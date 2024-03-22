@@ -445,6 +445,9 @@ module m_global_parameters
     !$acc declare create(gammas, gs_min, pi_infs, ps_inf, cvs, qvs, qvps)
 #endif
 
+    integer :: max_iter_pc_ts !< maximum number of iterations for phase change at each time-step
+    !$acc declare create(max_iter_pc_ts)   
+    
     real(kind(0d0)) :: mytime       !< Current simulation time
     real(kind(0d0)) :: finaltime    !< Final simulation time
 
