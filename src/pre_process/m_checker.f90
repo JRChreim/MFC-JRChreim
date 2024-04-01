@@ -163,10 +163,24 @@ contains
                              'x_domain%end. Exiting ...')
         end if
 
-        if (cyl_coord) then ! Cartesian coordinates
-
+        if (cyl_coord) then ! Cylindrical coordinates
+            ! in case restart of a simulation
+            if (old_grid .and. old_ic) then
+                ! checking of there is any input to the domains
+                if ((x_domain%beg /= dflt_real .or. x_domain%end /= dflt_real) &
+                    .or. &
+                    (y_domain%beg /= dflt_real .or. y_domain%end /= dflt_real) &
+                    .or. &
+                    (y_domain%beg /= dflt_real .or. y_domain%end /= dflt_real)) then
+                    call s_mpi_abort('domain are not dflt_real.'// &
+                                     'Please, correct them')
+                elseif (m == dflt_int .or. n == dflt_int .or. p == dflt_int) then
+                    call s_mpi_abort('m, n, and/or p are set to dflt_int.'// &
+                                     'Please, correct them')
+                end if
+            ! in case it is NOT restart
             ! Constraints on domain boundaries for cylindrical coordinates
-            if (n == 0 &
+            elseif (n == 0 &
                 .or. &
                 y_domain%beg /= 0d0 &
                 .or. &
