@@ -83,3 +83,4 @@ benchmarks/*.png
 *.mov
 *.mkv
 *.avi
+src/pre_process/m_checker.f90
