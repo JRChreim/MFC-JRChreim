@@ -224,7 +224,7 @@ module m_global_parameters
     type(pres_field) :: pb
     type(pres_field) :: mv
 
-    integer :: max_iter_pc_ts !< maximum number of iterations for phase change at each time-step    
+    integer :: max_iter_pc_ts !< maximum number of iterations for phase change at each time-step
 
 contains
 

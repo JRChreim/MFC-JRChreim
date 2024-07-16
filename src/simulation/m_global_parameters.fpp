@@ -446,8 +446,8 @@ module m_global_parameters
 #endif
 
     integer :: max_iter_pc_ts !< maximum number of iterations for phase change at each time-step
-    !$acc declare create(max_iter_pc_ts)   
-    
+    !$acc declare create(max_iter_pc_ts)
+
     real(kind(0d0)) :: mytime       !< Current simulation time
     real(kind(0d0)) :: finaltime    !< Final simulation time
 
