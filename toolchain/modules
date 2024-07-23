@@ -26,7 +26,6 @@ a-gpu nvhpc/21.11 spectrum-mpi cuda/nvhpc nsight-compute nsight-systems
 a-gpu CC=nvc CXX=nvc++ FC=nvfortran
 
 r     Richardson
-r-all python/3.7
 r-cpu gcc/9.3.0 openmpi-2.0/gcc-9.3.0
 
 w     OLCF Wombat
