@@ -202,13 +202,13 @@ contains
 
                     ! pTg-equilibrium criteria
 
-                    if (
+                    if ( &
                     ! 1st: model activation, 1st order transition (p,T) <= (pCr, TCr)                    
                     (relax_model == 6) .and. (pS < pCr) .and. (TS < TCr) .and. (TR .eqv. .true.) .and. &
                     ! 2 - homogeneous or heterogeneous.
                     ! 2.1 Homogeneous pTg-equilibrium
-                    ( ( pS < -1.0d6 )
-                    .or.
+                    ( ( pS < -1.0d6 ) &
+                    .or. &
                     ! 2.2. Heterogeneous pTg-equilibrium
                     ( (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps) ) ) &
                     ) then
