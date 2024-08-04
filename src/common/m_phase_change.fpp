@@ -175,7 +175,7 @@ contains
                     ! at each of the cells. The internal energy is calculated as the total energy minus the kinetic
                     ! energy to preserved its value at sharp interfaces
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
-
+                    TR = .false.
                     if (TR) then
                         ! calling p-equilibrium
                         if ((relax_model == 4)) then
