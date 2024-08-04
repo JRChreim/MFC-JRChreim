@@ -200,10 +200,18 @@ contains
                         Tk = spread(0.0d0, 1, num_fluids)
                     end if
 
-                    ! check if pTg-equilibrium is required, in terms of volume fractions
-                    if ((relax_model == 6) .and. ((q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) &
-                                                  .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps)) &
-                        .and. (pS < pCr) .and. (TS < TCr) .and. (TR .eqv. .true.)) then
+                    ! pTg-equilibrium criteria
+
+                    if (
+                    ! 1st: model activation, 1st order transition (p,T) <= (pCr, TCr)                    
+                    (relax_model == 6) .and. (pS < pCr) .and. (TS < TCr) .and. (TR .eqv. .true.) .and. &
+                    ! 2 - homogeneous or heterogeneous.
+                    ! 2.1 Homogeneous pTg-equilibrium
+                    ( ( pS < -1.0d6 )
+                    .or.
+                    ! 2.2. Heterogeneous pTg-equilibrium
+                    ( (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps) ) ) &
+                    ) then
 
                         ! Checking if phase change is needed, by checking whether the final solution is either subcoooled
                         ! liquid or overheated vapor.
@@ -910,15 +918,15 @@ contains
                 ! correcting the partial densities of the reacting fluids. In case liquid is negative
             elseif (q_cons_vf(lp + contxb - 1)%sf(j, k, l) < mixM*rM) then
 
-                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
+                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
 
-                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
                 ! correcting the partial densities of the reacting fluids. In case vapor is negative
             elseif (q_cons_vf(vp + contxb - 1)%sf(j, k, l) < mixM*rM) then
 
-                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
 
-                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
+                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
 
             end if
         else
