@@ -111,7 +111,7 @@ contains
         real(kind(0.0d0)) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
         real(kind(0.0d0)) :: rho, rM, m1, m2, rhoT, rMT !< total density, total reacting mass, individual reacting masses
         real(kind(0.0d0)) :: TvF, TvFT !< total volume fraction
-        logical :: TR
+        logical :: extf, TR
 
         !$acc declare create(pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, rhoT, rMT, TvF, TvFT, TR)
 
@@ -135,6 +135,7 @@ contains
 
                     ! reinitializing mixture density and volume fraction
                     rho = 0.0d0; TvF = 0.0d0; rhoeT = 0.0d0
+                    
                     !$acc loop seq
                     do i = 1, num_fluids
 
@@ -154,7 +155,7 @@ contains
                     rM = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)
 
                     ! correcting negative (recating) mass fraction values in case they happen
-                    call s_correct_partial_densities(q_cons_vf, rM, rho, TR, i, j, k, l)
+                    call s_correct_partial_densities(2, q_cons_vf, rM, rho, TR, i, j, k, l)
 
                     ! fixing m1 and m2 AFTER correcting the partial densities. Note that these values must be stored for the phase
                     ! change process that will happen a posteriori
@@ -183,7 +184,7 @@ contains
                             ! Calling pT-equilibrium for solving it or as an IC for the pTg-equilibrium
                         elseif ((relax_model == 5) .or. (relax_model == 6)) then
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
-                            call s_infinite_pt_relaxation_k(j, k, l, 2, pS, p_infpT, q_cons_vf, rhoe, TS)
+                            call s_infinite_pt_relaxation_k(j, k, l, 2, pS, p_infpT, q_cons_vf, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
                         end if
                         ! updating the densities such that appropriate volume fractions can be calculated and used for thresholds
@@ -201,22 +202,20 @@ contains
                     end if
 
                     ! pTg-equilibrium criteria
-
                     if ( &
                     ! 1st: model activation, 1st order transition (p,T) <= (pCr, TCr)                    
                     (relax_model == 6) .and. (pS < pCr) .and. (TS < TCr) .and. (TR .eqv. .true.) .and. &
                     ! 2 - homogeneous or heterogeneous.
-                    ! 2.1 Homogeneous pTg-equilibrium
-                    ( ( pS < -1.0d6 ) &
+                    ! 2.1 Homogeneous pTg-equilibrium (either one, or both)
+                    ( ( pS + minval(p_infpT) .gt. 0.0 ) &
                     .or. &
                     ! 2.2. Heterogeneous pTg-equilibrium
                     ( (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps) ) ) &
                     ) then
 
-                        ! Checking if phase change is needed, by checking whether the final solution is either subcoooled
-                        ! liquid or overheated vapor.
+                        ! start checking the presence of either subcoooled liquid or overheated vapor.
 
-                        ! overheated vapor case
+                        ! overheated vapor hypothesis
                         ! depleting the mass of liquid
                         q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
 
@@ -224,12 +223,12 @@ contains
                         q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
 
                         ! calling pT-equilibrium for overheated vapor, which is MFL = 0
-                        call s_infinite_pt_relaxation_k(j, k, l, 0, pSOV, p_infOV, q_cons_vf, rhoe, TSOV)
+                        call s_infinite_pt_relaxation_k(j, k, l, 0, pSOV, p_infOV, q_cons_vf, rhoe, rM, TSOV)
 
                         ! calculating Saturation temperature
                         call s_TSat(pSOV, TSatOV, TSOV)
 
-                        ! subcooled liquid case
+                        ! subcooled liquid hyphotesis
                         ! tranferring the total mass to liquid
                         q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
 
@@ -237,9 +236,10 @@ contains
                         q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
                         ! calling pT-equilibrium for subcooled liquid, which is MFL = 1
-                        call s_infinite_pt_relaxation_k(j, k, l, 1, pSSL, p_infSL, q_cons_vf, rhoe, TSSL)
+                        call s_infinite_pt_relaxation_k(j, k, l, 1, pSSL, p_infSL, q_cons_vf, rhoe, rM, TSSL)
 
                         ! calculating Saturation temperature
+                        ! PRINT *, 'pSSL', pSSL
                         call s_TSat(pSSL, TSatSL, TSSL)
 
                         ! checking the conditions for overheated vapor
@@ -274,7 +274,7 @@ contains
 
                         else
 
-                            ! returning partial pressures to what they were from the homogeneous solver
+                            ! returning partial pressures to what they were from the hyperbolic
                             ! liquid
                             q_cons_vf(lp + contxb - 1)%sf(j, k, l) = m1
 
@@ -282,7 +282,13 @@ contains
                             q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m2
 
                             ! calling the pTg-equilibrium solver
-                            call s_infinite_ptg_relaxation_k(j, k, l, pS, p_infpT, rhoe, q_cons_vf, TS)
+                            call s_infinite_ptg_relaxation_k(extf, j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TS)
+
+                            ! if extf is true, the solver will skip phase change and the fluid the same as from
+                            ! the hyperbolic part
+                            if ( extf ) then
+                                return
+                            end if
 
                         end if
                         Tk = spread(TS, 1, num_fluids)
@@ -529,16 +535,15 @@ contains
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_pt_relaxation_k(j, k, l, MFL, pS, p_infpT, q_cons_vf, rhoe, TS)
+    subroutine s_infinite_pt_relaxation_k(j, k, l, MFL, pS, p_infpT, q_cons_vf, rhoe, rM, TS)
         !$acc routine seq
 
         ! initializing variables
         type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
         real(kind(0.0d0)), intent(OUT) :: pS, TS
         real(kind(0.0d0)), dimension(num_fluids), intent(OUT) :: p_infpT
-        real(kind(0.0d0)), intent(IN) :: rhoe
+        real(kind(0.0d0)), intent(IN) :: rhoe, rM
         integer, intent(IN) :: j, k, l, MFL
-        real(kind(0.0d0)), dimension(num_fluids) :: pk !< individual initial pressures
         integer, dimension(num_fluids) :: ig !< flags to toggle the inclusion of fluids for the pT-equilibrium
         real(kind(0.0d0)) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
@@ -546,10 +551,10 @@ contains
         integer :: i, ns !< generic loop iterators
 
         ! auxiliary variables for the pT-equilibrium solver
-        mCP = 0.0d0; mQ = 0.0d0; p_infpT = ps_inf; 
+        mCP = 0.0d0; mQ = 0.0d0; p_infpT = ps_inf;
+
         ! these are slowing the computations significantly. Think about a workaround
-        ! pk(1:num_fluids) = 0.0d0
-        ! ig(1:num_fluids) = 0
+        ig(1:num_fluids) = 0
 
         ! Performing tests before initializing the pT-equilibrium
         !$acc loop seq
@@ -558,16 +563,16 @@ contains
             ! check if all alpha(i)*rho(i) are negative. If so, abort
 ! #ifndef MFC_OpenACC
             ! check which indices I will ignore (no need to abort the solver in this case). Adjust this sgm_eps value for mixture cells
-            ! if( ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) >= 0.0D0 ) &
-            !         .and. ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) < mixM ) ) then
+            if( ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) .ge. 0.0D0 ) &
+                    .and. ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) - rM * mixM .le. sgm_eps ) ) then
 
-            !         ig(i) = i
+                ig(i) = i
 
-            !         ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
-            !         ! This way, I am ensuring this value will not be selected.
-            !         p_infpT(i) = 2 * MAXVAL( ps_inf )
+                ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
+                ! This way, I am ensuring this value will not be selected.
+                p_infpT(i) = 2 * MAXVAL( ps_inf )
 
-            ! end if
+            end if
 ! #endif
             ! if (i /= ig(i)) then
 
@@ -582,7 +587,10 @@ contains
             mQ = mQ + q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
         end do
 
-        ! Checking energy constraint
+        ! Checking energy constraint. In the case we are calculating the possibility of having subcooled liquid or
+        ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
+        ! mass from one phase to the other. When this is the case, we simply ignore this possibility, set pS = TS = 0,
+        ! and discard the hypothesis. The solver can thus move forward.
         if ((rhoe - mQ - minval(p_infpT)) < 0.0d0) then
 
             if ((MFL == 0) .or. (MFL == 1)) then
@@ -640,15 +648,15 @@ contains
 
                 ! given pS always change, I need ig( i ) and gp to be in here, as it dynamically updates.
                 ! Note that I do not need to use p_infpT here, but I will do it for consistency
-                ! if (i /= ig(i)) then
+                if (i /= ig(i)) then
 
-                gp = gp + (gs_min(i) - 1.0d0)*q_cons_vf(i + contxb - 1)%sf(j, k, l)*cvs(i) &
-                     *(rhoe + pO - mQ)/(mCP*(pO + p_infpT(i)))
+                    gp = gp + (gs_min(i) - 1.0d0)*q_cons_vf(i + contxb - 1)%sf(j, k, l)*cvs(i) &
+                        *(rhoe + pO - mQ)/(mCP*(pO + p_infpT(i)))
 
-                gpp = gpp + (gs_min(i) - 1.0d0)*q_cons_vf(i + contxb - 1)%sf(j, k, l)*cvs(i) &
-                      *(p_infpT(i) - rhoe + mQ)/(mCP*(pO + p_infpT(i))**2)
+                    gpp = gpp + (gs_min(i) - 1.0d0)*q_cons_vf(i + contxb - 1)%sf(j, k, l)*cvs(i) &
+                        *(p_infpT(i) - rhoe + mQ)/(mCP*(pO + p_infpT(i))**2)
 
-                ! end if
+                end if
 
             end do
 
@@ -694,15 +702,16 @@ contains
         !!  @param rhoe mixture energy
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_ptg_relaxation_k(j, k, l, pS, p_infpT, rhoe, q_cons_vf, TS)
+    subroutine s_infinite_ptg_relaxation_k(extf, j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TS)
 
         !$acc routine seq
 
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
         real(kind(0.0d0)), dimension(num_fluids), intent(IN) :: p_infpT
-        real(kind(0.0d0)), intent(INOUT) :: pS, TS
-        real(kind(0.0d0)), intent(IN) :: rhoe
+        real(kind(0.0d0)), intent(INOUT) :: pS, TS, rM
+        real(kind(0.0d0)), intent(IN) :: rho, rhoe
         integer, intent(IN) :: j, k, l
+        logical, intent(out) :: extf
         real(kind(0.0d0)), dimension(num_fluids) :: p_infpTg
         real(kind(0.0d0)), dimension(2, 2) :: Jac, InvJac, TJac
         real(kind(0.0d0)), dimension(2) :: R2D, DeltamP
@@ -710,21 +719,44 @@ contains
         real(kind(0.0d0)) :: Om, OmI ! underrelaxation factor
         real(kind(0.0d0)) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts
+        logical :: TR
 
         !< Generic loop iterators
         integer :: i, ns
 
+        extf = .false.
         p_infpTg = p_infpT
 
-        if (((pS < 0.0d0) .and. ((q_cons_vf(lp + contxb - 1)%sf(j, k, l) &
-                                  + q_cons_vf(vp + contxb - 1)%sf(j, k, l)) > ((rhoe &
-                                                                                - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1))/qvs(lp)))) .or. &
-            ((pS >= 0.0d0) .and. (pS < 1.0d-1))) then
+        ! checking if homogeneous cavitation is expected. If yes, transfering an amount of mass to the depleted (liquid,
+        ! for the moment) phase, and then let the algorithm run. 
+        ! checking if homogeneous cavitation is possible
+        
+        ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
+        if ((pS < -1.0d7) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
+                                    > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1))/qvs(lp))) then
 
-            ! improve this initial condition
-            pS = 1.0d4
+            ! transfer a bit of mass to the deficient phase, enforce phase0chane
+            call s_correct_partial_densities(1, q_cons_vf, rM, rho, TR, i, j, k, l)
+    
+        ! the metastable state is not enough to sustain phase change
+        else if (pS < 0.0d0) then
+            
+            ! skip phase change, and get back to the main one
+            extf = .true.
+
+            return
 
         end if
+
+        ! ! if not homogeneous, then heterogeneous
+        ! if (((pS < 0.0d0) .and. ((q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)) &
+        ! > ((rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1))/qvs(lp)))) .or. &
+        !     ((pS >= 0.0d0) .and. (pS < 1.0d-1))) then
+
+        !         ! improve this initial condition
+        !     pS = 1.0d4
+
+        ! end if
 
         ! Dummy guess to start the pTg-equilibrium problem.
         ! improve this initial condition
@@ -761,7 +793,7 @@ contains
                 mQ = mQ + q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
 
                 ! These auxiliary variables now need to be updated, as the partial densities now
-                ! vary at every iteration
+                ! vary at every iteration.
                 if ((i /= lp) .and. (i /= vp)) then
 
                     mCVGP = mCVGP + q_cons_vf(i + contxb - 1)%sf(j, k, l) &
@@ -778,27 +810,28 @@ contains
 
                 end if
 
-                ! IF ( q_cons_vf( i + advxb - 1 )%sf( j, k, l ) .LT. 1.0D-10 ) THEN
+                ! I will not consider this for the moment
+                if ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) - rM * mixM .le. sgm_eps ) then
 
-                !     p_infpTg( i ) = 2 * MAXVAL( ps_inf )
+                    p_infpTg( i ) = 2 * MAXVAL( ps_inf )
 
-                ! ELSE
+                else
 
-                !     p_infpTg( i ) = ps_inf( i )
+                    p_infpTg( i ) = ps_inf( i )
 
-                ! END IF
+                end if
 
             end do
 
             ! Checking pressure and energy criteria for the (pT) solver to find a solution
 #ifndef MFC_OpenACC
-            if ((pS <= -1.0d0*minval(ps_inf)) .or. ((rhoe - mQ - minval(ps_inf)) < 0.0d0)) then
+            if ((pS <= -1.0d0*minval(p_infpTg)) .or. ((rhoe - mQ - minval(p_infpTg)) < 0.0d0)) then
                 if (proc_rank == 0) then
                     call s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, p_infpTg, pS &
                                       , R2D, rhoe, q_cons_vf, TS)
                 end if
 
-                call s_real_to_str(rhoe - mQ - minval(ps_inf), Econsts)
+                call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
                 call s_real_to_str(pS, pSs)
                 call s_mpi_abort('Solver for the pTg-relaxation failed (m_phase_change, s_infinite_ptg_relaxation_k). &
                 &   pS ~'//pSs//'. Econst = '//Econsts//'. Aborting!')
@@ -826,8 +859,8 @@ contains
             else
                 Oc(2) = OmI
             end if
-            if (pS + 1.0d0*minval(ps_inf) + Om*DeltamP(2) < 0.0d0) then
-                Oc(3) = (pS - 1.0d0*minval(ps_inf))/(2*DeltamP(2))
+            if (pS + 1.0d0*minval(p_infpTg) + Om*DeltamP(2) < 0.0d0) then
+                Oc(3) = (pS - 1.0d0*minval(p_infpTg))/(2*DeltamP(2))
             else
                 Oc(3) = OmI
             end if
@@ -878,7 +911,7 @@ contains
         !!  @param j generic loop iterator for x direction
         !!  @param k generic loop iterator for y direction
         !!  @param l generic loop iterator for z direction
-    subroutine s_correct_partial_densities(q_cons_vf, rM, rho, TR, i, j, k, l)
+    subroutine s_correct_partial_densities(CT, q_cons_vf, rM, rho, TR, i, j, k, l)
         !$acc routine seq
 
         !> @name variables for the correction of the reacting partial densities
@@ -887,12 +920,11 @@ contains
         real(kind(0.0d0)), intent(INOUT) :: rM
         real(kind(0.0d0)), intent(IN) :: rho
         logical, intent(INOUT) :: TR
-        integer, intent(IN) :: j, k, l
-        integer :: i, CT
+        integer, intent(IN) :: CT, j, k, l
+        integer :: i
         !> @}
 
         ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction; otherwise: Total Mass correction
-        CT = 2
         if (CT == 0) then
             !$acc loop seq
             do i = 1, num_fluids
@@ -918,15 +950,15 @@ contains
                 ! correcting the partial densities of the reacting fluids. In case liquid is negative
             elseif (q_cons_vf(lp + contxb - 1)%sf(j, k, l) < mixM*rM) then
 
-                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
+                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
 
-                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
+                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
                 ! correcting the partial densities of the reacting fluids. In case vapor is negative
             elseif (q_cons_vf(vp + contxb - 1)%sf(j, k, l) < mixM*rM) then
 
-                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
+                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
 
-                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
+                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
             end if
         else
@@ -1158,12 +1190,14 @@ contains
         real(kind(0.0d0)), intent(OUT) :: TSat
         real(kind(0.0d0)), intent(IN) :: pSat, TSIn
         real(kind(0.0d0)) :: dFdT, FT, Om !< auxiliary variables
-        character(20) :: nss
+        character(20) :: nss, pSatS, TSatS
 
         ! Generic loop iterators
         integer :: ns
 
-        if ((pSat == 0.0d0) .and. (TSIn == 0.0d0)) then
+        ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
+        ! phisically sustained (p = 0, T = 0)
+        if ((pSat .le. 0.0d0) .and. (TSIn .ge. 0.0d0)) then
 
             ! assigning Saturation temperature
             TSat = 0.0d0
@@ -1189,8 +1223,6 @@ contains
                 ! calculating residual
                 ! FT = A + B / TSat + C * DLOG( TSat ) + D * DLOG( ( pSat + ps_inf( lp ) ) ) - DLOG( pSat + ps_inf( vp ) )
 
-                ! PRINT *, FT
-
                 FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
                            *(1 - DLOG(TSat)) - (qvps(lp) - qvps(vp)) &
                            + cvs(lp)*(gs_min(lp) - 1)*DLOG(pSat + ps_inf(lp)) &
@@ -1199,8 +1231,6 @@ contains
 
                 ! calculating the jacobian
                 ! dFdT = - B / ( TSat ** 2) + C / TSat
-
-                ! PRINT *, dFdT
 
                 dFdT = &
                     -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*DLOG(TSat) &
@@ -1211,14 +1241,15 @@ contains
                 ! updating saturation temperature
                 TSat = TSat - Om*FT/dFdT
 
-                ! PRINT *, pSat, TSat, FT, dFdT, ns
-
 #ifndef MFC_OpenACC
                 ! Checking if TSat returns a NaN
                 if ((ieee_is_nan(TSat)) .or. (ns > max_iter)) then
 
                     call s_int_to_str(ns, nss)
-                    call s_mpi_abort('TSat possibly returned NaN when it shouldnt (by assumption of first order transition). &
+                    call s_real_to_str(TSat, TSatS)
+                    call s_real_to_str(pSat, pSatS)
+                    PRINT *, pSat
+                    call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
 &                     ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
 
                 end if
