@@ -109,13 +109,13 @@ contains
         real(kind(0.0d0)) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(kind(0.0d0)) :: TS, TSOV, TSSL, TSatOV, TSatSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(kind(0.0d0)) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
-        real(kind(0.0d0)) :: rho, rM, m1, m2, rhoT, rMT !< total density, total reacting mass, individual reacting masses
+        real(kind(0.0d0)) :: rho, rM, m1, m10, m2, m20, rhoT, rMT !< total density, total reacting mass, individual reacting masses
         real(kind(0.0d0)) :: TvF, TvFT !< total volume fraction
         logical :: extf, TR
 
         !$acc declare create(pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, rhoT, rMT, TvF, TvFT, TR)
 
-        real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, sk, hk, gk, ek, rhok, Tk
+        real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, sk, hk, gk, ek, rhok, Tk
 
         !< Generic loop iterators
         integer :: i, j, k, l
@@ -130,12 +130,17 @@ contains
         do j = 0, m
             do k = 0, n
                 do l = 0, p
+
+                    ! original mass composition prior to any relaxation scheme
+                    m10 = q_cons_vf(lp + contxb - 1)%sf(j, k, l) 
+                    m20 = q_cons_vf(vp + contxb - 1)%sf(j, k, l)
+
                     ! trigger for phase change at the interfaces
                     TR = .true.
 
                     ! reinitializing mixture density and volume fraction
                     rho = 0.0d0; TvF = 0.0d0; rhoeT = 0.0d0
-                    
+
                     !$acc loop seq
                     do i = 1, num_fluids
 
@@ -152,7 +157,7 @@ contains
 
                     ! calculating the total reacting mass for the phase change process. By hypothesis, this should not change
                     ! throughout the phase-change process.
-                    rM = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)
+                    rM = m10 + m20
 
                     ! correcting negative (recating) mass fraction values in case they happen
                     call s_correct_partial_densities(2, q_cons_vf, rM, rho, TR, i, j, k, l)
@@ -191,8 +196,11 @@ contains
                         rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
                         !$acc loop seq
                         do i = 1, num_fluids
+                            
+                            ! old volume fractions, before p- or pT-equilibrium
+                            alpha0k(i) = q_cons_vf(i + advxb - 1)%sf(j, k, l)
 
-                            ! volume fractions
+                            ! new volume fractions, after p- or pT-equilibrium
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
 
                         end do
@@ -287,7 +295,20 @@ contains
                             ! if extf is true, the solver will skip phase change and the fluid the same as from
                             ! the hyperbolic part
                             if ( extf ) then
+                                
+                                ! returning partial densities to what they were previous to any relaxation scheme
+                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = m10
+                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m20
+
+                                do i = 1, num_fluids
+                                    ! same with volume fractions, for all fluids
+                                    q_cons_vf(i + advxb - 1)%sf(j, k, l) = alpha0k(i) 
+                                end do
+
+                                PRINT *, q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+
                                 return
+
                             end if
 
                         end if
