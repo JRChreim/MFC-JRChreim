@@ -84,3 +84,4 @@ benchmarks/*.png
 *.mkv
 *.avi
 src/pre_process/m_checker.f90
+visitlog.py
