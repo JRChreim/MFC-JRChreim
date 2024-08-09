@@ -133,7 +133,8 @@ contains
 
                     ! trigger for phase change. This will be used for checking many conditions through the code
                     TR = .true.
-
+                    
+                    !$acc loop seq
                     do i = 1, num_fluids
                         ! original volume fractions, before any relaxation
                         alpha0k(i) = q_cons_vf(i + advxb - 1)%sf(j, k, l)
@@ -201,6 +202,7 @@ contains
                         end do
                     else
                         ! returning partial densities to what they were previous to any relaxation scheme
+                        !$acc loop seq                        
                         do i = 1, num_fluids
                             q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
                         end do
@@ -243,7 +245,7 @@ contains
                         ! depleting the mass of vapor
                         q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
-                        ! calling pT-equilibrium for subcooled liquid, which is MFL = 1
+                        ! calling pT-equilibrium for subcooled liquid, which is MFL = 1                       
                         call s_infinite_pt_relaxation_k(j, k, l, 1, pSSL, p_infSL, q_cons_vf, rhoe, rM, TSSL)
 
                         ! calculating Saturation temperature
@@ -292,17 +294,16 @@ contains
                             ! calling the pTg-equilibrium solver
                             call s_infinite_ptg_relaxation_k(j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TR, TS)
 
-                            ! if extf is true, the solver will skip phase change and the fluid the same as from
+                            ! if TR is false, the solver will skip phase change and the fluid the same as from
                             ! the hyperbolic part
                             if ( TR .eqv. .false. ) then
+                                !$acc loop seq
                                 do i = 1, num_fluids
                                     ! returning volume fractions to what they were previous to any relaxation scheme
                                     q_cons_vf(i + advxb - 1)%sf(j, k, l) = alpha0k(i) 
                                     ! returning partial densities to what they were previous to any relaxation scheme
                                     q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
                                 end do
-
-                                PRINT *, q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
 
                                 return
 
@@ -355,31 +356,6 @@ contains
                         rMT = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)
                     end if
 
-! #ifndef MFC_OpenACC
-!                    ! testing the total volume fraction
-!                    if (DABS(TvF - TvFT) > 1.0d-2) then
-
-!                        print *, 'D total volume fractions AFTER PC: ', TvF - TvFT &
-!                            ,' j, k, l ', j, k, l, ' old VF ', TvF, ' new VF ', TvFT
-
-!                    end if
-
-!                    ! testing the reacting mass
-!                    if (DABS(rM - rMT) > 1.0d-8) then
-
-!                        print *, 'D Reacting Mass AFTER PC: ', rM - rMT &
-!                            ,' j, k, l ', j, k, l, ' old rM ', rM, ' new rM ', rMT
-
-!                    end if
-
-!                    ! testing the total mass
-!                    if (DABS(rho - rhoT) > 1.0d-6) then
-
-!                        print *, 'D Total Mass AFTER PC: ', rho - rhoT &
-!                            ,' j, k, l ', j, k, l, ' old TM', rho, 'new TM', rhoT
-
-!                    end if
-! #endif
                 end do
             end do
         end do
@@ -741,8 +717,6 @@ contains
         !< Generic loop iterators
         integer :: i, ns
 
-        p_infpTg = p_infpT
-
         ! checking if homogeneous cavitation is expected. If yes, transfering an amount of mass to the depleted (liquid,
         ! for the moment) phase, and then let the algorithm run. 
         ! checking if homogeneous cavitation is possible
@@ -819,28 +793,17 @@ contains
 
                 end if
 
-                ! I will not consider this for the moment
-                if ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) - rM * mixM .le. sgm_eps ) then
-
-                    p_infpTg( i ) = 2 * MAXVAL( ps_inf )
-
-                else
-
-                    p_infpTg( i ) = ps_inf( i )
-
-                end if
-
             end do
 
             ! Checking pressure and energy criteria for the (pT) solver to find a solution
 #ifndef MFC_OpenACC
-            if ((pS <= -1.0d0*minval(p_infpTg)) .or. ((rhoe - mQ - minval(p_infpTg)) < 0.0d0)) then
+            if ((pS <= -1.0d0*minval(ps_inf)) .or. ((rhoe - mQ - minval(ps_inf)) < 0.0d0)) then
                 if (proc_rank == 0) then
-                    call s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, p_infpTg, pS &
+                    call s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, ps_inf, pS &
                                       , R2D, rhoe, q_cons_vf, TS)
                 end if
 
-                call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
+                call s_real_to_str(rhoe - mQ - minval(ps_inf), Econsts)
                 call s_real_to_str(pS, pSs)
                 call s_mpi_abort('Solver for the pTg-relaxation failed (m_phase_change, s_infinite_ptg_relaxation_k). &
                 &   pS ~'//pSs//'. Econst = '//Econsts//'. Aborting!')
@@ -868,8 +831,8 @@ contains
             else
                 Oc(2) = OmI
             end if
-            if (pS + 1.0d0*minval(p_infpTg) + Om*DeltamP(2) < 0.0d0) then
-                Oc(3) = (pS - 1.0d0*minval(p_infpTg))/(2*DeltamP(2))
+            if (pS + 1.0d0*minval(ps_inf) + Om*DeltamP(2) < 0.0d0) then
+                Oc(3) = (pS - 1.0d0*minval(ps_inf))/(2*DeltamP(2))
             else
                 Oc(3) = OmI
             end if
@@ -947,7 +910,7 @@ contains
                 if ((q_cons_vf(lp + contxb - 1)%sf(j, k, l)/rM < mixM) .or. &
                     (q_cons_vf(vp + contxb - 1)%sf(j, k, l)/rM < mixM)) then
                     TR = .false.
-                    ! reacting masses are not as negative so I can disregard them expecting no significant changes in the physics of the simulation
+                ! reacting masses are not as negative so I can disregard them, expecting no significant changes in the physics of the simulation
                 else
                     q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
 
@@ -956,7 +919,7 @@ contains
                     rM = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)
 
                 end if
-                ! correcting the partial densities of the reacting fluids. In case liquid is negative
+            ! correcting the partial densities of the reacting fluids. In case liquid is negative
             elseif (q_cons_vf(lp + contxb - 1)%sf(j, k, l) < mixM*rM) then
 
                 q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
