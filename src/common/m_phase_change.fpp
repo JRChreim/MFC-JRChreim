@@ -109,13 +109,13 @@ contains
         real(kind(0.0d0)) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(kind(0.0d0)) :: TS, TSOV, TSSL, TSatOV, TSatSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(kind(0.0d0)) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
-        real(kind(0.0d0)) :: rho, rM, m1, m10, m2, m20, rhoT, rMT !< total density, total reacting mass, individual reacting masses
+        real(kind(0.0d0)) :: rho, rM, m1, m2, rhoT, rMT !< total density, total reacting mass, individual reacting masses
         real(kind(0.0d0)) :: TvF, TvFT !< total volume fraction
-        logical :: extf, TR
+        logical :: TR
 
         !$acc declare create(pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, rhoT, rMT, TvF, TvFT, TR)
 
-        real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, sk, hk, gk, ek, rhok, Tk
+        real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, m0k, sk, hk, gk, ek, rhok, Tk
 
         !< Generic loop iterators
         integer :: i, j, k, l
@@ -131,19 +131,21 @@ contains
             do k = 0, n
                 do l = 0, p
 
-                    ! original mass composition prior to any relaxation scheme
-                    m10 = q_cons_vf(lp + contxb - 1)%sf(j, k, l) 
-                    m20 = q_cons_vf(vp + contxb - 1)%sf(j, k, l)
-
-                    ! trigger for phase change at the interfaces
+                    ! trigger for phase change. This will be used for checking many conditions through the code
                     TR = .true.
+
+                    do i = 1, num_fluids
+                        ! original volume fractions, before any relaxation
+                        alpha0k(i) = q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                        ! original mass fractions, before any relaxation
+                        m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                    end do
 
                     ! reinitializing mixture density and volume fraction
                     rho = 0.0d0; TvF = 0.0d0; rhoeT = 0.0d0
 
                     !$acc loop seq
                     do i = 1, num_fluids
-
                         ! Mixture density
                         rho = rho + q_cons_vf(i + contxb - 1)%sf(j, k, l)
 
@@ -157,12 +159,12 @@ contains
 
                     ! calculating the total reacting mass for the phase change process. By hypothesis, this should not change
                     ! throughout the phase-change process.
-                    rM = m10 + m20
+                    rM = m0k(lp) + m0k(vp)
 
                     ! correcting negative (recating) mass fraction values in case they happen
                     call s_correct_partial_densities(2, q_cons_vf, rM, rho, TR, i, j, k, l)
 
-                    ! fixing m1 and m2 AFTER correcting the partial densities. Note that these values must be stored for the phase
+                    ! updating m1 and m2 AFTER correcting the partial densities. Note that these values must be stored for the phase
                     ! change process that will happen a posteriori
                     m1 = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
 
@@ -172,14 +174,12 @@ contains
                     dynE = 0.0d0
                     !$acc loop seq
                     do i = momxb, momxe
-
                         dynE = dynE + 5.0d-1*q_cons_vf(i)%sf(j, k, l)**2/rho
-
                     end do
 
                     ! calculating the total energy that MUST be preserved throughout the pT- and pTg-relaxation procedures
                     ! at each of the cells. The internal energy is calculated as the total energy minus the kinetic
-                    ! energy to preserved its value at sharp interfaces
+                    ! energy to preserved its value at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
 
                     if (TR) then
@@ -196,32 +196,32 @@ contains
                         rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
                         !$acc loop seq
                         do i = 1, num_fluids
-                            
-                            ! old volume fractions, before p- or pT-equilibrium
-                            alpha0k(i) = q_cons_vf(i + advxb - 1)%sf(j, k, l)
-
                             ! new volume fractions, after p- or pT-equilibrium
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
-
                         end do
                     else
-                        pS = 0.0d0
-                        Tk = spread(0.0d0, 1, num_fluids)
+                        ! returning partial densities to what they were previous to any relaxation scheme
+                        do i = 1, num_fluids
+                            q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
+                        end do
+                        ! exiting phase change with nothing updated
+                        return
                     end if
 
-                    ! pTg-equilibrium criteria
+                    ! pTg-equilibrium criteria. 1 & 2(.1 or .2) must be satisfied
                     if ( &
-                    ! 1st: model activation, 1st order transition (p,T) <= (pCr, TCr)                    
+                    ! 1st: model activation, 1st order transition (p,T) <= (pCr, TCr)
                     (relax_model == 6) .and. (pS < pCr) .and. (TS < TCr) .and. (TR .eqv. .true.) .and. &
                     ! 2 - homogeneous or heterogeneous.
-                    ! 2.1 Homogeneous pTg-equilibrium (either one, or both)
+                    ! 2.1 Homogeneous pTg-equilibrium (either one, or both). Note that this is a vector sum. If pS < 0,
+                    ! this sum still must be > 0
                     ( ( pS + minval(p_infpT) .gt. 0.0 ) &
                     .or. &
-                    ! 2.2. Heterogeneous pTg-equilibrium
+                    ! 2.2. Heterogeneous pTg-equilibrium. Checking whether the cell is a mixture
                     ( (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps) ) ) &
                     ) then
 
-                        ! start checking the presence of either subcoooled liquid or overheated vapor.
+                        ! start checking the presence of either subcoooled liquid or overheated vapor (NOT metastability)
 
                         ! overheated vapor hypothesis
                         ! depleting the mass of liquid
@@ -290,19 +290,16 @@ contains
                             q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m2
 
                             ! calling the pTg-equilibrium solver
-                            call s_infinite_ptg_relaxation_k(extf, j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TS)
+                            call s_infinite_ptg_relaxation_k(j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TR, TS)
 
                             ! if extf is true, the solver will skip phase change and the fluid the same as from
                             ! the hyperbolic part
-                            if ( extf ) then
-                                
-                                ! returning partial densities to what they were previous to any relaxation scheme
-                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = m10
-                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m20
-
+                            if ( TR .eqv. .false. ) then
                                 do i = 1, num_fluids
-                                    ! same with volume fractions, for all fluids
+                                    ! returning volume fractions to what they were previous to any relaxation scheme
                                     q_cons_vf(i + advxb - 1)%sf(j, k, l) = alpha0k(i) 
+                                    ! returning partial densities to what they were previous to any relaxation scheme
+                                    q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
                                 end do
 
                                 PRINT *, q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
@@ -723,7 +720,7 @@ contains
         !!  @param rhoe mixture energy
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_ptg_relaxation_k(extf, j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TS)
+    subroutine s_infinite_ptg_relaxation_k(j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TR, TS)
 
         !$acc routine seq
 
@@ -732,7 +729,7 @@ contains
         real(kind(0.0d0)), intent(INOUT) :: pS, TS, rM
         real(kind(0.0d0)), intent(IN) :: rho, rhoe
         integer, intent(IN) :: j, k, l
-        logical, intent(out) :: extf
+        logical, intent(INOUT) :: TR
         real(kind(0.0d0)), dimension(num_fluids) :: p_infpTg
         real(kind(0.0d0)), dimension(2, 2) :: Jac, InvJac, TJac
         real(kind(0.0d0)), dimension(2) :: R2D, DeltamP
@@ -740,12 +737,10 @@ contains
         real(kind(0.0d0)) :: Om, OmI ! underrelaxation factor
         real(kind(0.0d0)) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts
-        logical :: TR
 
         !< Generic loop iterators
         integer :: i, ns
 
-        extf = .false.
         p_infpTg = p_infpT
 
         ! checking if homogeneous cavitation is expected. If yes, transfering an amount of mass to the depleted (liquid,
@@ -762,26 +757,19 @@ contains
         ! the metastable state is not enough to sustain phase change
         else if (pS < 0.0d0) then
             
-            ! skip phase change, and get back to the main one
-            extf = .true.
+            ! skip pTg subroutine, and get back to the main one
+            TR = .false.
 
             return
 
+        ! if not homogeneous, then heterogeneous. Thus, setting up an arbitrary initial condition in case the one from
+        ! the p(T)-equilibrium solver could lead to numerical issues
+        else if ((pS < 1.0d-1) .and. (pS >= 0.0d0)) then
+            ! improve this initial condition
+            pS = 1.0d4
         end if
 
-        ! ! if not homogeneous, then heterogeneous
-        ! if (((pS < 0.0d0) .and. ((q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)) &
-        ! > ((rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1))/qvs(lp)))) .or. &
-        !     ((pS >= 0.0d0) .and. (pS < 1.0d-1))) then
-
-        !         ! improve this initial condition
-        !     pS = 1.0d4
-
-        ! end if
-
-        ! Dummy guess to start the pTg-equilibrium problem.
-        ! improve this initial condition
-        ! Relaxation factors palpha_eps
+        ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
         OmI = 1.0d-1
         ! Critical relaxation factors, for variable sub-relaxation
         Oc(1) = OmI; Oc(2) = OmI; Oc(3) = OmI

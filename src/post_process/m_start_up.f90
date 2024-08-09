@@ -305,6 +305,22 @@ contains
         end if
         ! ----------------------------------------------------------------------
 
+        ! Adding the individual energies to the formatted database file --------
+        if (model_eqns == 3 .and. cons_vars_wrt) then
+            do i = 1, num_fluids
+
+                q_sf = q_cons_vf(i + intxb - 1)%sf(-offset_x%beg:m + offset_x%end, &
+                                                -offset_y%beg:n + offset_y%end, &
+                                                -offset_z%beg:p + offset_z%end)
+
+                write (varname, '(A,I0)') 'alpha_rho_e', i
+                call s_write_variable_to_formatted_database_file(varname, t_step)
+
+                varname(:) = ' '
+
+            end do
+        end if
+
         ! Adding the elastic shear stresses to the formatted database file -----
         if (hypoelasticity) then
             do i = 1, stress_idx%end - stress_idx%beg + 1
