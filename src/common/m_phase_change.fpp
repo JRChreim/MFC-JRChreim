@@ -721,6 +721,8 @@ contains
 
             ! transfer a bit of mass to the deficient phase, enforce phase0chane
             call s_correct_partial_densities(1, q_cons_vf, rM, rho, TR, i, j, k, l)
+
+            PRINT *, 'activated'
     
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0d0) then
