@@ -471,7 +471,7 @@ contains
 &                   . Please, check energy constraint. Econst ~'//Econsts//'. Aborting!')
 
                 ! checking if pressure is within expected bounds
-            else if ((pS <= -1.0d0*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
+            elseif ((pS <= -1.0d0*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
                 ! if (proc_rank .eq. 0) then
 
                 print *, 'ns', ns
@@ -723,7 +723,7 @@ contains
             call s_correct_partial_densities(1, q_cons_vf, rM, rho, TR, i, j, k, l)
     
         ! the metastable state is not enough to sustain phase change
-        else if (pS < 0.0d0) then
+        elseif (pS < 0.0d0) then
             
             ! skip pTg subroutine, and get back to the main one
             TR = .false.
@@ -732,7 +732,7 @@ contains
 
         ! if not homogeneous, then heterogeneous. Thus, setting up an arbitrary initial condition in case the one from
         ! the p(T)-equilibrium solver could lead to numerical issues
-        else if ((pS < 1.0d-1) .and. (pS >= 0.0d0)) then
+        elseif ((pS < 1.0d-1) .and. (pS >= 0.0d0)) then
             ! improve this initial condition
             pS = 1.0d4
         end if
@@ -890,7 +890,8 @@ contains
         integer :: i
         !> @}
 
-        ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction; otherwise: Total Mass correction
+        ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction;
+        ! CT = 2: crude correction; else: Total Mass correction
         if (CT == 0) then
             !$acc loop seq
             do i = 1, num_fluids
@@ -927,6 +928,15 @@ contains
                 q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
             end if
+        elseif (CT == 2) then
+            do i = 1, num_fluids
+                if (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0 .or. &
+                    q_cons_vf(i + contxb - 1)%sf(j, k, l)  < 0 ) then
+                    q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0.0
+                    q_cons_vf(i + contxb - 1)%sf(j, k, l) = 0.0
+                    q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0.0
+                end if
+            end do
         else
             !$acc loop seq
             do i = 1, num_fluids
