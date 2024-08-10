@@ -249,7 +249,6 @@ contains
                         call s_infinite_pt_relaxation_k(j, k, l, 1, pSSL, p_infSL, q_cons_vf, rhoe, rM, TSSL)
 
                         ! calculating Saturation temperature
-                        ! PRINT *, 'pSSL', pSSL
                         call s_TSat(pSSL, TSatSL, TSSL)
 
                         ! checking the conditions for overheated vapor
@@ -568,12 +567,7 @@ contains
 
             end if
 ! #endif
-            ! if (i /= ig(i)) then
 
-            !     pk(i) = (gs_min(i) - 1)*(q_cons_vf(i + intxb - 1)%sf(j, k, l) - q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)) &
-            !     / q_cons_vf(i + advxb - 1)%sf(j, k, l) - gs_min(i)*ps_inf(i)
-
-            ! endif
             ! sum of the total alpha*rho*cp of the system
             mCP = mCP + q_cons_vf(i + contxb - 1)%sf(j, k, l)*cvs(i)*gs_min(i)
 
