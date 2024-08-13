@@ -223,6 +223,10 @@ contains
                     ( (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps) ) ) &
                     ) then
 
+                        PRINT *, 'phase change is happening'
+                        PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                        PRINT *, pS
+
                         ! start checking the presence of either subcoooled liquid or overheated vapor (NOT metastability)
 
                         ! overheated vapor hypothesis
@@ -902,6 +906,7 @@ contains
                 end if
             end do
         elseif (CT == 1) then
+            PRINT *, 'CT 1'
             if (rM < 0.0d0) then
                 ! reacting masses are very negative so as to affect the physics of the problem, so phase change will not be activated
                 if ((q_cons_vf(lp + contxb - 1)%sf(j, k, l)/rM < mixM) .or. &
@@ -931,6 +936,7 @@ contains
 
             end if
         elseif (CT == 2) then
+            PRINT *, 'CT 2'
             do i = 1, num_fluids
                 if (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0 .or. &
                     q_cons_vf(i + contxb - 1)%sf(j, k, l)  < 0 ) then
