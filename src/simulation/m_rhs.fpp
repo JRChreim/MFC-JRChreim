@@ -1872,9 +1872,11 @@ contains
                         do i = 1, num_fluids
                             if ((q_cons_vf(i + contxb - 1)%sf(j, k, l) < 0d0) .or. &
                                 (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0d0)) then
+                                    PRINT *, 'alpha before mpp 1', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                                 q_cons_vf(i + contxb - 1)%sf(j, k, l) = 0d0
                                 q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0d0
                                 q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0d0
+                                    PRINT *, 'alpha after mpp 2', q_cons_vf(i + advxb - 1)%sf(j, k, l)    
                             end if
 
                             if (q_cons_vf(i + advxb - 1)%sf(j, k, l) > 1d0) &
@@ -1884,7 +1886,9 @@ contains
 
                         !$acc loop seq
                         do i = 1, num_fluids
+                            PRINT *, 'alpha before mpp 2', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + advxb - 1)%sf(j, k, l)/sum_alpha
+                            PRINT *, 'alpha after mpp 2', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                         end do
                     end if
 
