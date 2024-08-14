@@ -224,7 +224,7 @@ contains
                     ) then
 
                         PRINT *, 'phase change is happening'
-                        PRINT *, 'masses 1, 2, 3', q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                        PRINT *, 'masses 1, 2, 3', q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
                         PRINT *, 'pS', pS
 
                         ! start checking the presence of either subcoooled liquid or overheated vapor (NOT metastability)
