@@ -1121,6 +1121,8 @@ contains
             call s_strang_splitting(t_step, time_avg)
         end if
         if (relax) call s_infinite_relaxation_k(q_cons_ts(1)%vf)
+        PRINT *, 'printing after phase change'
+        PRINT *, q_cons_ts(1)%vf
         ! Time-stepping loop controls
         if ((mytime + dt) >= finaltime) dt = finaltime - mytime
         t_step = t_step + 1
