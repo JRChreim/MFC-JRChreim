@@ -363,6 +363,11 @@ contains
                         rMT = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)
                     end if
 
+                    if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                        PRINT *, 'printing after phase change'
+                        PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                    end if
+
                 end do
             end do
         end do
