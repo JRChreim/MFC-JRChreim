@@ -1872,11 +1872,11 @@ contains
                         do i = 1, num_fluids
                             if ((q_cons_vf(i + contxb - 1)%sf(j, k, l) < 0d0) .or. &
                                 (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0d0)) then
-                                    PRINT *, 'alpha before mpp 1', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                                    PRINT *, 'm_rhs line 1875, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                                 q_cons_vf(i + contxb - 1)%sf(j, k, l) = 0d0
                                 q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0d0
                                 q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0d0
-                                    PRINT *, 'alpha after mpp 2', q_cons_vf(i + advxb - 1)%sf(j, k, l)    
+                                    PRINT *, 'm_rhs line 1879, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                             end if
 
                             if (q_cons_vf(i + advxb - 1)%sf(j, k, l) > 1d0) &
@@ -1886,9 +1886,9 @@ contains
 
                         !$acc loop seq
                         do i = 1, num_fluids
-                            PRINT *, 'alpha before mpp 2', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                            PRINT *, 'm_rhs line 1889, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + advxb - 1)%sf(j, k, l)/sum_alpha
-                            PRINT *, 'alpha after mpp 2', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                            PRINT *, 'm_rhs line 1891, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                         end do
                     end if
 
@@ -2023,6 +2023,11 @@ contains
                         sum_alpha = 0d0
 
                         if (mpp_lim) then
+                            if ( alpha(2) > 1E-16) then
+                                PRINT *, 'm_rhs, m, vf, 2027'
+                                PRINT *, alpha_rho(2), alpha(2)
+                            end if
+                            
                             !$acc loop seq
                             do i = 1, num_fluids
                                 alpha_rho(i) = max(0d0, alpha_rho(i))
@@ -2031,6 +2036,11 @@ contains
                             end do
 
                             alpha = alpha/max(sum_alpha, sgm_eps)
+
+                            if ( alpha(2) > 1E-16) then
+                                PRINT *, 'm_rhs, m, vf, 2041'
+                                PRINT *, alpha_rho(2), alpha(2)
+                            end if
 
                         end if
 
