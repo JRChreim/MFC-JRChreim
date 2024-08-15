@@ -173,6 +173,12 @@ contains
                     ! correcting negative (recating) mass fraction values in case they happen
                     call s_correct_partial_densities(2, q_cons_vf, rM, rho, TR, i, j, k, l)
 
+                    if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                        PRINT *, 'printing vf after mass correction 1'
+                        PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                        PRINT *, 'printing vf after mass correction 2'
+                    end if
+
                     ! updating m1 and m2 AFTER correcting the partial densities. Note that these values must be stored for the phase
                     ! change process that will happen a posteriori
                     m1 = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
@@ -216,6 +222,12 @@ contains
                         end do
                         ! exiting phase change with nothing updated
                         return
+                    end if
+
+                    if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                        PRINT *, 'printing vf after pT-equilibrium 1'
+                        PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                        PRINT *, 'printing vf after pT-equilibrium 2'
                     end if
 
                     ! pTg-equilibrium criteria. 1 & 2(.1 or .2) must be satisfied
