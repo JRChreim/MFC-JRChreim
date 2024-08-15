@@ -132,9 +132,9 @@ contains
                 do l = 0, p
 
                     if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                        PRINT *, 'printing vf before pc'
+                        PRINT *, 'printing vf before pc 1'
                         PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                        PRINT *, 'printing vf before pc'
+                        PRINT *, 'printing vf before pc 2'
                     end if
 
                     ! trigger for phase change. This will be used for checking many conditions through the code
@@ -370,9 +370,9 @@ contains
                     end if
 
                     if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                        PRINT *, 'printing vf after pc'
+                        PRINT *, 'printing vf after pc 1'
                         PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                        PRINT *, 'printing vf after pc'
+                        PRINT *, 'printing vf after pc 2'
                     end if
 
                 end do
