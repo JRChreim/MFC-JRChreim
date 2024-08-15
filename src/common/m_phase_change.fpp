@@ -155,7 +155,9 @@ contains
 
                         ! calculating the total internal energy such that the energy-fraction for each of the
                         ! fluids can be proportionally distributed when the sum of the internal energies differs from the
-                        rhoeT = rhoeT + q_cons_vf(i + intxb - 1)%sf(j, k, l)
+                        if (model_eqns .eq. 3) then
+                            rhoeT = rhoeT + q_cons_vf(i + intxb - 1)%sf(j, k, l)
+                        end if
                     end do
 
                     ! calculating the total reacting mass for the phase change process. By hypothesis, this should not change
@@ -186,7 +188,7 @@ contains
                     if (TR) then
                         ! calling p-equilibrium
                         if ((relax_model == 4)) then
-                            call s_infinite_p_relaxation_k(j, k, l, pS, q_cons_vf, rhoe, rhoeT, Tk)
+                            call s_infinite_p_relaxation_k(j, k, l, pS, q_cons_vf, rho, rhoe, rhoeT, Tk)
                             ! Calling pT-equilibrium for solving it or as an IC for the pTg-equilibrium
                         elseif ((relax_model == 5) .or. (relax_model == 6)) then
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
@@ -223,9 +225,9 @@ contains
                     ( (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps) ) ) &
                     ) then
 
-                        PRINT *, 'phase change is happening'
-                        PRINT *, 'masses 1, 2, 3', q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
-                        PRINT *, 'pS', pS
+                        ! PRINT *, 'phase change is happening'
+                        ! PRINT *, 'masses 1, 2, 3', q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
+                        ! PRINT *, 'pS', pS
 
                         ! start checking the presence of either subcoooled liquid or overheated vapor (NOT metastability)
 
@@ -343,7 +345,9 @@ contains
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
 
                             ! alpha*rho*e
-                            q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)*ek(i)
+                            if (model_eqns .eq. 3) then
+                                q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)*ek(i)
+                            end if
 
                             ! Total volume Fraction Test
                             TvFT = TvFT + q_cons_vf(i + advxb - 1)%sf(j, k, l)
@@ -371,12 +375,12 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
-    subroutine s_infinite_p_relaxation_k(j, k, l, pS, q_cons_vf, rhoe, rhoeT, Tk)
+    subroutine s_infinite_p_relaxation_k(j, k, l, pS, q_cons_vf, rho, rhoe, rhoeT, Tk)
         !$acc routine seq
 
         ! initializing variables
         type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
-        real(kind(0.0d0)), intent(IN) :: rhoe, rhoeT
+        real(kind(0.0d0)), intent(IN) :: rho, rhoe, rhoeT
         real(kind(0.0d0)), intent(OUT) :: pS
         real(kind(0.0d0)), dimension(num_fluids), intent(OUT) :: Tk
         integer, intent(IN) :: j, k, l
@@ -393,7 +397,11 @@ contains
 
             ! Re-distributiong internal energy values such that rhoe = rhoeT, eventually.
             ! initial value for internal energy
-            alpharhoe0k(i) = q_cons_vf(i + intxb - 1)%sf(j, k, l)*rhoe/rhoeT
+            if (model_eqns .eq. 3) then
+                alpharhoe0k(i) = q_cons_vf(i + intxb - 1)%sf(j, k, l)*rhoe/rhoeT
+            else 
+                alpharhoe0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)*rhoe/rho
+            end if
 
             alphak(i) = q_cons_vf(i + advxb - 1)%sf(j, k, l)
 
@@ -726,7 +734,7 @@ contains
             ! transfer a bit of mass to the deficient phase, enforce phase0chane
             call s_correct_partial_densities(1, q_cons_vf, rM, rho, TR, i, j, k, l)
 
-            PRINT *, 'activated'
+            ! PRINT *, 'activated'
     
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0d0) then
@@ -906,7 +914,7 @@ contains
                 end if
             end do
         elseif (CT == 1) then
-            PRINT *, 'CT 1'
+            ! PRINT *, 'CT 1'
             if (rM < 0.0d0) then
                 ! reacting masses are very negative so as to affect the physics of the problem, so phase change will not be activated
                 if ((q_cons_vf(lp + contxb - 1)%sf(j, k, l)/rM < mixM) .or. &
@@ -936,13 +944,15 @@ contains
 
             end if
         elseif (CT == 2) then
-            PRINT *, 'CT 2'
+            ! PRINT *, 'CT 2'
             do i = 1, num_fluids
                 if (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0 .or. &
                     q_cons_vf(i + contxb - 1)%sf(j, k, l)  < 0 ) then
                     q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0.0
                     q_cons_vf(i + contxb - 1)%sf(j, k, l) = 0.0
-                    q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0.0
+                    if (model_eqns .eq. 3) then
+                        q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0.0
+                    end if 
                 end if
             end do
         else
@@ -1157,7 +1167,9 @@ contains
 
             print *, 'mq_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
 
-            print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
+            if (model_eqns .eq. 3) then
+                print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
+            end if
 
             print *, 'Y_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)/rho
 

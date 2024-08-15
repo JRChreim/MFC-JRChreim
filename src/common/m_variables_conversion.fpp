@@ -263,10 +263,10 @@ contains
         end do
 
         if (mpp_lim) then
-            PRINT *, 'mpp_variables conversion, line 266'
-            PRINT *, 'before. mass, vf'
-            PRINT *, alpha_rho_K
-            PRINT *, alpha_K
+            ! PRINT *, 'mpp_variables conversion, line 266'
+            ! PRINT *, 'before. mass, vf'
+            ! PRINT *, alpha_rho_K
+            ! PRINT *, alpha_K
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0d0, alpha_rho_K(i))
                 alpha_K(i) = min(max(0d0, alpha_K(i)), 1d0)
@@ -274,9 +274,9 @@ contains
 
             alpha_K = alpha_K/max(sum(alpha_K), 1d-16)
 
-            PRINT *, 'after. mass, vf'
-            PRINT *, alpha_rho_K
-            PRINT *, alpha_K
+            ! PRINT *, 'after. mass, vf'
+            ! PRINT *, alpha_rho_K
+            ! PRINT *, alpha_K
 
         end if
 
@@ -396,10 +396,10 @@ contains
 
         if (mpp_lim) then
 
-            PRINT *, 'mpp_variables conversion, line 399'
-            PRINT *, 'before. mass, vf'
-            PRINT *, alpha_rho_K
-            PRINT *, alpha_K
+            ! PRINT *, 'mpp_variables conversion, line 399'
+            ! PRINT *, 'before. mass, vf'
+            ! PRINT *, alpha_rho_K
+            ! PRINT *, alpha_K
 
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0d0, alpha_rho_K(i))
@@ -408,9 +408,9 @@ contains
 
             alpha_K = alpha_K/max(sum(alpha_K), 1d-16)
 
-            PRINT *, 'after. mass, vf'
-            PRINT *, alpha_rho_K
-            PRINT *, alpha_K
+            ! PRINT *, 'after. mass, vf'
+            ! PRINT *, alpha_rho_K
+            ! PRINT *, alpha_K
 
         end if
 
@@ -498,10 +498,10 @@ contains
 
         if (mpp_lim) then
             
-            PRINT *, 'mpp_variables conversion, line 501'
-            PRINT *, 'before. mass, vf'
-            PRINT *, alpha_rho_K
-            PRINT *, alpha_K
+            ! PRINT *, 'mpp_variables conversion, line 501'
+            ! PRINT *, 'before. mass, vf'
+            ! PRINT *, alpha_rho_K
+            ! PRINT *, alpha_K
 
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0d0, alpha_rho_K(i))
@@ -511,9 +511,9 @@ contains
 
             alpha_K = alpha_K/max(alpha_K_sum, sgm_eps)
 
-            PRINT *, 'after. mass, vf'
-            PRINT *, alpha_rho_K
-            PRINT *, alpha_K
+            ! PRINT *, 'after. mass, vf'
+            ! PRINT *, alpha_rho_K
+            ! PRINT *, alpha_K
 
         end if
 

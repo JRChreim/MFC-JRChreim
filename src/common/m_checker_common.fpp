@@ -183,10 +183,10 @@ contains
         !! Called by s_check_inputs_common for pre-processing and simulation
     subroutine s_check_inputs_phase_change
         if (relax) then
-            if (model_eqns /= 3) then
-                call s_mpi_abort('phase change requires model_eqns = 3. '// &
-                                 'Exiting ...')
-            elseif ((relax_model < 0) .or. (relax_model > 6)) then
+            ! if (model_eqns /= 3) then
+            !     call s_mpi_abort('phase change requires model_eqns = 3. '// &
+            !                      'Exiting ...')
+            if ((relax_model < 0) .or. (relax_model > 6)) then
                 call s_mpi_abort('relax_model should be in between 0 and 6. '// &
                                  'Exiting ...')
             elseif ((palpha_eps <= 0d0) .or. (palpha_eps >= 1d0)) then
