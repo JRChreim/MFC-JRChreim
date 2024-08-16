@@ -149,7 +149,7 @@ contains
                         m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
                     end do
 
-                    ! reinitializing mixture density and volume fraction
+                    ! computing mixture density, volume fraction, and internal energy
                     rho = 0.0d0; TvF = 0.0d0; rhoeT = 0.0d0
 
                     !$acc loop seq
@@ -171,7 +171,8 @@ contains
                     ! throughout the phase-change process.
                     rM = m0k(lp) + m0k(vp)
 
-                    ! correcting negative (recating) mass fraction values in case they happen
+                    ! correcting negative (recating) mass fraction values in case they happen. TR is updated here,
+                    ! in case phase change needs to be stopped
                     call s_correct_partial_densities(2, q_cons_vf, rM, rho, TR, i, j, k, l)
 
                     ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
@@ -220,7 +221,7 @@ contains
                         end do
                         
                         ! if either p or pT is an IC for the pTg model. The variables will only be updated if 
-                        ! the pTg model is expected to happen
+                        ! the pTg model is expected to happen. TR will be used in the futu
                         if ((relax_model == 1) .or. (relax_model == 6)) then
                             TR = .false.
                         end if
@@ -304,8 +305,10 @@ contains
 
                             ! correcting the vapor partial density
                             q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                            
+                            TR = .true.
 
-                            ! checking the conditions for subcooled liquid
+                        ! checking the conditions for subcooled liquid
                         elseif (TSSL < TSatSL) then
 
                             ! Assigning pressure
@@ -320,6 +323,9 @@ contains
                             ! correcting the vapor partial density
                             q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
+                            TR = .true.
+
+                        ! if not, allowing phase change (pTg)
                         else
 
                             ! returning partial pressures to what they were from the hyperbolic
@@ -329,7 +335,8 @@ contains
                             ! vapor
                             q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m2
 
-                            ! calling the pTg-equilibrium solver
+                            ! calling the pTg-equilibrium solver. Note that TR is updated inside phase the subroutine, 
+                            ! if this is ought to happen
                             call s_infinite_ptg_relaxation_k(j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TR, TS)
 
                             ! if TR is false, the solver will skip phase change and the fluid the same as from
@@ -773,7 +780,7 @@ contains
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0d0) then
             
-            ! skip pTg subroutine, and get back to the main one
+            ! skip pTg subroutine, and get back to the main one. TR false means nothing will be updated
             TR = .false.
 
             return
@@ -915,6 +922,12 @@ contains
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+
+        if ( (ns .gt. 0) )then
+            ! if we enter phase-change then we are interested in updating the variables
+            ! I think I have to solve this, first. Make sure the pTg process happens
+            TR = .true.
+        end if
 
     end subroutine s_infinite_ptg_relaxation_k ! -----------------------
 
