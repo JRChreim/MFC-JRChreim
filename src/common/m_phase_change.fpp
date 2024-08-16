@@ -338,8 +338,6 @@ contains
                                 PRINT *, 'pc is happening 1'
                                 PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
                                 PRINT *, 'pc is happening 2'
-                                PRINT *, 'TR', TR
-                                PRINT *, 'pc is happening 3'
                             end if
 
                         end if
@@ -395,12 +393,6 @@ contains
                         end do
 
                         rMT = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)
-                    end if
-
-                    if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                        PRINT *, 'printing vf after pc 1'
-                        PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                        PRINT *, 'printing vf after pc 2'
                     end if
 
                 end do
@@ -773,9 +765,7 @@ contains
 
             ! transfer a bit of mass to the deficient phase, enforce phase0chane
             call s_correct_partial_densities(1, q_cons_vf, rM, rho, TR, i, j, k, l)
-
-            ! PRINT *, 'activated'
-    
+   
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0d0) then
             
