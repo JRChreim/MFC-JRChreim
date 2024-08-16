@@ -370,6 +370,12 @@ contains
                             ! volume fractions
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
 
+                            if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                                PRINT *, 'inside TR 1'
+                                PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                                PRINT *, 'inside TR 2'
+                            end if
+
                             ! alpha*rho*e
                             if (model_eqns .eq. 3) then
                                 q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)*ek(i)
