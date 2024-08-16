@@ -131,11 +131,11 @@ contains
             do k = 0, n
                 do l = 0, p
 
-                    if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                        PRINT *, 'printing vf before pc 1'
-                        PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                        PRINT *, 'printing vf before pc 2'
-                    end if
+                    ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                    !     PRINT *, 'printing vf before pc 1'
+                    !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                    !     PRINT *, 'printing vf before pc 2'
+                    ! end if
 
                     ! trigger for phase change. This will be used for checking many conditions through the code
                     TR = .true.
@@ -174,11 +174,11 @@ contains
                     ! correcting negative (recating) mass fraction values in case they happen
                     call s_correct_partial_densities(2, q_cons_vf, rM, rho, TR, i, j, k, l)
 
-                    if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                        PRINT *, 'printing vf after mass correction 1'
-                        PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                        PRINT *, 'printing vf after mass correction 2'
-                    end if
+                    ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                    !     PRINT *, 'printing vf after mass correction 1'
+                    !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                    !     PRINT *, 'printing vf after mass correction 2'
+                    ! end if
 
                     ! updating m1 and m2 AFTER correcting the partial densities. Note that these values must be stored for the phase
                     ! change process that will happen a posteriori
@@ -234,30 +234,33 @@ contains
                         return
                     end if
 
-                    if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                        PRINT *, 'printing vf after pT-equilibrium 1'
-                        PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                        PRINT *, 'printing vf after pT-equilibrium 2'
-                    end if
+                    ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                    !     PRINT *, 'printing vf after pT-equilibrium 1'
+                    !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                    !     PRINT *, 'printing vf after pT-equilibrium 2'
+                    ! end if
 
                     ! pTg-equilibrium criteria. 1 & 2(.1 or .2) must be satisfied
                     if ( &
-                    ! 1st: model activation, 1st order transition (p,T) <= (pCr, TCr)
+                    
+                    ! 1 - model activation, 1st order transition (p,T) <= (pCr, TCr)
                     (relax_model == 6) .and. (pS < pCr) .and. (TS < TCr) .and. (TR .eqv. .true.) .and. &
+                    
                     ! 2 - homogeneous or heterogeneous.
                     ! 2.1 Homogeneous pTg-equilibrium (either one, or both). Note that this is a vector sum. If pS < 0,
                     ! this sum still must be > 0
                     ( ( pS + minval(p_infpT) .gt. 0.0 ) &
                     .or. &
+                    
                     ! 2.2. Heterogeneous pTg-equilibrium. Checking whether the cell is a mixture
                     ( (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps) ) ) &
                     ) then
 
-                        if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                            PRINT *, 'entering pc 1'
-                            PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                            PRINT *, 'entering pc 2'
-                        end if
+                        ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                        !     PRINT *, 'entering pc 1'
+                        !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                        !     PRINT *, 'entering pc 2'
+                        ! end if
 
                         ! start checking the presence of either subcoooled liquid or overheated vapor (NOT metastability)
 
@@ -344,11 +347,11 @@ contains
 
                             end if
 
-                            if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                                PRINT *, 'pc is happening 1'
-                                PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                                PRINT *, 'pc is happening 2'
-                            end if
+                            ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                            !     PRINT *, 'pc is happening 1'
+                            !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                            !     PRINT *, 'pc is happening 2'
+                            ! end if
 
                         end if
                         Tk = spread(TS, 1, num_fluids)
@@ -380,11 +383,11 @@ contains
                             ! volume fractions
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
 
-                            if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                                PRINT *, 'inside TR 1'
-                                PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                                PRINT *, 'inside TR 2'
-                            end if
+                            ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                            !     PRINT *, 'inside TR 1'
+                            !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                            !     PRINT *, 'inside TR 2'
+                            ! end if
 
                             ! alpha*rho*e
                             if (model_eqns .eq. 3) then
