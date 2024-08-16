@@ -243,9 +243,11 @@ contains
                     ( (q_cons_vf(lp + advxb - 1)%sf(j, k, l) > palpha_eps) .and. (q_cons_vf(vp + advxb - 1)%sf(j, k, l) > palpha_eps) ) ) &
                     ) then
 
-                        ! PRINT *, 'phase change is happening'
-                        ! PRINT *, 'masses 1, 2, 3', q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
-                        ! PRINT *, 'pS', pS
+                        if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                            PRINT *, 'entering pc 1'
+                            PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                            PRINT *, 'entering pc 2'
+                        end if
 
                         ! start checking the presence of either subcoooled liquid or overheated vapor (NOT metastability)
 
@@ -330,6 +332,12 @@ contains
 
                                 return
 
+                            end if
+
+                            if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+                                PRINT *, 'pc is happening 1'
+                                PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                                PRINT *, 'pc is happening 2'
                             end if
 
                         end if
