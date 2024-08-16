@@ -338,6 +338,8 @@ contains
                                 PRINT *, 'pc is happening 1'
                                 PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
                                 PRINT *, 'pc is happening 2'
+                                PRINT *, 'TR', TR
+                                PRINT *, 'pc is happening 3'
                             end if
 
                         end if
