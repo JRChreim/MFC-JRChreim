@@ -109,11 +109,11 @@ contains
         real(kind(0.0d0)) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(kind(0.0d0)) :: TS, TSOV, TSSL, TSatOV, TSatSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(kind(0.0d0)) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
-        real(kind(0.0d0)) :: rho, rM, m1, m2, rhoT, rMT !< total density, total reacting mass, individual reacting masses
-        real(kind(0.0d0)) :: TvF, TvFT !< total volume fraction
+        real(kind(0.0d0)) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
+        real(kind(0.0d0)) :: TvF !< total volume fraction
         logical :: TR
 
-        !$acc declare create(pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, rhoT, rMT, TvF, TvFT, TR)
+        !$acc declare create(pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TvF, TR)
 
         real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, m0k, sk, hk, gk, ek, rhok, Tk
 
@@ -126,7 +126,7 @@ contains
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, sk, hk, gk, ek, rhok, Tk, pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, rhoT, rMT, TvF, TvFT, TR)
+        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, sk, hk, gk, ek, rhok, Tk, pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TvF, TR)
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -144,6 +144,7 @@ contains
                     do i = 1, num_fluids
                         ! original volume fractions, before any relaxation
                         alpha0k(i) = q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                        
                         ! original mass fractions, before any relaxation
                         m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
                     end do
@@ -199,21 +200,30 @@ contains
 
                     if (TR) then
                         ! calling p-equilibrium
-                        if ((relax_model == 4)) then
+                        if ((relax_model == 1) .or. (relax_model == 4)) then
                             call s_infinite_p_relaxation_k(j, k, l, pS, q_cons_vf, rho, rhoe, rhoeT, Tk)
-                            ! Calling pT-equilibrium for solving it or as an IC for the pTg-equilibrium
+                        
+                        ! Calling pT-equilibrium
                         elseif ((relax_model == 5) .or. (relax_model == 6)) then
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
                             call s_infinite_pt_relaxation_k(j, k, l, 2, pS, p_infpT, q_cons_vf, rhoe, rM, TS)
-                            Tk = spread(TS, 1, num_fluids)
+                            Tk = spread(TS, 1, num_fluids)           
                         end if
+                        
                         ! updating the densities such that appropriate volume fractions can be calculated and used for thresholds
                         rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
+                        
                         !$acc loop seq
                         do i = 1, num_fluids
                             ! new volume fractions, after p- or pT-equilibrium
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
                         end do
+                        
+                        ! if either p or pT is an IC for the pTg model. The variables will only be updated if 
+                        ! the pTg model is expected to happen
+                        if ((relax_model == 1) .or. (relax_model == 6)) then
+                            TR = .false.
+                        end if
                     else
                         ! returning partial densities to what they were previous to any relaxation scheme
                         !$acc loop seq                        
