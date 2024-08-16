@@ -362,7 +362,7 @@ contains
                     ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
 
                     ! calculating volume fractions, internal energies, and total entropy
-                    TvFT = 0.0d0; rhoT = 0.0d0; rhos = 0.0d0
+                    rhos = 0.0d0
                     if (TR) then
                         !$acc loop seq
                         do i = 1, num_fluids
@@ -381,20 +381,11 @@ contains
                                 q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)*ek(i)
                             end if
 
-                            ! Total volume Fraction Test
-                            TvFT = TvFT + q_cons_vf(i + advxb - 1)%sf(j, k, l)
-
-                            ! Total mixture density Test
-                            rhoT = rhoT + q_cons_vf(i + contxb - 1)%sf(j, k, l)
-
                             ! Total entropy
                             rhos = rhos + q_cons_vf(i + contxb - 1)%sf(j, k, l)*sk(i)
 
                         end do
-
-                        rMT = q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l)
                     end if
-
                 end do
             end do
         end do
