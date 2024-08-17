@@ -291,8 +291,6 @@ contains
                             Tk = spread(TS, 1, num_fluids)
                         end if
                         
-                        PRINT *, 'TR', TR
-
                         if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
                             PRINT *, 'phase change, m, vf, 297'
                             PRINT *, q_cons_vf(i + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
@@ -690,6 +688,10 @@ contains
         elseif ((pS < 1.0d-1) .and. (pS >= 0.0d0)) then
             ! improve this initial condition
             pS = 1.0d4
+        end if
+
+        if ( q_cons_vf(vp + contxb - 1)%sf(j, k, l) .eq. 0.0 ) then
+            PRINT *, 'phase change is happening'
         end if
 
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
