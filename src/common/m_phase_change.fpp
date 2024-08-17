@@ -174,7 +174,7 @@ contains
 
                     if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
                         PRINT *, 'phase change, m, vf, 176'
-                        PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l),
+                        PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
                         PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
                     end if
 
@@ -294,7 +294,7 @@ contains
                         
                         if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
                             PRINT *, 'phase change, m, vf, 297'
-                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l),
+                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
                             PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
                         end if
                         ! updating conservative variables through either p- or pT-equilibrium
@@ -302,7 +302,7 @@ contains
 
                         if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
                             PRINT *, 'phase change, m, vf, 304'
-                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l),
+                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
                             PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
                         end if
 
@@ -314,8 +314,8 @@ contains
                         end do
                         
                         if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                            PRINT *, 'phase change, m, vf, 304'
-                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l),
+                            PRINT *, 'phase change, m, vf, 318'
+                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
                             PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
                         end if
 
