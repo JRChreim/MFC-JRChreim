@@ -263,10 +263,10 @@ contains
         end do
 
         if (mpp_lim) then
-            if ( alpha_K(2) > 1E-8) then
-                PRINT *, 'mpp_variables, m, vf, 266'
-                PRINT *, alpha_rho_K(2), alpha_K(2)
-            end if
+            ! if ( alpha_K(2) > 1E-8) then
+            !     PRINT *, 'mpp_variables, m, vf, 266'
+            !     PRINT *, alpha_rho_K(2), alpha_K(2)
+            ! end if
 
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0d0, alpha_rho_K(i))
@@ -275,10 +275,10 @@ contains
 
             alpha_K = alpha_K/max(sum(alpha_K), 1d-16)
             
-            if ( alpha_K(2) > 1E-8) then
-                PRINT *, 'mpp_variables, m, vf, 278'
-                PRINT *, alpha_rho_K(2), alpha_K(2)
-            end if
+            ! if ( alpha_K(2) > 1E-8) then
+            !     PRINT *, 'mpp_variables, m, vf, 278'
+            !     PRINT *, alpha_rho_K(2), alpha_K(2)
+            ! end if
 
         end if
 
@@ -398,10 +398,10 @@ contains
 
         if (mpp_lim) then
 
-            if ( alpha_K(2) > 1E-8) then
-                PRINT *, 'mpp_variables, m, vf, 402'
-                PRINT *, alpha_rho_K(2), alpha_K(2)
-            end if
+            ! if ( alpha_K(2) > 1E-8) then
+            !     PRINT *, 'mpp_variables, m, vf, 402'
+            !     PRINT *, alpha_rho_K(2), alpha_K(2)
+            ! end if
 
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0d0, alpha_rho_K(i))
@@ -410,10 +410,10 @@ contains
 
             alpha_K = alpha_K/max(sum(alpha_K), 1d-16)
 
-            if ( alpha_K(2) > 1E-8) then
-                PRINT *, 'mpp_variables, m, vf, 414'
-                PRINT *, alpha_rho_K(2), alpha_K(2)
-            end if
+            ! if ( alpha_K(2) > 1E-8) then
+            !     PRINT *, 'mpp_variables, m, vf, 414'
+            !     PRINT *, alpha_rho_K(2), alpha_K(2)
+            ! end if
 
         end if
 
@@ -501,10 +501,10 @@ contains
 
         if (mpp_lim) then
             
-            if ( alpha_K(2) > 1E-8) then
-                PRINT *, 'mpp_variables, m, vf, 505'
-                PRINT *, alpha_rho_K(2), alpha_K(2)
-            end if
+            ! if ( alpha_K(2) > 1E-8) then
+            !     PRINT *, 'mpp_variables, m, vf, 505'
+            !     PRINT *, alpha_rho_K(2), alpha_K(2)
+            ! end if
 
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0d0, alpha_rho_K(i))
@@ -514,10 +514,10 @@ contains
 
             alpha_K = alpha_K/max(alpha_K_sum, sgm_eps)
 
-            if ( alpha_K(2) > 1E-8) then
-                PRINT *, 'mpp_variables, m, vf, 517'
-                PRINT *, alpha_rho_K(2), alpha_K(2)
-            end if
+            ! if ( alpha_K(2) > 1E-8) then
+            !     PRINT *, 'mpp_variables, m, vf, 517'
+            !     PRINT *, alpha_rho_K(2), alpha_K(2)
+            ! end if
 
         end if
 
