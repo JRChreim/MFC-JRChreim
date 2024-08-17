@@ -283,7 +283,7 @@ contains
                             Tk = spread(TS, 1, num_fluids)
                         end if
                         ! updating conservative variables through either p- or pT-equilibrium
-                        call update_conservative_vars( pS, q_cons_vf, Tk )
+                        call update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
                     else
                         !$acc loop seq
                         do i = 1, num_fluids
@@ -1195,12 +1195,13 @@ contains
 
     end subroutine s_TSat
 
-    subroutine update_conservative_vars( pS, q_cons_vf, Tk )
+    subroutine update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
         
         !$acc routine seq
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
         real(kind(0.0d0)), intent(IN) :: pS
         real(kind(0.0d0)), dimension(num_fluids), intent(IN) :: Tk
+        integer, intent(IN) :: j, k, l
         real(kind(0d0)), dimension(num_fluids) :: sk, hk, gk, ek, rhok
 
         ! Calculations AFTER then intended equilibrium
