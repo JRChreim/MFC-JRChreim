@@ -445,7 +445,7 @@ contains
                     print *, 'fp', 'fpp', fp, fpp
 
                     call s_tattletale((/0.0d0, 0.0d0/), reshape((/0.0d0, 0.0d0, 0.0d0, 0.0d0/), (/2, 2/)) &
-                                      , j, (/0.0d0, 0.0d0, 0.0d0, 0.0d0/), k, l, rhoeT, p_infpT, pS, (/pS - pO, pS + pO/) &
+                                      , j, (/0.0d0, 0.0d0, 0.0d0, 0.0d0/), k, l, rhoeT, ps_inf, pS, (/pS - pO, pS + pO/) &
                                       , rhoe, q_cons_vf, SUM(Tk)/num_fluids)
                 end if
 
