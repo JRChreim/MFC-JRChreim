@@ -293,7 +293,7 @@ contains
                         
                         if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
                             PRINT *, 'phase change, m, vf, 297'
-                            PRINT *, q_cons_vf(i + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                            PRINT *, q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
                         end if
                         ! updating conservative variables through either p- or pT-equilibrium
                         call update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
