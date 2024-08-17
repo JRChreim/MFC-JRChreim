@@ -274,7 +274,9 @@ contains
                                     q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m2
 
                                     ! pTg-equilibrium solver.
+                                    PRINT *, 'entering phase change'
                                     call s_infinite_ptg_relaxation_k(j, k, l, pS, p_infpT, rho, rhoe, rM, q_cons_vf, TR, TS)
+                                    PRINT *, 'exiting phase change'
 
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
                                     if ( TR .eqv. .false. ) then
