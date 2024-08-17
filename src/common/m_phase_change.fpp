@@ -256,8 +256,6 @@ contains
                                     q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
                                     q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
-                                    massa é efetivamente a atualizacao 3
-
                                 ! if not, allowing phase change (pTg)
                                 else
                                     ! returning partial pressures to what they were after the partial density correction 
