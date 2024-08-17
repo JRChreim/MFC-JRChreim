@@ -114,18 +114,18 @@ contains
 
         !$acc declare create(pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
 
-        real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, sk, hk, gk, ek, rhok, Tk
+        real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk
 
         !< Generic loop iterators
         integer :: i, j, k, l
 
-        !$acc declare create(p_infOV, p_infpT, p_infSL, alpha0k, alphak, sk, hk, gk, ek, rhok, Tk)
+        !$acc declare create(p_infOV, p_infpT, p_infSL, alpha0k, alphak, rhok, Tk)
 
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, alpha0k, alphak, sk, hk, gk, ek, rhok, Tk, pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
+        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, alpha0k, alphak, rhok, Tk, pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -197,7 +197,7 @@ contains
                             end do
                             
                             ! 1 - model activation, 1st order transition (p,T) <= (pCr, TCr)
-                            if ( ( pS < pCr ) .and.
+                            if ( ( pS < pCr ) .and. &
                             ! 2.1 Homogeneous pTg-equilibrium criterium
                             ( ( pS + minval(p_infpT) .gt. 0.0 ) &
                             .or. &
@@ -277,7 +277,6 @@ contains
                                         
                                         ! exiting phase change with nothing updated.
                                         return
-
                                     end if
                                 end if
                             end if
@@ -291,6 +290,7 @@ contains
                             ! returning partial densities to what they were for the hyperbolic solver
                             q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
                         end do
+                    end if
                 end do
             end do
         end do
@@ -1198,11 +1198,11 @@ contains
     subroutine update_conservative_vars( pS, q_cons_vf, Tk )
         
         !$acc routine seq
-
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
         real(kind(0.0d0)), intent(IN) :: pS
         real(kind(0.0d0)), dimension(num_fluids), intent(IN) :: Tk
-    
+        real(kind(0d0)), dimension(num_fluids) :: sk, hk, gk, ek, rhok
+
         ! Calculations AFTER then intended equilibrium
         ! entropy
         sk = cvs*DLOG((Tk**gs_min)/((pS + ps_inf)**(gs_min - 1.0d0))) + qvps
@@ -1221,29 +1221,27 @@ contains
 
         ! calculating volume fractions, internal energies, and total entropy
         ! rhos = 0.0d0
-        if (TR) then
-            !$acc loop seq
-            do i = 1, num_fluids
+        !$acc loop seq
+        do i = 1, num_fluids
 
-                ! volume fractions
-                q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
+            ! volume fractions
+            q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
 
-                ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-                !     PRINT *, 'inside TR 1'
-                !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                !     PRINT *, 'inside TR 2'
-                ! end if
+            ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
+            !     PRINT *, 'inside TR 1'
+            !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+            !     PRINT *, 'inside TR 2'
+            ! end if
 
-                ! alpha*rho*e
-                if (model_eqns .eq. 3) then
-                    q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)*ek(i)
-                end if
+            ! alpha*rho*e
+            if (model_eqns .eq. 3) then
+                q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)*ek(i)
+            end if
 
-                ! Total entropy
-                ! rhos = rhos + q_cons_vf(i + contxb - 1)%sf(j, k, l)*sk(i)
+            ! Total entropy
+            ! rhos = rhos + q_cons_vf(i + contxb - 1)%sf(j, k, l)*sk(i)
 
-            end do
-        end if
+        end do
         
     end subroutine update_conservative_vars
 
