@@ -290,8 +290,8 @@ contains
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
                             else
-
                                 return        
+                            end if
                         end if
                         
                         if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
