@@ -1203,6 +1203,7 @@ contains
         real(kind(0.0d0)), dimension(num_fluids), intent(IN) :: Tk
         integer, intent(IN) :: j, k, l
         real(kind(0d0)), dimension(num_fluids) :: sk, hk, gk, ek, rhok
+        integer :: i
 
         ! Calculations AFTER then intended equilibrium
         ! entropy
