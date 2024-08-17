@@ -312,12 +312,6 @@ contains
                             ! returning partial densities to what they were for the hyperbolic solver
                             q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
                         end do
-                        
-                        if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                            PRINT *, 'phase change, m, vf, 318'
-                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
-                            PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
-                        end if
 
                     end if
                 end do
@@ -441,34 +435,19 @@ contains
 
                 ! checking if pressure is within expected bounds
             elseif ((pS <= -1.0d0*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
-                ! if (proc_rank .eq. 0) then
 
-                print *, 'ns', ns
+                if (proc_rank == 0) then
 
-                print *, 'pO, pS', pO, pS, abs(pO - pS)
+                    print *, 'ns', ns
 
-                print *, 'energies (N,O)', rhoe, rhoeT, 'DE', rhoe - rhoeT
+                    print *, 'energies (N,O)', rhoe, rhoeT, 'DE', rhoe - rhoeT
 
-                print *, 'TVF', sum(alphak)
+                    print *, 'fp', 'fpp', fp, fpp
 
-                print *, 'alpha', alphak
-
-                print *, 'alpharhoe', alpharhoek
-
-                print *, 'alpharhoe0', alpharhoe0k
-
-                print *, 'sum(alpharhoe) - sum(alpharhoe0)', sum(alpharhoek) - sum(alpharhoe0k)
-
-                print *, 'fp', 'fpp', fp, fpp
-
-                do i = 1, num_fluids
-
-                    print *, 'alpha0_i', q_cons_vf(i + advxb - 1)%sf(j, k, l)
-                    print *, 'alpha_rho_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)
-
-                end do
-
-                ! end if
+                    call s_tattletale((/0.0d0, 0.0d0/), reshape((/0.0d0, 0.0d0, 0.0d0, 0.0d0/), (/2, 2/)) &
+                                      , j, (/0.0d0, 0.0d0, 0.0d0, 0.0d0/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
+                                      , rhoe, q_cons_vf, TS)
+                end if
 
                 call s_real_to_str(pS, pSs)
                 call s_int_to_str(ns, nss)
@@ -706,7 +685,7 @@ contains
             pS = 1.0d4
         end if
 
-        if ( q_cons_vf(vp + contxb - 1)%sf(j, k, l) .eq. 0.0 ) then
+        if ( q_cons_vf(vp + contxb - 1)%sf(j, k, l) .le. 1.0d-8 ) then
             PRINT *, 'phase change is happening'
         end if
 
