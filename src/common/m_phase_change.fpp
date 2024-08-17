@@ -173,7 +173,7 @@ contains
                     call s_correct_partial_densities(2, q_cons_vf, rM, rho, TR, i, j, k, l)
 
                     if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                        PRINT *, 'mpp_variables, m, vf, 176'
+                        PRINT *, 'phase change, m, vf, 176'
                         PRINT *, q_cons_vf(i + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
                     end if
 
@@ -289,6 +289,13 @@ contains
                                 end if
                             end if
                             Tk = spread(TS, 1, num_fluids)
+                        end if
+                        
+                        PRINT *, 'TR', TR
+
+                        if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
+                            PRINT *, 'phase change, m, vf, 297'
+                            PRINT *, q_cons_vf(i + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
                         end if
                         ! updating conservative variables through either p- or pT-equilibrium
                         call update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
