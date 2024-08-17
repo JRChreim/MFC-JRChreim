@@ -685,9 +685,12 @@ contains
             pS = 1.0d4
         end if
 
-        if ( q_cons_vf(lp + contxb - 1)%sf(j, k, l) .le. 1.0d-8 .or. q_cons_vf(vp + contxb - 1)%sf(j, k, l) .le. 1.0d-8 ) then
-            PRINT *, 'phase change is happening'
+        ! PRINT *, 'phase change is happening'
+        ! PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
+        if ( q_cons_vf(lp + advxb - 1)%sf(j, k, l) .le. 1.0d-8 .or. q_cons_vf(vp + advxb - 1)%sf(j, k, l) .le. 1.0d-8 ) then
+            PRINT *, 'phase change is happening, mass, vf'
             PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
+            PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
         end if
 
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
