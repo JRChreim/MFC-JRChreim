@@ -225,8 +225,8 @@ contains
 
                                 ! overheated vapor
                                 ! depleting the mass of liquid and tranferring the total mass to vapor
-                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
-                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
+                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
 
                                 ! calling pT-equilibrium for overheated vapor, which is MFL = 0
                                 call s_infinite_pt_relaxation_k(j, k, l, 0, pSOV, p_infOV, q_cons_vf, rhoe, rM, TSOV)
@@ -236,8 +236,8 @@ contains
 
                                 ! subcooled liquid 
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
-                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
-                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
+                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
+                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
 
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1                       
                                 call s_infinite_pt_relaxation_k(j, k, l, 1, pSSL, p_infSL, q_cons_vf, rhoe, rM, TSSL)
@@ -283,15 +283,20 @@ contains
                                         do i = 1, num_fluids
                                             ! returning partial densities to what they were previous to any relaxation scheme
                                             q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
-                                        end do
-                                        
-                                        ! exiting phase change with nothing updated.
+                                        end do 
+                                        ! ends the execution of this function and returns control to the calling function
                                         return
                                     end if
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
                             else
-                                return        
+                                !$acc loop seq
+                                do i = 1, num_fluids
+                                    ! returning partial densities to what they were for the hyperbolic solver
+                                    q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
+                                end do
+                                ! ends the execution of this function and returns control to the calling function
+                                return
                             end if
                         end if
                         
@@ -315,7 +320,6 @@ contains
                             ! returning partial densities to what they were for the hyperbolic solver
                             q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
                         end do
-
                     end if
                 end do
             end do
@@ -676,9 +680,10 @@ contains
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0d0) then
             
-            ! skip pTg subroutine, and get back to the main one.
+            ! cancel any phase-change updates.
             TR = .false.
 
+            ! ends the execution of this function and returns control to the calling function
             return
 
         ! if not homogeneous, then heterogeneous. Thus, setting up an arbitrary initial condition in case the one from
@@ -720,7 +725,6 @@ contains
             ! the partial masses for all fluids, or on the equilibrium pressure
             !$acc loop seq
             do i = 1, num_fluids
-
                 ! sum of the total alpha*rho*cp of the system
                 mCP = mCP + q_cons_vf(i + contxb - 1)%sf(j, k, l) &
                       *cvs(i)*gs_min(i)
@@ -745,7 +749,6 @@ contains
                            *gs_min(i)
 
                 end if
-
             end do
 
             ! Checking pressure and energy criteria for the (pT) solver to find a solution
@@ -818,7 +821,6 @@ contains
 
             end if
 #endif
-
         end do
 
         ! common temperature
