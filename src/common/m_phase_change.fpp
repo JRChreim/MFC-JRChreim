@@ -248,32 +248,31 @@ contains
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
 
-                                    PRINT *, 'OV'
-
                                     ! Assigning pressure and temperature
                                     pS = pSOV
                                     TS = TSOV
 
                                     ! correcting the liquid and vapor partial densities
-                                    q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
-                                    q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                                    q_cons_vf(lp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
+                                    q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
 
                                 ! checking the conditions for subcooled liquid
                                 elseif (TSSL < TSatSL) then
-
-                                    PRINT *, 'SL'
 
                                     ! Assigning pressure and temperature
                                     pS = pSSL
                                     TS = TSSL
 
                                     ! correcting the liquid and vapor partial densities
-                                    q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
-                                    q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
+                                    q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
+                                    q_cons_vf(vp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
 
                                 ! if not, allowing phase change (pTg)
                                 else
                                     ! returning partial pressures to what they were after the partial density correction 
+
+                                    PRINT *, 'pc happening'
+                                    
                                     q_cons_vf(lp + contxb - 1)%sf(j, k, l) = m1
                                     q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m2
 
