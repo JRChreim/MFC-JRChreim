@@ -172,11 +172,11 @@ contains
                     ! at this time, TR is updated if phase change needs to be stopped
                     call s_correct_partial_densities(2, q_cons_vf, rM, rho, TR, i, j, k, l)
 
-                    if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                        PRINT *, 'phase change, m, vf, 176'
-                        PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
-                        PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
-                    end if
+                    ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
+                    !     PRINT *, 'phase change, m, vf, 176'
+                    !     PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
+                    !     PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
+                    ! end if
 
                     if (TR) then
                         ! p-equilibrium, only
@@ -193,10 +193,10 @@ contains
                             call s_infinite_pt_relaxation_k(j, k, l, 2, pS, p_infpT, q_cons_vf, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
 
-                            if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                                PRINT *, 'mpp_variables, m, vf, 176'
-                                PRINT *, q_cons_vf(i + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                            end if
+                            ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
+                            !     PRINT *, 'mpp_variables, m, vf, 176'
+                            !     PRINT *, q_cons_vf(i + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
+                            ! end if
 
                             ! updating the densities and volume fractions used for thresholds
                             rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
@@ -271,8 +271,6 @@ contains
                                 else
                                     ! returning partial pressures to what they were after the partial density correction 
 
-                                    PRINT *, 'pc happening'
-                                    
                                     q_cons_vf(lp + contxb - 1)%sf(j, k, l) = m1
                                     q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m2
 
@@ -297,19 +295,19 @@ contains
                             end if
                         end if
                         
-                        if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                            PRINT *, 'phase change, m, vf, 297'
-                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
-                            PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
-                        end if
+                        ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
+                        !     PRINT *, 'phase change, m, vf, 297'
+                        !     PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
+                        !     PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
+                        ! end if
                         ! updating conservative variables through either p- or pT-equilibrium
                         call update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
 
-                        if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                            PRINT *, 'phase change, m, vf, 304'
-                            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
-                            PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
-                        end if
+                        ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
+                        !     PRINT *, 'phase change, m, vf, 304'
+                        !     PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
+                        !     PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
+                        ! end if
 
                     else
                         !$acc loop seq
@@ -693,9 +691,9 @@ contains
         ! PRINT *, 'phase change is happening'
         ! PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
         ! if ( q_cons_vf(lp + advxb - 1)%sf(j, k, l) .le. 1.0d-8 .or. q_cons_vf(vp + advxb - 1)%sf(j, k, l) .le. 1.0d-8 ) then
-            PRINT *, 'phase change is happening, mass, vf'
-            PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
-            PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
+            ! PRINT *, 'phase change is happening, mass, vf'
+            ! PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
+            ! PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
         ! end if
 
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
