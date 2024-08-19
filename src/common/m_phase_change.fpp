@@ -216,6 +216,8 @@ contains
                             ( (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps) ) ) &
                             ) then
 
+                                PRINT *, 'is it entering pc?'
+
                                 ! updating m1 and m2 AFTER correcting the partial densities. These values must be
                                 ! stored in case the final state is a mixture of fluids
                                 m1 = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
