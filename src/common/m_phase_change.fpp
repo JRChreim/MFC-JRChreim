@@ -682,18 +682,18 @@ contains
         ! PRINT *, 'pc happening'
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
-        if ((pS < -8.2d5) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
+        if ((pS < -7.5d5) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
                                     > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1))/qvs(lp))) then
 
             ! transfer a bit of mass to the deficient phase, enforce phase0chane
             call s_correct_partial_densities(1, q_cons_vf, rM, rho, TR, i, j, k, l)
 
-            ! PRINT *, 'is it pS < 1E-6'
+            PRINT *, 'is it pS < 7.5E-5'
             
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0d0) then
             
-            ! PRINT *, 'is it pS < 0'
+            PRINT *, 'is it pS < 0'
 
             ! cancel any phase-change updates.
             TR = .false.
