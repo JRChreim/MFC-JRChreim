@@ -694,7 +694,7 @@ contains
         elseif (pS < 0.0d0) then
             
             PRINT *, 'is it pS < 0'
-
+            PRINT *, 'pS', pS
             ! cancel any phase-change updates.
             TR = .false.
 
