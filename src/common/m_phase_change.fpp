@@ -117,7 +117,7 @@ contains
         real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk
 
         !< Generic loop iterators
-        integer :: i, j, k, l
+        integer :: i, j, k, l, w
 
         !$acc declare create(p_infOV, p_infpT, p_infSL, alpha0k, alphak, rhok, Tk)
 
@@ -256,6 +256,8 @@ contains
                                     q_cons_vf(lp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
                                     q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
 
+                                    w = 0
+
                                 ! checking the conditions for subcooled liquid
                                 elseif (TSSL < TSatSL) then
 
@@ -267,10 +269,11 @@ contains
                                     q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
                                     q_cons_vf(vp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
 
+                                    w = 1
+
                                 ! if not, allowing phase change (pTg)
                                 else
                                     ! returning partial pressures to what they were after the partial density correction 
-
                                     q_cons_vf(lp + contxb - 1)%sf(j, k, l) = m1
                                     q_cons_vf(vp + contxb - 1)%sf(j, k, l) = m2
 
@@ -287,6 +290,9 @@ contains
                                         ! ends the execution of this function and returns control to the calling function
                                         return
                                     end if
+
+                                    w = 2
+
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
                             else
@@ -302,14 +308,17 @@ contains
                         
                         ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
                         !     PRINT *, 'phase change, m, vf, 297'
+                        !     PRINT *, w
                         !     PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
                         !     PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
                         ! end if
+                        
                         ! updating conservative variables through either p- or pT-equilibrium
                         call update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
 
                         ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
                         !     PRINT *, 'phase change, m, vf, 304'
+                        !     PRINT *, w
                         !     PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
                         !     PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
                         ! end if
@@ -670,16 +679,22 @@ contains
         ! for the moment) phase, and then let the algorithm run. 
         ! checking if homogeneous cavitation is possible
         
+        ! PRINT *, 'pc happening'
+
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
         if ((pS < -1.0d6) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
                                     > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1))/qvs(lp))) then
 
             ! transfer a bit of mass to the deficient phase, enforce phase0chane
             call s_correct_partial_densities(1, q_cons_vf, rM, rho, TR, i, j, k, l)
-   
+
+            ! PRINT *, 'is it pS < 1E-6'
+            
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0d0) then
             
+            ! PRINT *, 'is it pS < 0'
+
             ! cancel any phase-change updates.
             TR = .false.
 
@@ -691,6 +706,8 @@ contains
         elseif ((pS < 1.0d-1) .and. (pS >= 0.0d0)) then
             ! improve this initial condition
             pS = 1.0d4
+
+            ! PRINT *, 'is it pS > 0'
         end if
 
         ! PRINT *, 'phase change is happening'
