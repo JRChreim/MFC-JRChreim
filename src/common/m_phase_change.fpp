@@ -682,7 +682,7 @@ contains
         ! PRINT *, 'pc happening'
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
-        if ((pS < -7.5d5) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
+        if ((pS < -6.0d5) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
                                     > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1))/qvs(lp))) then
 
             ! transfer a bit of mass to the deficient phase, enforce phase0chane
