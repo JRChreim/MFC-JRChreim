@@ -2,8 +2,6 @@
 !! @file m_data_output.f90
 !! @brief Contains module m_data_output
 
-#:include 'inline_conversions.fpp'
-
 !> @brief This module takes care of writing the grid and initial condition
 !!              data files into the "0" time-step directory located in the folder
 !!              associated with the rank of the local processor, which is a sub-
@@ -232,6 +230,8 @@ contains
 
         if (.not. file_exist) call s_create_directory(trim(t_step_dir))
 
+        if (cfl_dt) t_step = n_start
+
         !1D
         if (n == 0 .and. p == 0) then
             if (model_eqns == 2) then
@@ -367,6 +367,12 @@ contains
                     end do
                 end do
             end if
+        end if
+
+        if (precision == 1) then
+            FMT = "(4F30.7)"
+        else
+            FMT = "(4F40.14)"
         end if
 
         ! 3D
@@ -517,7 +523,11 @@ contains
             end if
 
             ! Open the file to write all flow variables
-            write (file_loc, '(I0,A,i7.7,A)') t_step_start, '_', proc_rank, '.dat'
+            if (cfl_dt) then
+                write (file_loc, '(I0,A,i7.7,A)') n_start, '_', proc_rank, '.dat'
+            else
+                write (file_loc, '(I0,A,i7.7,A)') t_step_start, '_', proc_rank, '.dat'
+            end if
             file_loc = trim(restart_dir)//'/lustre_0'//trim(mpiiofs)//trim(file_loc)
             inquire (FILE=trim(file_loc), EXIST=file_exist)
             if (file_exist .and. proc_rank == 0) then
@@ -577,7 +587,11 @@ contains
             end if
 
             ! Open the file to write all flow variables
-            write (file_loc, '(I0,A)') t_step_start, '.dat'
+            if (cfl_dt) then
+                write (file_loc, '(I0,A)') n_start, '.dat'
+            else
+                write (file_loc, '(I0,A)') t_step_start, '.dat'
+            end if
             file_loc = trim(restart_dir)//trim(mpiiofs)//trim(file_loc)
             inquire (FILE=trim(file_loc), EXIST=file_exist)
             if (file_exist .and. proc_rank == 0) then
