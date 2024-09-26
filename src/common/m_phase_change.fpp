@@ -288,7 +288,7 @@ contains
                                             q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
                                         end do 
                                         ! ends the execution of this function and returns control to the calling function
-                                        return
+                                        !! return
                                     end if
 
                                     w = 2
@@ -302,7 +302,7 @@ contains
                                     q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
                                 end do
                                 ! ends the execution of this function and returns control to the calling function
-                                return
+                                !! return
                             end if
                         end if
                         
@@ -554,7 +554,7 @@ contains
                 ! temperature
                 TS = 0.0d0
 
-                return
+                !! return
 #ifndef MFC_OpenACC
             else
                 if (proc_rank == 0) then
@@ -699,7 +699,7 @@ contains
             TR = .false.
 
             ! ends the execution of this function and returns control to the calling function
-            return
+            !! return
 
         ! if not homogeneous, then heterogeneous. Thus, setting up an arbitrary initial condition in case the one from
         ! the p(T)-equilibrium solver could lead to numerical issues
