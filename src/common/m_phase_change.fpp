@@ -119,13 +119,13 @@ contains
         !< Generic loop iterators
         integer :: i, j, k, l, w
 
-        !$acc declare create(p_infOV, p_infpT, p_infSL, alpha0k, alphak, rhok, Tk)
+        !$acc declare create(p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk)
 
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, alpha0k, alphak, rhok, Tk, pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
+        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk, pS, pSOV, pSSL, TS, TSOV, TSSL, TSatOV, TSatSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
         do j = 0, m
             do k = 0, n
                 do l = 0, p
