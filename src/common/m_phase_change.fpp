@@ -287,8 +287,8 @@ contains
                                             ! returning partial densities to what they were previous to any relaxation scheme
                                             q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
                                         end do 
-                                        ! ends the execution of this function and returns control to the calling function
-                                        !! return
+                                        ! cycles the innermost loop to the next iteration
+                                        cycle 
                                     end if
 
                                     w = 2
@@ -301,8 +301,8 @@ contains
                                     ! returning partial densities to what they were for the hyperbolic solver
                                     q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
                                 end do
-                                ! ends the execution of this function and returns control to the calling function
-                                !! return
+                                ! cycles the innermost loop to the next iteration
+                                cycle 
                             end if
                         end if
                         
