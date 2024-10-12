@@ -148,6 +148,11 @@ contains
 
                         ! calculating the total internal energy such that the energy-fraction for each of the
                         ! fluids can be proportionally distributed when the sum of the internal energies differs from the
+
+                        if ( ieee_is_nan( q_cons_vf(i + contxb - 1)%sf(j, k, l) ) ) then
+                            print *, 'partial densities', q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                        end if
+
                         if (model_eqns .eq. 3) then
                             rhoeT = rhoeT + q_cons_vf(i + intxb - 1)%sf(j, k, l)
                         end if
@@ -565,6 +570,8 @@ contains
 
                 end if
 
+                print *, '573'
+
                 call s_real_to_str(rhoe - mQ - minval(p_infpT), Econsts)
                 call s_mpi_abort('Solver for the pT-relaxation solver failed (m_phase_change, s_infinite_pt_relaxation_k) &
                 &    . Energy constraint~'//Econsts//'. Aborting!')
@@ -626,6 +633,16 @@ contains
                                       , j, (/0.0d0, 0.0d0, 0.0d0, 0.0d0/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
                                       , rhoe, q_cons_vf, TS)
                 end if
+
+                print *, 'gp, gpp, hp', gp, gpp, hp
+
+                do i = 1, num_fluids
+                    print *, 'cont, i', i, q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                end do
+
+                print *, 'sums', rhoe, pO, mQ, mCP
+
+                print *, 'parameters', gs_min, cvs, p_infpT
 
                 call s_real_to_str(pS, pSs)
                 call s_int_to_str(nS, nss)
