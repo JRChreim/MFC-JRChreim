@@ -80,7 +80,6 @@ print(json.dumps({
     'x_domain%beg'                 : -10.E-03/x0,
     'x_domain%end'                 :  10.E-03/x0,
     'stretch_x'                    : 'F',
-    'cyl_coord'                    : 'F',
     'm'                            : Nx,
     'n'                            : 0,
     'p'                            : 0,
@@ -89,7 +88,6 @@ print(json.dumps({
     't_step_stop'                  : Nt,
     't_step_save'                  : Nout,
     # ==========================================================
-    
     # Simulation Algorithm Parameters ==========================
     'num_patches'                  : 2,
     'model_eqns'                   : 2,
@@ -111,19 +109,16 @@ print(json.dumps({
     'bc_x%beg'                     : -3,
     'bc_x%end'                     : -3,
     # ==========================================================
-    
     # Formatted Database Files Structure Parameters ============
     'format'                       : 1,
     'precision'                    : 2,
     'prim_vars_wrt'                :'T',
-    'parallel_io'                  :'F',
+    'parallel_io'                  :'T',
     'fd_order'                     : 1,
-    # 'schlieren_wrt'                :'T',
     'probe_wrt'                    :'T',
     'num_probes'                   : 1,
     'probe(1)%x'                   : 0.,
     # ==========================================================                                                   
-    
     # Patch 1 _ Background =====================================
     'patch_icpp(1)%geometry'       : 1,
     'patch_icpp(1)%x_centroid'     : 0.,

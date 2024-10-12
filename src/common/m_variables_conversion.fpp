@@ -348,6 +348,15 @@ contains
                 pi_inf = fluid_pp(1)%pi_inf
                 qv = fluid_pp(1)%qv
             end if
+
+            do i = 1, num_fluids
+                if (isnan(alpha_rho_K(i))) then
+                    print *, 's_convert_species_to_mixture_variables_bubbles'
+                    print *, i, alpha_K(i)
+                    print *, i, alpha_rho_K(i)
+                end if
+            end do
+
         end if
 
 #ifdef MFC_SIMULATION

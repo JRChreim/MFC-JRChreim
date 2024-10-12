@@ -141,7 +141,7 @@ contains
     !> Checks constraints on the phase change parameters.
         !! Called by s_check_inputs_common for pre-processing and simulation
     subroutine s_check_inputs_phase_change
-        @:PROHIBIT(relax .and. model_eqns /= 3, "phase change requires model_eqns = 3")
+        @:PROHIBIT(relax .and. model_eqns == 4, "phase change requires model_eqns = 2 or 3")
         @:PROHIBIT(relax .and. relax_model < 0, "relax_model must be in between 0 and 6")
         @:PROHIBIT(relax .and. relax_model > 6, "relax_model must be in between 0 and 6")
         @:PROHIBIT(relax .and. palpha_eps <= 0d0, "palpha_eps must be positive")

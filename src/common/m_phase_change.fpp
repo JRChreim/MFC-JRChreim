@@ -107,25 +107,25 @@ contains
     subroutine s_infinite_relaxation_k(q_cons_vf) ! ----------------
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
         real(kind(0.0d0)) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
-        real(kind(0.0d0)) :: TS, TSOV, TSSL, TSatOV, TSatSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
+        real(kind(0.0d0)) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(kind(0.0d0)) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
         real(kind(0.0d0)) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
         logical :: TR
 
-        !$acc declare create(pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
+        !$acc declare create(pS, pSOV, pSSL, TS, TSatOV, TSatSL, TSOV, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
 
         real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk
 
         !< Generic loop iterators
         integer :: i, j, k, l, w
 
-        !$acc declare create(p_infOV, p_infpT, p_infSL, alpha0k, alphak, rhok, Tk)
+        !$acc declare create(p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk)
 
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, alpha0k, alphak, rhok, Tk, pS, pSOV, pSSL, TS, TSOV, TSatOV, TSatSL, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
+        !$acc parallel loop collapse(3) gang vector default(present) private(p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk, pS, pSOV, pSSL, TS, TSatOV, TSatSL, TSOV, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -148,6 +148,11 @@ contains
 
                         ! calculating the total internal energy such that the energy-fraction for each of the
                         ! fluids can be proportionally distributed when the sum of the internal energies differs from the
+
+                        if ( ieee_is_nan( q_cons_vf(i + contxb - 1)%sf(j, k, l) ) ) then
+                            print *, 'partial densities', q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                        end if
+
                         if (model_eqns .eq. 3) then
                             rhoeT = rhoeT + q_cons_vf(i + intxb - 1)%sf(j, k, l)
                         end if
@@ -287,8 +292,8 @@ contains
                                             ! returning partial densities to what they were previous to any relaxation scheme
                                             q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i) 
                                         end do 
-                                        ! ends the execution of this function and returns control to the calling function
-                                        return
+                                        ! cycles the innermost loop to the next iteration
+                                        cycle 
                                     end if
 
                                     w = 2
@@ -301,8 +306,8 @@ contains
                                     ! returning partial densities to what they were for the hyperbolic solver
                                     q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
                                 end do
-                                ! ends the execution of this function and returns control to the calling function
-                                return
+                                ! cycles the innermost loop to the next iteration
+                                cycle 
                             end if
                         end if
                         
@@ -565,6 +570,8 @@ contains
 
                 end if
 
+                print *, '573'
+
                 call s_real_to_str(rhoe - mQ - minval(p_infpT), Econsts)
                 call s_mpi_abort('Solver for the pT-relaxation solver failed (m_phase_change, s_infinite_pt_relaxation_k) &
                 &    . Energy constraint~'//Econsts//'. Aborting!')
@@ -626,6 +633,16 @@ contains
                                       , j, (/0.0d0, 0.0d0, 0.0d0, 0.0d0/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
                                       , rhoe, q_cons_vf, TS)
                 end if
+
+                print *, 'gp, gpp, hp', gp, gpp, hp
+
+                do i = 1, num_fluids
+                    print *, 'cont, i', i, q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                end do
+
+                print *, 'sums', rhoe, pO, mQ, mCP
+
+                print *, 'parameters', gs_min, cvs, p_infpT
 
                 call s_real_to_str(pS, pSs)
                 call s_int_to_str(nS, nss)

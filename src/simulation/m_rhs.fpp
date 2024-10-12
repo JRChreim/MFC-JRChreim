@@ -763,6 +763,9 @@ contains
                 do k = iy%beg, iy%end
                     do j = ix%beg, ix%end
                         q_cons_qp%vf(i)%sf(j, k, l) = q_cons_vf(i)%sf(j, k, l)
+                        if ( isnan( q_cons_qp%vf(i)%sf(j, k, l) )  ) then
+                            print *, 'm_rhs - mass', i, q_cons_qp%vf(i)%sf(j, k, l)
+                        end if
                     end do
                 end do
             end do
@@ -793,6 +796,10 @@ contains
                         do i = advxb, advxe - 1
                             q_cons_qp%vf(i)%sf(j, k, l) = q_cons_qp%vf(i)%sf(j, k, l)*(1.d0 - q_cons_qp%vf(alf_idx)%sf(j, k, l)) &
                                                           /alf_sum%sf(j, k, l)
+                        if ( isnan( q_cons_qp%vf(i)%sf(j, k, l) )  ) then
+                            print *, 'm_rhs - mass', i, q_cons_qp%vf(i)%sf(j, k, l)
+                            print *, 'm_rhs - alpha', i, alf_sum%sf(j, k, l)
+                        end if
                         end do
                     end do
                 end do
