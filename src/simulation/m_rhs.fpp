@@ -763,9 +763,9 @@ contains
                 do k = iy%beg, iy%end
                     do j = ix%beg, ix%end
                         q_cons_qp%vf(i)%sf(j, k, l) = q_cons_vf(i)%sf(j, k, l)
-                        if ( isnan( q_cons_qp%vf(i)%sf(j, k, l) )  ) then
-                            print *, 'm_rhs - mass', i, q_cons_qp%vf(i)%sf(j, k, l)
-                        end if
+                        ! if ( isnan( q_cons_qp%vf(i)%sf(j, k, l) )  ) then
+                        !     print *, 'm_rhs - mass', i, q_cons_qp%vf(i)%sf(j, k, l)
+                        ! end if
                     end do
                 end do
             end do
@@ -796,10 +796,10 @@ contains
                         do i = advxb, advxe - 1
                             q_cons_qp%vf(i)%sf(j, k, l) = q_cons_qp%vf(i)%sf(j, k, l)*(1.d0 - q_cons_qp%vf(alf_idx)%sf(j, k, l)) &
                                                           /alf_sum%sf(j, k, l)
-                        if ( isnan( q_cons_qp%vf(i)%sf(j, k, l) )  ) then
-                            print *, 'm_rhs - mass', i, q_cons_qp%vf(i)%sf(j, k, l)
-                            print *, 'm_rhs - alpha', i, alf_sum%sf(j, k, l)
-                        end if
+                        ! if ( isnan( q_cons_qp%vf(i)%sf(j, k, l) )  ) then
+                        !     print *, 'm_rhs - mass', i, q_cons_qp%vf(i)%sf(j, k, l)
+                        !     print *, 'm_rhs - alpha', i, alf_sum%sf(j, k, l)
+                        ! end if
                         end do
                     end do
                 end do
@@ -1934,11 +1934,11 @@ contains
                         do i = 1, num_fluids
                             if ((q_cons_vf(i + contxb - 1)%sf(j, k, l) < 0d0) .or. &
                                 (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0d0)) then
-                                    PRINT *, 'm_rhs line 1875, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                                !    PRINT *, 'm_rhs line 1875, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                                 q_cons_vf(i + contxb - 1)%sf(j, k, l) = 0d0
                                 q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0d0
                                 q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0d0
-                                    PRINT *, 'm_rhs line 1879, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                                !    PRINT *, 'm_rhs line 1879, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                             end if
 
                             if (q_cons_vf(i + advxb - 1)%sf(j, k, l) > 1d0) &
@@ -1948,9 +1948,9 @@ contains
 
                         !$acc loop seq
                         do i = 1, num_fluids
-                            PRINT *, 'm_rhs line 1889, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                        !    PRINT *, 'm_rhs line 1889, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + advxb - 1)%sf(j, k, l)/sum_alpha
-                            PRINT *, 'm_rhs line 1891, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+                        !    PRINT *, 'm_rhs line 1891, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                         end do
                     end if
 
@@ -2085,10 +2085,10 @@ contains
                         sum_alpha = 0d0
 
                         if (mpp_lim) then
-                            if ( alpha(2) > 1E-16) then
-                                PRINT *, 'm_rhs, m, vf, 2027'
-                                PRINT *, alpha_rho(2), alpha(2)
-                            end if
+                            ! if ( alpha(2) > 1E-16) then
+                            !     PRINT *, 'm_rhs, m, vf, 2027'
+                            !     PRINT *, alpha_rho(2), alpha(2)
+                            ! end if
                             
                             !$acc loop seq
                             do i = 1, num_fluids
@@ -2099,10 +2099,10 @@ contains
 
                             alpha = alpha/max(sum_alpha, sgm_eps)
 
-                            if ( alpha(2) > 1E-16) then
-                                PRINT *, 'm_rhs, m, vf, 2041'
-                                PRINT *, alpha_rho(2), alpha(2)
-                            end if
+                            ! if ( alpha(2) > 1E-16) then
+                            !    PRINT *, 'm_rhs, m, vf, 2041'
+                            !    PRINT *, alpha_rho(2), alpha(2)
+                            ! end if
 
                         end if
 
