@@ -198,11 +198,6 @@ contains
                             call s_infinite_pt_relaxation_k(j, k, l, 2, pS, p_infpT, q_cons_vf, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
 
-                            ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                            !     PRINT *, 'mpp_variables, m, vf, 176'
-                            !     PRINT *, q_cons_vf(i + contxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-                            ! end if
-
                             ! updating the densities and volume fractions used for thresholds
                             rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
             
@@ -213,13 +208,14 @@ contains
                             end do
                             
                             ! 1 - model activation, 1st order transition (p,T) <= (pCr, TCr)
-                            if ( ( pS < pCr ) .and. &
+                            if ( ( pS < pCr ) .and. ( pS > 0 ) .and. &
                             ! 2.1 Homogeneous pTg-equilibrium criterium
-                            ( ( pS + minval(p_infpT) .gt. 0.0 ) &
-                            .or. &
+                            ! ( ( ( pS .lt. 0 ) .and. ( pS + minval(p_infpT) .gt. 0.0 ) ) &
+                            ! .or. &
                             ! 2.2. Heterogeneous pTg-equilibrium.
                             ( (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps) ) ) &
-                            ) then
+                            ! ) then
+                            then
 
                                 ! updating m1 and m2 AFTER correcting the partial densities. These values must be
                                 ! stored in case the final state is a mixture of fluids
@@ -241,8 +237,8 @@ contains
 
                                 ! subcooled liquid 
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
-                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
-                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
+                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1                       
                                 call s_infinite_pt_relaxation_k(j, k, l, 1, pSSL, p_infSL, q_cons_vf, rhoe, rM, TSSL)
@@ -258,8 +254,8 @@ contains
                                     TS = TSOV
 
                                     ! correcting the liquid and vapor partial densities
-                                    q_cons_vf(lp + contxb - 1)%sf(j, k, l) = 0*mixM*rM
-                                    q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - 0*mixM)*rM
+                                    q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
+                                    q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
 
                                     w = 0
 
@@ -300,33 +296,19 @@ contains
 
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
-                            else
-                                !$acc loop seq
-                                do i = 1, num_fluids
-                                    ! returning partial densities to what they were for the hyperbolic solver
-                                    q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
-                                end do
-                                ! cycles the innermost loop to the next iteration
-                                cycle 
+                            ! else
+                            !     !$acc loop seq
+                            !     do i = 1, num_fluids
+                            !         ! returning partial densities to what they were for the hyperbolic solver
+                            !         q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
+                            !     end do
+                            !     ! cycles the innermost loop to the next iteration
+                            !     cycle 
                             end if
                         end if
-                        
-                        ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                        !     PRINT *, 'phase change, m, vf, 297'
-                        !     PRINT *, w
-                        !     PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
-                        !     PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
-                        ! end if
-                        
+                                               
                         ! updating conservative variables through either p- or pT-equilibrium
                         call update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
-
-                        ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1E-8) then
-                        !     PRINT *, 'phase change, m, vf, 304'
-                        !     PRINT *, w
-                        !     PRINT *, q_cons_vf(lp + contxb - 1)%sf(j, k, l), q_cons_vf(vp + contxb - 1)%sf(j, k, l), q_cons_vf(3 + contxb - 1)%sf(j, k, l)
-                        !     PRINT *, q_cons_vf(lp + advxb - 1)%sf(j, k, l), q_cons_vf(vp + advxb - 1)%sf(j, k, l), q_cons_vf(3 + advxb - 1)%sf(j, k, l)
-                        ! end if
 
                     else
                         !$acc loop seq
@@ -570,8 +552,6 @@ contains
 
                 end if
 
-                print *, '573'
-
                 call s_real_to_str(rhoe - mQ - minval(p_infpT), Econsts)
                 call s_mpi_abort('Solver for the pT-relaxation solver failed (m_phase_change, s_infinite_pt_relaxation_k) &
                 &    . Energy constraint~'//Econsts//'. Aborting!')
@@ -686,7 +666,7 @@ contains
         real(kind(0.0d0)), dimension(2) :: R2D, DeltamP
         real(kind(0.0d0)), dimension(3) :: Oc
         real(kind(0.0d0)) :: Om, OmI ! underrelaxation factor
-        real(kind(0.0d0)) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD ! auxiliary variables for the pTg-solver
+        real(kind(0.0d0)) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, m0i, pSi ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts
 
         !< Generic loop iterators
@@ -697,6 +677,9 @@ contains
         ! checking if homogeneous cavitation is possible
         
         ! PRINT *, 'pc happening'
+
+        pSi = pS
+        m0i = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
         if ((pS < -6.0d5) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
@@ -724,7 +707,7 @@ contains
             ! improve this initial condition
             pS = 1.0d4
 
-            ! PRINT *, 'is it pS > 0'
+            PRINT *, 'is it pS > 0'
         end if
 
         ! PRINT *, 'phase change is happening'
@@ -736,7 +719,7 @@ contains
         ! end if
 
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
-        OmI = 1.0d-1
+        OmI = 1.0d-2
         ! Critical relaxation factors, for variable sub-relaxation
         Oc(1) = OmI; Oc(2) = OmI; Oc(3) = OmI
 
@@ -829,7 +812,7 @@ contains
             ! choosing amonst the minimum relaxation maximum to ensure solver will not produce unphysical values
             Om = minval(Oc)
 #else
-            Om = 1.0d-1
+            Om = OmI
 #endif
             ! updating two reacting 'masses'. Recall that inert 'masses' do not change during the phase change
             ! liquid
@@ -848,6 +831,18 @@ contains
             ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
             if ((ieee_is_nan(R2D(1))) .or. (ieee_is_nan(R2D(2))) .or. (ns > max_iter)) then
+
+                print *, 'homogeneous cavitation criteria', pS + minval(p_infpT)
+
+                print *, 'm0i', m0i
+
+                print *, 'alpha0i', q_cons_vf(lp + advxb - 1)%sf(j, k, l) + Om*DeltamP(1)
+
+                print *, 'pSi', pSi
+
+                print *, 'pS', pS
+
+                print *, 'R2D', R2D
 
                 call s_int_to_str(ns, nss)
                 call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
@@ -1238,7 +1233,6 @@ contains
                     call s_int_to_str(ns, nss)
                     call s_real_to_str(TSat, TSatS)
                     call s_real_to_str(pSat, pSatS)
-                    PRINT *, pSat
                     call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
 &                     ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
 
@@ -1283,12 +1277,6 @@ contains
 
             ! volume fractions
             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
-
-            ! if ( q_cons_vf(vp + advxb - 1)%sf(j, k, l) > 1.0d-8) then
-            !     PRINT *, 'inside TR 1'
-            !     PRINT *, q_cons_vf(vp + advxb - 1)%sf(j, k, l)
-            !     PRINT *, 'inside TR 2'
-            ! end if
 
             ! alpha*rho*e
             if (model_eqns .eq. 3) then
