@@ -943,6 +943,7 @@ contains
         real(kind(0d0)), dimension(num_fluids) :: alpha      !< Cell-avg. volume fraction
         real(kind(0d0)) :: gamma      !< Cell-avg. sp. heat ratio
         real(kind(0d0)) :: pi_inf     !< Cell-avg. liquid stiffness function
+        real(kind(0d0)) :: qv         !< Cell-avg. fluid reference energy
         real(kind(0d0)) :: c          !< Cell-avg. sound speed
         real(kind(0d0)) :: H          !< Cell-avg. enthalpy
         real(kind(0d0)), dimension(2) :: Re         !< Cell-avg. Reynolds numbers
@@ -964,10 +965,10 @@ contains
         do l = 0, p
             do k = 0, n
                 do j = 0, m
-                    call s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, j, k, l)
+                    call s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, qv, j, k, l)
 
                     ! Compute mixture sound speed
-                    call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, c)
+                    call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, c, qv)
 
                     call s_compute_dt_from_cfl(vel, c, max_dt, rho, Re, j, k, l)
                 end do

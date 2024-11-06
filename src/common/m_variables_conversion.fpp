@@ -1462,14 +1462,14 @@ contains
     end subroutine s_finalize_variables_conversion_module
 
 #ifndef MFC_PRE_PROCESS
-    subroutine s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_sum, c)
+    subroutine s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_sum, c, qv)
 #ifdef CRAY_ACC_WAR
         !DIR$ INLINEALWAYS s_compute_speed_of_sound
 #else
         !$acc routine seq
 #endif
         real(kind(0d0)), intent(in) :: pres
-        real(kind(0d0)), intent(in) :: rho, gamma, pi_inf
+        real(kind(0d0)), intent(in) :: rho, gamma, pi_inf, qv
         real(kind(0d0)), intent(in) :: H
         real(kind(0d0)), dimension(num_fluids), intent(in) :: adv
         real(kind(0d0)), intent(in) :: vel_sum
@@ -1507,7 +1507,14 @@ contains
                     (rho*(1d0 - adv(num_fluids)))
             end if
         else
-            c = ((H - 5d-1*vel_sum)/gamma)
+            c = ((H - 5d-1*vel_sum - qv/rho)/gamma)
+            ! blkmod1 = ((gammas(1) + 1d0)*pres + &
+            ! pi_infs(1))/gammas(1)
+            
+            ! blkmod2 = ((gammas(2) + 1d0)*pres + &
+            ! pi_infs(2))/gammas(2)
+            
+            ! c = (1d0/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
         end if
 
         if (mixture_err .and. c < 0d0) then

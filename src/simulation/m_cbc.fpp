@@ -802,12 +802,12 @@ contains
                             mf(i) = alpha_rho(i)/rho
                         end do
 
-                        E = gamma*pres + pi_inf + 5d-1*rho*vel_K_sum
+                        E = gamma*pres + pi_inf + 5d-1*rho*vel_K_sum + qv
 
                         H = (E + pres)/rho
 
                         ! Compute mixture sound speed
-                        call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_K_sum, c)
+                        call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_K_sum, c, qv)
                         ! ============================================================
 
                         ! First-Order Spatial Derivatives of Primitive Variables =====

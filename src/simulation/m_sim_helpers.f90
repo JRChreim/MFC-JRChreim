@@ -30,7 +30,7 @@ contains
         !! @param j x index
         !! @param k y index
         !! @param l z index
-    subroutine s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, j, k, l)
+    subroutine s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, qv, j, k, l)
         !$acc routine seq
         type(scalar_field), dimension(sys_size) :: q_prim_vf
         real(kind(0d0)), dimension(num_fluids) :: alpha_rho

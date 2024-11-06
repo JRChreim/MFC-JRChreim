@@ -317,6 +317,7 @@ contains
         real(kind(0d0)) :: rho_avg
         real(kind(0d0)), dimension(num_dims) :: vel_avg
         real(kind(0d0)) :: H_avg
+        real(kind(0d0)) :: qv_avg
         real(kind(0d0)) :: gamma_avg
         real(kind(0d0)) :: c_avg
 
@@ -509,16 +510,18 @@ contains
                             @:compute_average_state()
 
                             call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
-                                                          vel_L_rms, c_L)
+                                                          vel_L_rms, c_L, qv_L)
 
                             call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
-                                                          vel_R_rms, c_R)
+                                                          vel_R_rms, c_R, qv_R)
 
                             !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
                             ! variables are placeholders to call the subroutine.
 
                             call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
-                                                          vel_avg_rms, c_avg)
+                                                          vel_avg_rms, c_avg, qv_avg)
+
+                            ! print *, 'm_riemann_solvers 524', alt_soundspeed, c_L, c_R, c_avg
 
                             if (any(Re_size > 0)) then
                                 !$acc loop seq
@@ -871,6 +874,7 @@ contains
         real(kind(0d0)), dimension(num_dims) :: vel_avg
         real(kind(0d0)) :: H_avg
         real(kind(0d0)) :: gamma_avg
+        real(kind(0d0)) :: qv_avg
         real(kind(0d0)) :: c_avg
 
         real(kind(0d0)) :: s_L, s_R, s_M, s_P, s_S
@@ -1047,16 +1051,18 @@ contains
                                 @:compute_average_state()
 
                                 call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
-                                                              vel_L_rms, c_L)
+                                                              vel_L_rms, c_L, qv_L)
 
                                 call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
-                                                              vel_R_rms, c_R)
+                                                              vel_R_rms, c_R, qv_R)
 
                                 !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
                                 ! variables are placeholders to call the subroutine.
 
                                 call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
-                                                              vel_avg_rms, c_avg)
+                                                              vel_avg_rms, c_avg, qv_avg)
+
+                                ! print *, 'm_riemann_solvers 1063', alt_soundspeed, c_L, c_R, c_avg
 
                                 if (any(Re_size > 0)) then
                                     !$acc loop seq
@@ -1346,17 +1352,19 @@ contains
                                 @:compute_average_state()
 
                                 call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
-                                                              vel_L_rms, c_L)
+                                                              vel_L_rms, c_L, qv_L)
 
                                 call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
-                                                              vel_R_rms, c_R)
+                                                              vel_R_rms, c_R, qv_R)
 
                                 !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
                                 ! variables are placeholders to call the subroutine.
 
                                 call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
-                                                              vel_avg_rms, c_avg)
+                                                              vel_avg_rms, c_avg, qv_avg)
 
+                                ! print *, 'm_riemann_solvers 1364', alt_soundspeed, c_L, c_R, c_avg
+                                    
                                 if (wave_speeds == 1) then
                                     s_L = min(vel_L(dir_idx(1)) - c_L, vel_R(dir_idx(1)) - c_R)
                                     s_R = max(vel_R(dir_idx(1)) + c_R, vel_L(dir_idx(1)) + c_L)
@@ -1645,9 +1653,9 @@ contains
                                     end if
                                 end if
 
-                                E_L = gamma_L*pres_L + pi_inf_L + 5d-1*rho_L*vel_L_rms
+                                E_L = gamma_L*pres_L + pi_inf_L + 5d-1*rho_L*vel_L_rms + qv_L
 
-                                E_R = gamma_R*pres_R + pi_inf_R + 5d-1*rho_R*vel_R_rms
+                                E_R = gamma_R*pres_R + pi_inf_R + 5d-1*rho_R*vel_R_rms + qv_R
 
                                 H_L = (E_L + pres_L)/rho_L
                                 H_R = (E_R + pres_R)/rho_R
@@ -1752,6 +1760,7 @@ contains
                                     rho_avg = 5d-1*(rho_L + rho_R)
                                     H_avg = 5d-1*(H_L + H_R)
                                     gamma_avg = 5d-1*(gamma_L + gamma_R)
+                                    qv_avg = 5d-1*(qv_L + qv_R)
                                     vel_avg_rms = 0d0
 
                                     !$acc loop seq
@@ -1762,16 +1771,18 @@ contains
                                 end if
 
                                 call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
-                                                              vel_L_rms, c_L)
+                                                              vel_L_rms, c_L, qv_L)
 
                                 call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
-                                                              vel_R_rms, c_R)
+                                                              vel_R_rms, c_R, qv_R)
 
                                 !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
                                 ! variables are placeholders to call the subroutine.
 
                                 call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
-                                                              vel_avg_rms, c_avg)
+                                                              vel_avg_rms, c_avg, qv_avg)
+
+                                ! print *, 'm_riemann_solvers 1782', alt_soundspeed, c_L, c_R, c_avg
 
                                 if (any(Re_size > 0)) then
                                     !$acc loop seq
@@ -2117,16 +2128,18 @@ contains
                                 @:compute_average_state()
 
                                 call s_compute_speed_of_sound(pres_L, rho_L, gamma_L, pi_inf_L, H_L, alpha_L, &
-                                                              vel_L_rms, c_L)
+                                                              vel_L_rms, c_L, qv_L)
 
                                 call s_compute_speed_of_sound(pres_R, rho_R, gamma_R, pi_inf_R, H_R, alpha_R, &
-                                                              vel_R_rms, c_R)
+                                                              vel_R_rms, c_R, qv_R)
 
                                 !> The computation of c_avg does not require all the variables, and therefore the non '_avg'
                                 ! variables are placeholders to call the subroutine.
 
                                 call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
-                                                              vel_avg_rms, c_avg)
+                                                              vel_avg_rms, c_avg, qv_avg)
+
+                                ! print *, 'm_riemann_solvers 2141', alt_soundspeed, c_L, c_R, c_avg
 
                                 if (any(Re_size > 0)) then
                                     !$acc loop seq

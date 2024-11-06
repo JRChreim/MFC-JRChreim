@@ -1128,6 +1128,9 @@ contains
 
                         Kterm(j, k, l) = alpha1(j, k, l)*alpha2(j, k, l)*(blkmod2(j, k, l) - blkmod1(j, k, l))/ &
                                          (alpha1(j, k, l)*blkmod2(j, k, l) + alpha2(j, k, l)*blkmod1(j, k, l))
+                        if ( Kterm(j, k, l) .ne. 0 ) then 
+                            Print *, Kterm(j, k, l)
+                        end if
                     end do
                 end do
             end do
