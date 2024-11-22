@@ -32,6 +32,8 @@
 
 - <a id="Meng16">Meng, J. C. C. (2016). Numerical simulations of droplet aerobreakup. PhD thesis, California Institute of Technology.</a>
 
+- <a id="Pirozzoli13">Pirozzoli, S., and Colonius, T. (2013). Generalized characteristic relaxation boundary conditions for unsteady compressible flow simulations. Journal of Computational Physics, 248:109-126.</a>
+
 - <a id="Preston07">Preston, A., Colonius, T., and Brennen, C. (2007). A reduced-order model of diffusive effects on the dynamics of bubbles. Physics of Fluids, 19(12):123302.</a>
 
 - <a id="Saurel09">Saurel, R., Petitpas, F., and Berry, R. A. (2009). Simple and efficient relaxation methods for interfaces separating compressible fluids, cavitating flows and shocks in multiphase mixtures. journal of Computational Physics, 228(5):1678–1712</a>
@@ -39,6 +41,8 @@
 - <a id="Schmidmayer19">Schmidmayer, K., Bryngelson, S. H., and Colonius, T. (2019). An assessment of multicomponent flow models and interface capturing schemes for spherical bubble dynamics. arXiv preprint arXiv:1903.08242.</a>
 
 - <a id="Suresh97">Suresh, A. and Huynh, H. (1997). Accurate monotonicity-preserving schemes with runge–kutta time stepping. Journal of Computational Physics, 136(1):83–99.</a>
+
+- <a id="Tam05">Tam, C. K., Ju, H., Jones, M. G., Watson, W. R., and Parrott, T. L. (2005). A computational and experimental study of slit resonators. Journal of Sound and Vibration, 284(3-5), 947-984.</a>
 
 - <a id="Thompson87">Thompson, K. W. (1987). Time dependent boundary conditions for hyperbolic systems. Journal of computational physics, 68(1):1–24.</a>
 
