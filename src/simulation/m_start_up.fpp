@@ -1452,7 +1452,6 @@ contains
 #endif
 
         if (hypoelasticity) call s_initialize_hypoelastic_module()
-        if (relax) call s_initialize_phasechange_module()
         if (chemistry) call s_initialize_chemistry_module()
 
         call s_initialize_data_output_module()
@@ -1611,7 +1610,6 @@ contains
         if (grid_geometry == 3) call s_finalize_fftw_module
         call s_finalize_mpi_proxy_module()
         call s_finalize_global_parameters_module()
-        if (relax) call s_finalize_relaxation_solver_module()
         if (viscous) then
             call s_finalize_viscous_module()
         end if

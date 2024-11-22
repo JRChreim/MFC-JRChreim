@@ -222,6 +222,7 @@ contains
         real(kind(0d0)), dimension(num_fluids) :: alpha      !< Cell-avg. volume fraction
         real(kind(0d0)) :: gamma      !< Cell-avg. sp. heat ratio
         real(kind(0d0)) :: pi_inf     !< Cell-avg. liquid stiffness function
+        real(kind(0d0)) :: qv         !< Cell-avg. internal energy reference value
         real(kind(0d0)) :: c          !< Cell-avg. sound speed
         real(kind(0d0)) :: H          !< Cell-avg. enthalpy
         real(kind(0d0)), dimension(2) :: Re         !< Cell-avg. Reynolds numbers

@@ -31,9 +31,7 @@ module m_phase_change
     implicit none
 
     private; public :: s_initialize_phasechange_module, &
- s_relaxation_solver, &
- s_infinite_relaxation_k, &
- s_finalize_relaxation_solver_module
+ s_infinite_relaxation_k
 
     !> @name Parameters for the first order transition phase change
     !> @{
@@ -53,16 +51,6 @@ module m_phase_change
     !$acc declare create(max_iter,pCr,TCr,mixM,lp,vp,A,B,C,D)
 
 contains
-
-    !> This subroutine should dispatch to the correct relaxation solver based
-        !!      some parameter. It replaces the procedure pointer, which CCE
-        !!      is breaking on.
-    subroutine s_relaxation_solver(q_cons_vf)
-        type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
-        ! This is empty because in current master the procedure pointer
-        ! was never assigned
-        @:ASSERT(.false., "s_relaxation_solver called but it currently does nothing")
-    end subroutine s_relaxation_solver
 
     !>  The purpose of this subroutine is to initialize the phase change module
         !!      by setting the parameters needed for phase change and
@@ -84,9 +72,7 @@ contains
 
         ! Associating procedural pointer to the subroutine that will be
         ! utilized to calculate the solution to the selected relaxation system
-        if (any((/4, 5, 6/) == relax_model)) then
-            s_relaxation_solver => s_infinite_relaxation_k
-        else
+        if ( .not. any((/4, 5, 6/) == relax_model)) then
             call s_mpi_abort('relaxation solver was not set!')
         end if
 
@@ -469,7 +455,7 @@ contains
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
         !!  @param TS equilibrium temperature at the interface
-    subroutine subroutine s_infinite_pt_relaxation_k(j, k, l, MFL, pS, p_infpT, q_cons_vf, rhoe, rM, TS)
+    subroutine s_infinite_pt_relaxation_k(j, k, l, MFL, pS, p_infpT, q_cons_vf, rhoe, rM, TS)
 
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_infinite_pt_relaxation_k
@@ -1378,13 +1364,6 @@ contains
         write (res, '(F10.4)') rl
         res = trim(res)
     end subroutine s_real_to_str
-
-    !>  This subroutine finalizes the phase change module
-    subroutine s_finalize_relaxation_solver_module()
-
-        s_relaxation_solver => null()
-
-    end subroutine s_finalize_relaxation_solver_module
 
 #endif
 end module m_phase_change

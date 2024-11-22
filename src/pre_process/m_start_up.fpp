@@ -788,7 +788,6 @@ contains
         call s_initialize_initial_condition_module()
         call s_initialize_perturbation_module()
         call s_initialize_assign_variables_module()
-        if (relax) call s_initialize_phasechange_module()
 
         ! Associate pointers for serial or parallel I/O
         if (parallel_io .neqv. .true.) then
@@ -937,7 +936,6 @@ contains
         call s_finalize_data_output_module()
         call s_finalize_global_parameters_module()
         call s_finalize_assign_variables_module()
-        if (relax) call s_finalize_relaxation_solver_module()
 
         ! Finalization of the MPI environment
         call s_mpi_finalize()
