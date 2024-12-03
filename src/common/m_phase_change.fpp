@@ -210,7 +210,7 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSOV, TSatOV, TSOV)
 
-                                PRINT *, 'pSOV, TSat, TSOV', pSOV, TSatOV, TSOV
+                                ! PRINT *, 'pSOV, TSat, TSOV', pSOV, TSatOV, TSOV
 
                                 ! subcooled liquid 
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
@@ -493,7 +493,7 @@ contains
 
                 ig(i) = i
 
-                PRINT *, ig
+                ! PRINT *, ig
 
                 ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
                 ! This way, I am ensuring this value will not be selected.
@@ -881,7 +881,7 @@ contains
 
                 call s_TSat(pS, TSat, (rhoe + pS - mQ)/mCP)
 
-                PRINT *, 'TSat', TSat 
+                print *, 'TSat', TSat 
 
                 call s_int_to_str(ns, nss)
                 call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
@@ -1288,8 +1288,8 @@ contains
                 ! Checking if TSat returns a NaN
                 if ((ieee_is_nan(TSat)) .or. (ns > max_iter)) then
 
-                    PRINT *, 'FT', FT
-                    PRINT *, 'TSat, pSat', TSat, pSat
+                    ! PRINT *, 'FT', FT
+                    ! PRINT *, 'TSat, pSat', TSat, pSat
 
                     call s_int_to_str(ns, nss)
                     call s_real_to_str(TSat, TSatS)
