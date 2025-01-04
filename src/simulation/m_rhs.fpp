@@ -632,9 +632,6 @@ contains
                 do k = idwbuff(2)%beg, idwbuff(2)%end
                     do j = idwbuff(1)%beg, idwbuff(1)%end
                         q_cons_qp%vf(i)%sf(j, k, l) = q_cons_vf(i)%sf(j, k, l)
-                        ! if ( isnan( q_cons_qp%vf(i)%sf(j, k, l) )  ) then
-                        !     print *, 'm_rhs - mass', i, q_cons_qp%vf(i)%sf(j, k, l)
-                        ! end if
                     end do
                 end do
             end do
@@ -658,10 +655,6 @@ contains
                         do i = advxb, advxe - 1
                             q_cons_qp%vf(i)%sf(j, k, l) = q_cons_qp%vf(i)%sf(j, k, l)*(1.d0 - q_cons_qp%vf(alf_idx)%sf(j, k, l)) &
                                                           /alf_sum%sf(j, k, l)
-                        ! if ( isnan( q_cons_qp%vf(i)%sf(j, k, l) )  ) then
-                        !     print *, 'm_rhs - mass', i, q_cons_qp%vf(i)%sf(j, k, l)
-                        !     print *, 'm_rhs - alpha', i, alf_sum%sf(j, k, l)
-                        ! end if
                         end do
                     end do
                 end do
@@ -975,9 +968,6 @@ contains
 
                         Kterm(j, k, l) = alpha1(j, k, l)*alpha2(j, k, l)*(blkmod2(j, k, l) - blkmod1(j, k, l))/ &
                                          (alpha1(j, k, l)*blkmod2(j, k, l) + alpha2(j, k, l)*blkmod1(j, k, l))
-                        if ( Kterm(j, k, l) .ne. 0 ) then 
-                            Print *, Kterm(j, k, l)
-                        end if
                     end do
                 end do
             end do
