@@ -16,7 +16,6 @@
 !!             reading in the relevant data files.
 module m_initial_condition
 
-    ! Dependencies =============================================================
     use m_derived_types         ! Definitions of the derived types
 
     use m_global_parameters     ! Global parameters for the code
@@ -36,8 +35,7 @@ module m_initial_condition
 
     use m_perturbation          ! Subroutines to perturb initial flow fields
 
-    ! ==========================================================================
-    ! ==========================================================================
+    use m_chemistry
 
     implicit none
 
@@ -48,6 +46,8 @@ module m_initial_condition
     type(scalar_field), allocatable, dimension(:) :: q_prim_vf !< primitive variables
 
     type(scalar_field), allocatable, dimension(:) :: q_cons_vf !< conservative variables
+
+    type(scalar_field) :: q_T_sf !< Temperature field
 
     integer, allocatable, dimension(:, :, :) :: patch_id_fp !<
     !! Bookkepping variable used to track the patch identities (id) associated
@@ -78,6 +78,10 @@ contains
             allocate (q_prim_vf(i)%sf(0:m, 0:n, 0:p))
             allocate (q_cons_vf(i)%sf(0:m, 0:n, 0:p))
         end do
+
+        if (chemistry) then
+            allocate (q_T_sf%sf(0:m, 0:n, 0:p))
+        end if
 
         ! Allocating the patch identities bookkeeping variable
         allocate (patch_id_fp(0:m, 0:n, 0:p))
@@ -128,15 +132,19 @@ contains
 
         character(len=10) :: iStr
 
+        ! First, compute the temperature field from the conservative variables.
+        if (chemistry) call s_compute_q_T_sf(q_T_sf, q_cons_vf, idwbuff)
+
         ! Converting the conservative variables to the primitive ones given
         ! preexisting initial condition data files were read in on start-up
         if (old_ic) then
             call s_convert_conservative_to_primitive_variables(q_cons_vf, &
+                                                               q_T_sf, &
                                                                q_prim_vf, &
                                                                idwbuff)
         end if
 
-        !  3D Patch Geometries =============================================
+        !  3D Patch Geometries
         if (p > 0) then
 
             do i = 1, num_patches
@@ -214,9 +222,7 @@ contains
             end do
             !> @}
 
-            ! ==================================================================
-
-            ! 2D Patch Geometries ==============================================
+            ! 2D Patch Geometries
         elseif (n > 0) then
 
             do i = 1, num_patches
@@ -246,11 +252,15 @@ contains
                     ! Unimplemented patch (formerly isentropic vortex)
                 elseif (patch_icpp(i)%geometry == 6) then
                     call s_mpi_abort('This used to be the isentropic vortex patch, '// &
-                                     'which no longer exists. See Examples. Exiting ...')
+                                     'which no longer exists. See Examples. Exiting.')
 
                     ! Analytical function patch for testing purposes
                 elseif (patch_icpp(i)%geometry == 7) then
                     call s_2D_analytical(i, patch_id_fp, q_prim_vf)
+
+                    ! Spherical Harmonic Patch
+                elseif (patch_icpp(i)%geometry == 14) then
+                    call s_spherical_harmonic(i, patch_id_fp, q_prim_vf)
 
                     ! Spiral patch
                 elseif (patch_icpp(i)%geometry == 17) then
@@ -295,9 +305,7 @@ contains
             end do
             !> @}
 
-            ! ==================================================================
-
-            ! 1D Patch Geometries ==============================================
+            ! 1D Patch Geometries
         else
 
             do i = 1, num_patches
@@ -322,15 +330,15 @@ contains
             end do
 
         end if
-        ! ==================================================================
 
         if (perturb_flow) call s_perturb_surrounding_flow(q_prim_vf)
         if (perturb_sph) call s_perturb_sphere(q_prim_vf)
         if (mixlayer_perturb) call s_superposition_instability_wave(q_prim_vf)
 
         ! Converting the primitive variables to the conservative ones
-        call s_convert_primitive_to_conservative_variables(q_prim_vf, &
-                                                           q_cons_vf)
+        call s_convert_primitive_to_conservative_variables(q_prim_vf, q_cons_vf)
+
+        if (chemistry) call s_compute_q_T_sf(q_T_sf, q_cons_vf, idwint)
 
         if (qbmm .and. .not. polytropic) then
             !Initialize pb and mv
@@ -353,6 +361,10 @@ contains
 
         deallocate (q_prim_vf)
         deallocate (q_cons_vf)
+
+        if (chemistry) then
+            deallocate (q_T_sf%sf)
+        end if
 
         ! Deallocating the patch identities bookkeeping variable
         deallocate (patch_id_fp)

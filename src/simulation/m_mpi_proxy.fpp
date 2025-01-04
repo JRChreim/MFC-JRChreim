@@ -12,7 +12,6 @@
 !!          goals for the simulation.
 module m_mpi_proxy
 
-    ! Dependencies =============================================================
 #ifdef MFC_MPI
     use mpi                    !< Message passing interface (MPI) module
 #endif
@@ -30,26 +29,25 @@ module m_mpi_proxy
     use m_nvtx
 
     use ieee_arithmetic
-    ! ==========================================================================
 
     implicit none
 
-    real(kind(0d0)), private, allocatable, dimension(:), target :: q_cons_buff_send !<
+    real(wp), private, allocatable, dimension(:), target :: q_cons_buff_send !<
     !! This variable is utilized to pack and send the buffer of the cell-average
     !! conservative variables, for a single computational domain boundary at the
     !! time, to the relevant neighboring processor.
 
-    real(kind(0d0)), private, allocatable, dimension(:), target :: q_cons_buff_recv !<
+    real(wp), private, allocatable, dimension(:), target :: q_cons_buff_recv !<
     !! q_cons_buff_recv is utilized to receive and unpack the buffer of the cell-
     !! average conservative variables, for a single computational domain boundary
     !! at the time, from the relevant neighboring processor.
 
-    real(kind(0d0)), private, allocatable, dimension(:), target :: c_divs_buff_send !<
+    real(wp), private, allocatable, dimension(:), target :: c_divs_buff_send !<
     !! c_divs_buff_send is utilized to send and unpack the buffer of the cell-
     !! centered color function derivatives, for a single computational domain
     !! boundary at the time, to the the relevant neighboring processor
 
-    real(kind(0d0)), private, allocatable, dimension(:), target :: c_divs_buff_recv
+    real(wp), private, allocatable, dimension(:), target :: c_divs_buff_recv
     !! c_divs_buff_recv is utilized to receiver and unpack the buffer of the cell-
     !! centered color function derivatives, for a single computational domain
     !! boundary at the time, from the relevant neighboring processor
@@ -73,10 +71,6 @@ module m_mpi_proxy
     integer, private :: err_code, ierr, v_size
     !> @}
     !$acc declare create(v_size)
-
-    !real :: s_time, e_time
-    !real :: compress_time, mpi_time, decompress_time
-    !integer :: nCalls_time = 0
 
     integer :: nVars !< nVars for surface tension communication
     !$acc declare create(nVars)
@@ -114,6 +108,7 @@ contains
 
             v_size = sys_size + 2*nb*4
         else
+
             if (n > 0) then
                 if (p > 0) then
                     @:ALLOCATE(q_cons_buff_send(0:-1 + buff_size*sys_size* &
@@ -132,6 +127,7 @@ contains
             @:ALLOCATE(q_cons_buff_recv(0:ubound(q_cons_buff_send, 1)))
 
             v_size = sys_size
+
         end if
 
         if (surface_tension) then
@@ -164,7 +160,7 @@ contains
         !!      available to the other processors. Then, the purpose of
         !!      this subroutine is to distribute the user inputs to the
         !!      remaining processors in the communicator.
-    subroutine s_mpi_bcast_user_inputs
+    subroutine s_mpi_bcast_user_inputs()
 
 #ifdef MFC_MPI
 
@@ -174,7 +170,7 @@ contains
 
         #:for VAR in ['k_x', 'k_y', 'k_z', 'w_x', 'w_y', 'w_z', 'p_x', 'p_y', &
             & 'p_z', 'g_x', 'g_y', 'g_z']
-            call MPI_BCAST(${VAR}$, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+            call MPI_BCAST(${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 
         #:for VAR in ['t_step_old', 'm', 'n', 'p', 'm_glb', 'n_glb', 'p_glb',  &
@@ -190,7 +186,7 @@ contains
         #:for VAR in [ 'run_time_info','cyl_coord', 'mpp_lim',     &
             &  'mp_weno', 'rdma_mpi', 'weno_flat', 'riemann_flat', &
             & 'weno_Re_flux', 'alt_soundspeed', 'null_weights', 'mixture_err',   &
-            & 'parallel_io', 'hypoelasticity', 'bubbles', 'polytropic',          &
+            & 'parallel_io', 'hypoelasticity', 'bubbles_euler', 'polytropic',    &
             & 'polydisperse', 'qbmm', 'acoustic_source', 'probe_wrt', 'integral_wrt',   &
             & 'prim_vars_wrt', 'weno_avg', 'file_per_process', 'relax',          &
             & 'adv_n', 'adap_dt', 'ib', 'bodyForces', 'bf_x', 'bf_y', 'bf_z',    &
@@ -198,7 +194,8 @@ contains
             & 'bc_y%grcbc_in', 'bc_y%grcbc_out', 'bc_y%grcbc_vel_out',          &
             & 'bc_z%grcbc_in', 'bc_z%grcbc_out', 'bc_z%grcbc_vel_out',          &
             & 'cfl_adap_dt', 'cfl_const_dt', 'cfl_dt', 'surface_tension',        &
-            & 'viscous', 'shear_stress', 'bulk_stress' ]
+            & 'viscous', 'shear_stress', 'bulk_stress', 'bubbles_lagrange',     &
+            & 'hyperelasticity', 'rkck_adap_dt' ]
             call MPI_BCAST(${VAR}$, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 
@@ -212,6 +209,22 @@ contains
             #:endfor
         end if
 
+        if (bubbles_lagrange) then
+            #:for VAR in [ 'heatTransfer_model', 'massTransfer_model', 'pressure_corrector', &
+                & 'write_bubbles', 'write_bubbles_stats']
+                call MPI_BCAST(lag_params%${VAR}$, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
+            #:endfor
+
+            #:for VAR in ['solver_approach', 'cluster_type', 'smooth_type', 'nBubs_glb']
+                call MPI_BCAST(lag_params%${VAR}$, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+            #:endfor
+
+            #:for VAR in [ 'c0', 'rho0', 'T0', 'x0', 'diffcoefvap', 'epsilonb','charwidth', &
+                & 'valmaxvoid', 'Thost']
+                call MPI_BCAST(lag_params%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
+            #:endfor
+        end if
+
         #:for VAR in [ 'dt','weno_eps','teno_CT','pref','rhoref','R0ref','Web','Ca', 'sigma', &
             & 'Re_inv', 'poly_sigma', 'palpha_eps', 'ptgalpha_eps', 'pi_fac',    &
             & 'bc_x%vb1','bc_x%vb2','bc_x%vb3','bc_x%ve1','bc_x%ve2','bc_x%ve2', &
@@ -219,14 +232,15 @@ contains
             & 'bc_z%vb1','bc_z%vb2','bc_z%vb3','bc_z%ve1','bc_z%ve2','bc_z%ve3', &
             & 'bc_x%pres_in','bc_x%pres_out','bc_y%pres_in','bc_y%pres_out', 'bc_z%pres_in','bc_z%pres_out', &
             & 'x_domain%beg', 'x_domain%end', 'y_domain%beg', 'y_domain%end',    &
-            & 'z_domain%beg', 'z_domain%end', 't_stop',  't_save', 'cfl_target']
-            call MPI_BCAST(${VAR}$, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+            & 'z_domain%beg', 'z_domain%end', 'x_a', 'x_b', 'y_a', 'y_b', 'z_a', &
+            & 'z_b', 't_stop', 't_save', 'cfl_target', 'rkck_tolerance']
+            call MPI_BCAST(${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 
         do i = 1, 3
             #:for VAR in [ 'bc_x%vel_in', 'bc_x%vel_out', 'bc_y%vel_in', 'bc_y%vel_out',  &
                 & 'bc_z%vel_in', 'bc_z%vel_out']
-                call MPI_BCAST(${VAR}$ (i), 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+                call MPI_BCAST(${VAR}$ (i), 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
         end do
 
@@ -237,34 +251,34 @@ contains
             call MPI_BCAST(weno_order, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
             call MPI_BCAST(nb, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
             call MPI_BCAST(num_fluids, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-            call MPI_BCAST(wenoz_q, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+            call MPI_BCAST(wenoz_q, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
         #:endif
 
         do i = 1, num_fluids_max
             #:for VAR in [ 'gamma','pi_inf','mul0','ss','pv','gamma_v','M_v',  &
-                & 'mu_v','k_v','G', 'cv', 'qv', 'qvp' ]
-                call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp' ]
+                call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
-            call MPI_BCAST(fluid_pp(i)%Re(1), 2, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+            call MPI_BCAST(fluid_pp(i)%Re(1), 2, mpi_p, 0, MPI_COMM_WORLD, ierr)
         end do
 
         do i = 1, num_fluids_max
             #:for VAR in ['bc_x%alpha_rho_in','bc_x%alpha_in','bc_y%alpha_rho_in','bc_y%alpha_in','bc_z%alpha_rho_in','bc_z%alpha_in']
-                call MPI_BCAST(${VAR}$ (i), 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+                call MPI_BCAST(${VAR}$ (i), 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
         end do
 
         do i = 1, num_ibs
             #:for VAR in [ 'radius', 'length_x', 'length_y', &
                 & 'x_centroid', 'y_centroid', 'c', 'm', 'p', 't', 'theta', 'slip' ]
-                call MPI_BCAST(patch_ib(i)%${VAR}$, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+                call MPI_BCAST(patch_ib(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
             call MPI_BCAST(patch_ib(i)%geometry, 2, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         end do
 
         do j = 1, num_probes_max
             do i = 1, 3
-                call MPI_BCAST(acoustic(j)%loc(i), 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+                call MPI_BCAST(acoustic(j)%loc(i), 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             end do
 
             call MPI_BCAST(acoustic(j)%dipole, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
@@ -278,15 +292,15 @@ contains
                 'npulse', 'dir', 'delay', 'foc_length', 'aperture', &
                 'element_spacing_angle', 'element_polygon_ratio', 'rotate_angle', &
                 'bb_bandwidth', 'bb_lowest_freq' ]
-                call MPI_BCAST(acoustic(j)%${VAR}$, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+                call MPI_BCAST(acoustic(j)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
 
             #:for VAR in [ 'x','y','z' ]
-                call MPI_BCAST(probe(j)%${VAR}$, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+                call MPI_BCAST(probe(j)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
 
             #:for VAR in [ 'xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax' ]
-                call MPI_BCAST(integral(j)%${VAR}$, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+                call MPI_BCAST(integral(j)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
         end do
 
@@ -307,10 +321,10 @@ contains
         integer :: num_procs_x, num_procs_y, num_procs_z !<
             !! Optimal number of processors in the x-, y- and z-directions
 
-        real(kind(0d0)) :: tmp_num_procs_x, tmp_num_procs_y, tmp_num_procs_z !<
+        real(wp) :: tmp_num_procs_x, tmp_num_procs_y, tmp_num_procs_z !<
             !! Non-optimal number of processors in the x-, y- and z-directions
 
-        real(kind(0d0)) :: fct_min !<
+        real(wp) :: fct_min !<
             !! Processor factorization (fct) minimization parameter
 
         integer :: MPI_COMM_CART !<
@@ -329,7 +343,7 @@ contains
             return
         end if
 
-        ! 3D Cartesian Processor Topology ==================================
+        ! 3D Cartesian Processor Topology
         if (n > 0) then
 
             if (p > 0) then
@@ -349,8 +363,8 @@ contains
                     tmp_num_procs_x = num_procs_x
                     tmp_num_procs_y = num_procs_y
                     tmp_num_procs_z = num_procs_z
-                    fct_min = 10d0*abs((m + 1)/tmp_num_procs_x &
-                                       - (n + 1)/tmp_num_procs_y)
+                    fct_min = 10._wp*abs((m + 1)/tmp_num_procs_x &
+                                         - (n + 1)/tmp_num_procs_y)
 
                     ! Searching for optimal computational domain distribution
                     do i = 1, num_procs
@@ -393,10 +407,10 @@ contains
                     tmp_num_procs_x = num_procs_x
                     tmp_num_procs_y = num_procs_y
                     tmp_num_procs_z = num_procs_z
-                    fct_min = 10d0*abs((m + 1)/tmp_num_procs_x &
-                                       - (n + 1)/tmp_num_procs_y) &
-                              + 10d0*abs((n + 1)/tmp_num_procs_y &
-                                         - (p + 1)/tmp_num_procs_z)
+                    fct_min = 10._wp*abs((m + 1)/tmp_num_procs_x &
+                                         - (n + 1)/tmp_num_procs_y) &
+                              + 10._wp*abs((n + 1)/tmp_num_procs_y &
+                                           - (p + 1)/tmp_num_procs_z)
 
                     ! Optimization of the initial processor topology
                     do i = 1, num_procs
@@ -451,7 +465,7 @@ contains
                 if (proc_rank == 0 .and. ierr == -1) then
                     call s_mpi_abort('Unsupported combination of values '// &
                                      'of num_procs, m, n, p and '// &
-                                     'weno_order. Exiting ...')
+                                     'weno_order. Exiting.')
                 end if
 
                 ! Creating new communicator using the Cartesian topology
@@ -463,9 +477,9 @@ contains
                 ! Finding the Cartesian coordinates of the local process
                 call MPI_CART_COORDS(MPI_COMM_CART, proc_rank, 3, &
                                      proc_coords, ierr)
-                ! END: 3D Cartesian Processor Topology =============================
+                ! END: 3D Cartesian Processor Topology
 
-                ! Global Parameters for z-direction ================================
+                ! Global Parameters for z-direction
 
                 ! Number of remaining cells
                 rem_cells = mod(p + 1, num_procs_z)
@@ -503,9 +517,8 @@ contains
                         start_idx(3) = (p + 1)*proc_coords(3) + rem_cells
                     end if
                 end if
-                ! ==================================================================
 
-                ! 2D Cartesian Processor Topology ==================================
+                ! 2D Cartesian Processor Topology
             else
 
                 ! Initial estimate of optimal processor topology
@@ -516,8 +529,8 @@ contains
                 ! Benchmarking the quality of this initial guess
                 tmp_num_procs_x = num_procs_x
                 tmp_num_procs_y = num_procs_y
-                fct_min = 10d0*abs((m + 1)/tmp_num_procs_x &
-                                   - (n + 1)/tmp_num_procs_y)
+                fct_min = 10._wp*abs((m + 1)/tmp_num_procs_x &
+                                     - (n + 1)/tmp_num_procs_y)
 
                 ! Optimization of the initial processor topology
                 do i = 1, num_procs
@@ -553,7 +566,7 @@ contains
                 if (proc_rank == 0 .and. ierr == -1) then
                     call s_mpi_abort('Unsupported combination of values '// &
                                      'of num_procs, m, n and '// &
-                                     'weno_order. Exiting ...')
+                                     'weno_order. Exiting.')
                 end if
 
                 ! Creating new communicator using the Cartesian topology
@@ -567,9 +580,9 @@ contains
                                      proc_coords, ierr)
 
             end if
-            ! END: 2D Cartesian Processor Topology =============================
+            ! END: 2D Cartesian Processor Topology
 
-            ! Global Parameters for y-direction ================================
+            ! Global Parameters for y-direction
 
             ! Number of remaining cells
             rem_cells = mod(n + 1, num_procs_y)
@@ -608,9 +621,7 @@ contains
                 end if
             end if
 
-            ! ==================================================================
-
-            ! 1D Cartesian Processor Topology ==================================
+            ! 1D Cartesian Processor Topology
         else
 
             ! Optimal processor topology
@@ -626,9 +637,8 @@ contains
                                  proc_coords, ierr)
 
         end if
-        ! ==================================================================
 
-        ! Global Parameters for x-direction ================================
+        ! Global Parameters for x-direction
 
         ! Number of remaining cells
         rem_cells = mod(m + 1, num_procs_x)
@@ -664,7 +674,6 @@ contains
                 start_idx(1) = (m + 1)*proc_coords(1) + rem_cells
             end if
         end if
-        ! ==================================================================
 
 #endif
 
@@ -687,7 +696,7 @@ contains
 
 #ifdef MFC_MPI
 
-        ! MPI Communication in x-direction =================================
+        ! MPI Communication in x-direction
         if (mpi_dir == 1) then
 
             if (pbc_loc == -1) then      ! PBC at the beginning
@@ -697,9 +706,9 @@ contains
                     ! Send/receive buffer to/from bc_x%end/bc_x%beg
                     call MPI_SENDRECV( &
                         dx(m - buff_size + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_x%end, 0, &
+                        mpi_p, bc_x%end, 0, &
                         dx(-buff_size), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_x%beg, 0, &
+                        mpi_p, bc_x%beg, 0, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 else                        ! PBC at the beginning only
@@ -707,9 +716,9 @@ contains
                     ! Send/receive buffer to/from bc_x%beg/bc_x%beg
                     call MPI_SENDRECV( &
                         dx(0), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_x%beg, 1, &
+                        mpi_p, bc_x%beg, 1, &
                         dx(-buff_size), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_x%beg, 0, &
+                        mpi_p, bc_x%beg, 0, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 end if
@@ -721,9 +730,9 @@ contains
                     ! Send/receive buffer to/from bc_x%beg/bc_x%end
                     call MPI_SENDRECV( &
                         dx(0), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_x%beg, 1, &
+                        mpi_p, bc_x%beg, 1, &
                         dx(m + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_x%end, 1, &
+                        mpi_p, bc_x%end, 1, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 else                        ! PBC at the end only
@@ -731,17 +740,17 @@ contains
                     ! Send/receive buffer to/from bc_x%end/bc_x%end
                     call MPI_SENDRECV( &
                         dx(m - buff_size + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_x%end, 0, &
+                        mpi_p, bc_x%end, 0, &
                         dx(m + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_x%end, 1, &
+                        mpi_p, bc_x%end, 1, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 end if
 
             end if
-            ! END: MPI Communication in x-direction ============================
+            ! END: MPI Communication in x-direction
 
-            ! MPI Communication in y-direction =================================
+            ! MPI Communication in y-direction
         elseif (mpi_dir == 2) then
 
             if (pbc_loc == -1) then      ! PBC at the beginning
@@ -751,9 +760,9 @@ contains
                     ! Send/receive buffer to/from bc_y%end/bc_y%beg
                     call MPI_SENDRECV( &
                         dy(n - buff_size + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_y%end, 0, &
+                        mpi_p, bc_y%end, 0, &
                         dy(-buff_size), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_y%beg, 0, &
+                        mpi_p, bc_y%beg, 0, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 else                        ! PBC at the beginning only
@@ -761,9 +770,9 @@ contains
                     ! Send/receive buffer to/from bc_y%beg/bc_y%beg
                     call MPI_SENDRECV( &
                         dy(0), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_y%beg, 1, &
+                        mpi_p, bc_y%beg, 1, &
                         dy(-buff_size), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_y%beg, 0, &
+                        mpi_p, bc_y%beg, 0, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 end if
@@ -775,9 +784,9 @@ contains
                     ! Send/receive buffer to/from bc_y%beg/bc_y%end
                     call MPI_SENDRECV( &
                         dy(0), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_y%beg, 1, &
+                        mpi_p, bc_y%beg, 1, &
                         dy(n + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_y%end, 1, &
+                        mpi_p, bc_y%end, 1, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 else                        ! PBC at the end only
@@ -785,17 +794,17 @@ contains
                     ! Send/receive buffer to/from bc_y%end/bc_y%end
                     call MPI_SENDRECV( &
                         dy(n - buff_size + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_y%end, 0, &
+                        mpi_p, bc_y%end, 0, &
                         dy(n + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_y%end, 1, &
+                        mpi_p, bc_y%end, 1, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 end if
 
             end if
-            ! END: MPI Communication in y-direction ============================
+            ! END: MPI Communication in y-direction
 
-            ! MPI Communication in z-direction =================================
+            ! MPI Communication in z-direction
         else
 
             if (pbc_loc == -1) then      ! PBC at the beginning
@@ -805,9 +814,9 @@ contains
                     ! Send/receive buffer to/from bc_z%end/bc_z%beg
                     call MPI_SENDRECV( &
                         dz(p - buff_size + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_z%end, 0, &
+                        mpi_p, bc_z%end, 0, &
                         dz(-buff_size), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_z%beg, 0, &
+                        mpi_p, bc_z%beg, 0, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 else                        ! PBC at the beginning only
@@ -815,9 +824,9 @@ contains
                     ! Send/receive buffer to/from bc_z%beg/bc_z%beg
                     call MPI_SENDRECV( &
                         dz(0), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_z%beg, 1, &
+                        mpi_p, bc_z%beg, 1, &
                         dz(-buff_size), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_z%beg, 0, &
+                        mpi_p, bc_z%beg, 0, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 end if
@@ -829,9 +838,9 @@ contains
                     ! Send/receive buffer to/from bc_z%beg/bc_z%end
                     call MPI_SENDRECV( &
                         dz(0), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_z%beg, 1, &
+                        mpi_p, bc_z%beg, 1, &
                         dz(p + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_z%end, 1, &
+                        mpi_p, bc_z%end, 1, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 else                        ! PBC at the end only
@@ -839,9 +848,9 @@ contains
                     ! Send/receive buffer to/from bc_z%end/bc_z%end
                     call MPI_SENDRECV( &
                         dz(p - buff_size + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_z%end, 0, &
+                        mpi_p, bc_z%end, 0, &
                         dz(p + 1), buff_size, &
-                        MPI_DOUBLE_PRECISION, bc_z%end, 1, &
+                        mpi_p, bc_z%end, 1, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 end if
@@ -849,7 +858,7 @@ contains
             end if
 
         end if
-        ! END: MPI Communication in z-direction ============================
+        ! END: MPI Communication in z-direction
 
 #endif
 
@@ -867,7 +876,7 @@ contains
                                                 pbc_loc)
 
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
-        real(kind(0d0)), dimension(startx:, starty:, startz:, 1:, 1:), intent(inout) :: pb, mv
+        real(wp), dimension(startx:, starty:, startz:, 1:, 1:), intent(inout) :: pb, mv
         integer, intent(in) :: mpi_dir, pbc_loc
 
         integer :: i, j, k, l, r, q !< Generic loop iterators
@@ -881,7 +890,8 @@ contains
         logical :: beg_end_geq_0
 
         integer :: pack_offset, unpack_offset
-        real(kind(0d0)), pointer :: p_send, p_recv
+
+        real(wp), pointer :: p_send, p_recv
 
 #ifdef MFC_MPI
 
@@ -1097,8 +1107,8 @@ contains
                 #:endif
 
                 call MPI_SENDRECV( &
-                    p_send, buffer_count, MPI_DOUBLE_PRECISION, dst_proc, send_tag, &
-                    p_recv, buffer_count, MPI_DOUBLE_PRECISION, src_proc, recv_tag, &
+                    p_send, buffer_count, mpi_p, dst_proc, send_tag, &
+                    p_recv, buffer_count, mpi_p, src_proc, recv_tag, &
                     MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
                 call nvtxEndRange ! RHS-MPI-SENDRECV-(NO)-RDMA
 
@@ -1321,7 +1331,7 @@ contains
 
         !nCalls_time = nCalls_time + 1
 
-        ! MPI Communication in x-direction =================================
+        ! MPI Communication in x-direction
         if (bc_x%beg >= 0) then      ! PBC at the beginning
 
             if (bc_x%end >= 0) then      ! PBC at the beginning and end
@@ -1581,9 +1591,9 @@ contains
             end do
 
         end if
-        ! END: MPI Communication in x-direction ============================
+        ! END: MPI Communication in x-direction
 
-        ! MPI Communication in y-direction =================================
+        ! MPI Communication in y-direction
 
         if (bc_y%beg >= 0) then      ! PBC at the beginning
 
@@ -1856,9 +1866,9 @@ contains
             end do
 
         end if
-        ! END: MPI Communication in y-direction ============================
+        ! END: MPI Communication in y-direction
 
-        ! MPI Communication in z-direction =================================
+        ! MPI Communication in z-direction
         if (bc_z%beg >= 0) then      ! PBC at the beginning
 
             if (bc_z%end >= 0) then      ! PBC at the beginning and end
@@ -2133,7 +2143,7 @@ contains
 
         end if
 
-        ! END: MPI Communication in z-direction ============================
+        ! END: MPI Communication in z-direction
 
 #endif
 
@@ -2155,7 +2165,7 @@ contains
         logical :: beg_end_geq_0
 
         integer :: pack_offset, unpack_offset
-        real(kind(0d0)), pointer :: p_send, p_recv
+        real(wp), pointer :: p_send, p_recv
 
 #ifdef MFC_MPI
 
@@ -2261,8 +2271,8 @@ contains
                 #:endif
 
                 call MPI_SENDRECV( &
-                    p_send, buffer_count, MPI_DOUBLE_PRECISION, dst_proc, send_tag, &
-                    p_recv, buffer_count, MPI_DOUBLE_PRECISION, src_proc, recv_tag, &
+                    p_send, buffer_count, mpi_p, dst_proc, send_tag, &
+                    p_recv, buffer_count, mpi_p, src_proc, recv_tag, &
                     MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
                 #:if rdma_mpi
@@ -2352,9 +2362,9 @@ contains
 
     subroutine s_mpi_send_random_number(phi_rn, num_freq)
         integer, intent(in) :: num_freq
-        real(kind(0d0)), intent(inout), dimension(1:num_freq) :: phi_rn
+        real(wp), intent(inout), dimension(1:num_freq) :: phi_rn
 #ifdef MFC_MPI
-        call MPI_BCAST(phi_rn, num_freq, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+        call MPI_BCAST(phi_rn, num_freq, mpi_p, 0, MPI_COMM_WORLD, ierr)
 #endif
     end subroutine s_mpi_send_random_number
 

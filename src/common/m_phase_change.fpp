@@ -1,18 +1,11 @@
-!>
-!! @file m_phase_change.fpp
-!! @brief Contains module m_phasechange
+!> energies (6-eqn to 4-eqn) equilibrium through an infinitely fast (algebraic)
+!> procedure.
 
 #:include 'macros.fpp'
 
-!> @brief This module is used to relax the model equations (6-eqn model)
-!> towards pressure and temperature (6-eqn to 4-eqn), and (if wanted) Gibbs free
-!> energies (6-eqn to 4-eqn) equilibrium through an infinitely fast (algebraic)
-!> procedure.
 module m_phase_change
 
 #ifndef MFC_POST_PROCESS
-
-    ! Dependencies =============================================================
 
     use m_derived_types        !< Definitions of the derived types
 
@@ -26,8 +19,6 @@ module m_phase_change
 
     use ieee_arithmetic
 
-    ! ==========================================================================
-
     implicit none
 
     private; public :: s_initialize_phasechange_module, &
@@ -35,17 +26,17 @@ module m_phase_change
 
     !> @name Parameters for the first order transition phase change
     !> @{
-    integer, parameter :: max_iter = 1d6        !< max # of iterations
-    real(kind(0d0)), parameter :: pCr = 4.94d7   !< Critical water pressure
-    real(kind(0d0)), parameter :: TCr = 385.05 + 273.15  !< Critical water temperature
-    real(kind(0d0)), parameter :: mixM = sgm_eps !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    integer, parameter :: max_iter = 1e8_wp        !< max # of iterations
+    real(wp), parameter :: pCr = 4.94e7_wp   !< Critical water pressure
+    real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
+    real(wp), parameter :: mixM = 1.0e-8_wp !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
     integer, parameter :: lp = 1    !< index for the liquid phase of the reacting fluid
     integer, parameter :: vp = 2    !< index for the vapor phase of the reacting fluid
     !> @}
 
     !> @name Gibbs free energy phase change parameters
     !> @{
-    real(kind(0d0)) :: A, B, C, D
+    real(wp) :: A, B, C, D
     !> @}
 
     !$acc declare create(max_iter,pCr,TCr,mixM,lp,vp,A,B,C,D)
@@ -60,15 +51,15 @@ contains
 
         ! variables used in the calculation of the saturation curves for fluids 1 and 2
         A = (gs_min(lp)*cvs(lp) - gs_min(vp)*cvs(vp) &
-             + qvps(vp) - qvps(lp))/((gs_min(vp) - 1.0d0)*cvs(vp))
+             + qvps(vp) - qvps(lp))/((gs_min(vp) - 1.0_wp)*cvs(vp))
 
-        B = (qvs(lp) - qvs(vp))/((gs_min(vp) - 1.0d0)*cvs(vp))
+        B = (qvs(lp) - qvs(vp))/((gs_min(vp) - 1.0_wp)*cvs(vp))
 
         C = (gs_min(vp)*cvs(vp) - gs_min(lp)*cvs(lp)) &
-            /((gs_min(vp) - 1.0d0)*cvs(vp))
+            /((gs_min(vp) - 1.0_wp)*cvs(vp))
 
-        D = ((gs_min(lp) - 1.0d0)*cvs(lp)) &
-            /((gs_min(vp) - 1.0d0)*cvs(vp))
+        D = ((gs_min(lp) - 1.0_wp)*cvs(lp)) &
+            /((gs_min(vp) - 1.0_wp)*cvs(vp))
 
         ! Associating procedural pointer to the subroutine that will be
         ! utilized to calculate the solution to the selected relaxation system
@@ -85,15 +76,15 @@ contains
         !!  @param q_cons_vf Cell-average conservative variables
     subroutine s_infinite_relaxation_k(q_cons_vf) ! ----------------
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
-        real(kind(0.0d0)) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
-        real(kind(0.0d0)) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
-        real(kind(0.0d0)) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
-        real(kind(0.0d0)) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
+        real(wp) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
+        real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
+        real(wp) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
+        real(wp) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
         logical :: TR
 
         !$acc declare create(pS, pSOV, pSSL, TS, TSatOV, TSatSL, TSOV, TSSL, rhoe, rhoeT, dynE, rhos, rho, rM, m1, m2, TR)
 
-        real(kind(0d0)), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk
+        real(wp), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alpha0k, alphak, m0k, rhok, Tk
 
         !< Generic loop iterators
         integer :: i, j, k, l
@@ -113,7 +104,7 @@ contains
 
                     ! computing mixture density, volume fraction, and internal energy, so as saving original variables
                     ! in case phase change is cancelled.
-                    rho = 0.0d0; rhoeT = 0.0d0
+                    rho = 0.0_wp; rhoeT = 0.0_wp
                     !$acc loop seq
                     do i = 1, num_fluids
                         ! original volume fractions, before any relaxation
@@ -138,10 +129,12 @@ contains
                     end do
                     
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
-                    dynE = 0.0d0
+                    dynE = 0.0_wp
                     !$acc loop seq
                     do i = momxb, momxe
-                        dynE = dynE + 5.0d-1*q_cons_vf(i)%sf(j, k, l)**2/rho
+
+                        dynE = dynE + 5.0e-1_wp*q_cons_vf(i)%sf(j, k, l)**2/rho
+
                     end do
 
                     ! calculating the internal mixture energy that MUST be preserved throughout pT- and pTg-relaxation procedures
@@ -202,7 +195,7 @@ contains
                                 ! overheated vapor
                                 ! depleting the mass of liquid and tranferring the total mass to vapor
                                 q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
-                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                                q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0_wp - mixM)*rM
 
                                 ! calling pT-equilibrium for overheated vapor, which is MFL = 0
                                 call s_infinite_pt_relaxation_k(j, k, l, 0, pSOV, p_infOV, q_cons_vf, rhoe, rM, TSOV)
@@ -214,7 +207,7 @@ contains
 
                                 ! subcooled liquid 
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
-                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                                q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0_wp - mixM)*rM
                                 q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1                       
@@ -232,7 +225,7 @@ contains
 
                                     ! correcting the liquid and vapor partial densities
                                     q_cons_vf(lp + contxb - 1)%sf(j, k, l) = mixM*rM
-                                    q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                                    q_cons_vf(vp + contxb - 1)%sf(j, k, l) = (1.0_wp - mixM)*rM
 
                                     ! PRINT *, 'OV'
 
@@ -244,7 +237,7 @@ contains
                                     TS = TSSL
 
                                     ! correcting the liquid and vapor partial densities
-                                    q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0d0 - mixM)*rM
+                                    q_cons_vf(lp + contxb - 1)%sf(j, k, l) = (1.0_wp - mixM)*rM
                                     q_cons_vf(vp + contxb - 1)%sf(j, k, l) = mixM*rM
 
                                     ! PRINT *, 'SL'
@@ -310,14 +303,14 @@ contains
 
         ! initializing variables
         type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
-        real(kind(0.0d0)), intent(IN) :: rho, rhoe, rhoeT
-        real(kind(0.0d0)), intent(OUT) :: pS
-        real(kind(0.0d0)), dimension(num_fluids), intent(OUT) :: Tk
+        real(wp), intent(IN) :: rho, rhoe, rhoeT
+        real(wp), intent(OUT) :: pS
+        real(wp), dimension(num_fluids), intent(OUT) :: Tk
         integer, intent(IN) :: j, k, l
 
-        real(kind(0.0d0)) :: fp, fpp, pO !< variables for the Newton Solver
-        real(kind(0.0d0)) :: Econst !< auxiliary variables
-        real(kind(0.0d0)), dimension(num_fluids) :: alpha0k, alphak, alpharhoek, alpharhoe0k, rhok
+        real(wp) :: fp, fpp, pO !< variables for the Newton Solver
+        real(wp) :: Econst !< auxiliary variables
+        real(wp), dimension(num_fluids) :: alpha0k, alphak, alpharhoek, alpharhoe0k, rhok
         character(20) :: nss, pSs, Econsts
 
         integer :: i, ns !< generic loop iterators
@@ -362,7 +355,7 @@ contains
             pO = pS
 
             ! updating functions used in the Newton's solver
-            fp = 0.0d0; fpp = 0.0d0; 
+            fp =  0.0_wp; fpp =  0.0_wp; 
             !$acc loop seq
             do i = 1, num_fluids
 
@@ -378,7 +371,7 @@ contains
             pS = pO + ((1.0d0 - fp)/fpp)/(1.0d0 - (1.0d0 - fp + DABS(1.0d0 - fp))/(2.0d0*fpp*(pO + minval(gs_min*ps_inf))))
 
             ! Variable to check energy constraint
-            Econst = 0.0d0
+            Econst =  0.0_wp
             !$acc loop seq
             ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
             do i = 1, num_fluids
@@ -423,8 +416,8 @@ contains
 
                     print *, 'fp', 'fpp', fp, fpp
 
-                    call s_tattletale((/0.0d0, 0.0d0/), reshape((/0.0d0, 0.0d0, 0.0d0, 0.0d0/), (/2, 2/)) &
-                                      , j, (/0.0d0, 0.0d0, 0.0d0, 0.0d0/), k, l, rhoeT, ps_inf, pS, (/pS - pO, pS + pO/) &
+                    call s_tattletale((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                                      , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, rhoeT, ps_inf, pS, (/pS - pO, pS + pO/) &
                                       , rhoe, q_cons_vf, SUM(Tk)/num_fluids)
                 end if
 
@@ -465,18 +458,18 @@ contains
 
         ! initializing variables
         type(scalar_field), dimension(sys_size), intent(in) :: q_cons_vf
-        real(kind(0.0d0)), intent(out) :: pS, TS
-        real(kind(0.0d0)), dimension(num_fluids), intent(out) :: p_infpT
-        real(kind(0.0d0)), intent(in) :: rhoe, rM
+        real(wp), intent(out) :: pS, TS
+        real(wp), dimension(num_fluids), intent(out) :: p_infpT
+        real(wp), intent(in) :: rhoe, rM
         integer, intent(in) :: j, k, l, MFL
         integer, dimension(num_fluids) :: ig !< flags to toggle the inclusion of fluids for the pT-equilibrium
-        real(kind(0.0d0)) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
+        real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
 
         integer :: i, ns !< generic loop iterators
 
         ! auxiliary variables for the pT-equilibrium solver
-        mCP = 0.0d0; mQ = 0.0d0; p_infpT = ps_inf;
+        mCP = 0.0_wp; mQ = 0.0_wp; p_infpT = ps_inf;
 
         ! these are slowing the computations significantly. Think about a workaround
         ig(1:num_fluids) = 0
@@ -488,7 +481,7 @@ contains
             ! check if all alpha(i)*rho(i) are negative. If so, abort
 #ifndef MFC_OpenACC
             ! check which indices I will ignore (no need to abort the solver in this case). Adjust this sgm_eps value for mixture cells
-            if( ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) .ge. 0.0D0 ) &
+            if( ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) .ge.  0.0_wp ) &
                     .and. ( q_cons_vf( i + contxb - 1 )%sf( j, k, l ) - rM * mixM .le. sgm_eps ) ) then
 
                 ig(i) = i
@@ -515,24 +508,24 @@ contains
         ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
         ! mass from one phase to the other. When this is the case, we simply ignore this possibility, set pS = TS = 0,
         ! and discard the hypothesis. The solver can thus move forward.
-        if ((rhoe - mQ - minval(p_infpT)) < 0.0d0) then
+        if ((rhoe - mQ - minval(p_infpT)) < 0.0_wp) then
 
             if ((MFL == 0) .or. (MFL == 1)) then
 
                 ! Assigning zero values for mass depletion cases
                 ! pressure
-                pS = 0.0d0
+                pS = 0.0_wp
 
                 ! temperature
-                TS = 0.0d0
+                TS = 0.0_wp
 
                 return
 #ifndef MFC_OpenACC
             else
                 if (proc_rank == 0) then
 
-                    call s_tattletale((/0.0d0, 0.0d0/), reshape((/0.0d0, 0.0d0, 0.0d0, 0.0d0/), (/2, 2/)) &
-                                      , j, (/0.0d0, 0.0d0, 0.0d0, 0.0d0/), k, l, mQ, p_infpT, pS, (/DABS(pS - pO), DABS(pS - pO)/) &
+                    call s_tattletale((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                                      , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, mQ, p_infpT, pS, (/DABS(pS - pO), DABS(pS - pO)/) &
                                       , rhoe, q_cons_vf, TS)
 
                 end if
@@ -547,17 +540,17 @@ contains
 
         ! calculating initial estimate for pressure in the pT-relaxation procedure. I will also use this variable to
         ! iterate over the Newton's solver
-        pO = 0.0d0
+        pO = 0.0_wp
 
         ! Maybe improve this condition afterwards. As long as the initial guess is in between -min(ps_inf)
         ! and infinity, a solution should be able to be found.
-        pS = 1.0d4
+        pS = 1.0e4_wp
 
         ! starting counter for the Newton solver
         ns = 0
 
         ! Newton solver for pT-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
-        do while (((DABS(pS - pO) > ptgalpha_eps) .and. (DABS((pS - pO)/pO) > ptgalpha_eps/1.0d6)) .or. (ns == 0))
+        do while (((DABS(pS - pO) > ptgalpha_eps) .and. (DABS((pS - pO)/pO) > ptgalpha_eps/1e4_wp)) .or. (ns == 0))
 
             ! increasing counter
             ns = ns + 1
@@ -566,7 +559,7 @@ contains
             pO = pS
 
             ! updating functions used in the Newton's solver
-            gpp = 0.0d0; gp = 0.0d0; hp = 0.0d0
+            gpp = 0.0_wp; gp = 0.0_wp; hp = 0.0_wp
             !$acc loop seq
             do i = 1, num_fluids
 
@@ -594,8 +587,8 @@ contains
 #ifndef MFC_OpenACC
             if ((pS <= -1.0d0*minval(p_infpT)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
                 if (proc_rank == 0) then
-                    call s_tattletale((/0.0d0, 0.0d0/), reshape((/0.0d0, 0.0d0, 0.0d0, 0.0d0/), (/2, 2/)) &
-                                      , j, (/0.0d0, 0.0d0, 0.0d0, 0.0d0/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
+                    call s_tattletale((/0.0_wp, 0.0_wp/), reshape((/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), (/2, 2/)) &
+                                      , j, (/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
                                       , rhoe, q_cons_vf, TS)
                 end if
 
@@ -635,17 +628,17 @@ contains
 #endif
 
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
-        real(kind(0.0d0)), dimension(num_fluids), intent(IN) :: p_infpT
-        real(kind(0.0d0)), intent(INOUT) :: pS, TS, rM
-        real(kind(0.0d0)), intent(IN) :: rho, rhoe
+        real(wp), dimension(num_fluids), intent(IN) :: p_infpT
+        real(wp), intent(INOUT) :: pS, TS, rM
+        real(wp), intent(IN) :: rho, rhoe
         integer, intent(IN) :: j, k, l
         logical, intent(INOUT) :: TR
-        real(kind(0.0d0)), dimension(num_fluids) :: p_infpTg
-        real(kind(0.0d0)), dimension(2, 2) :: Jac, InvJac, TJac
-        real(kind(0.0d0)), dimension(2) :: R2D, DeltamP
-        real(kind(0.0d0)), dimension(3) :: Oc
-        real(kind(0.0d0)) :: Om, OmI ! underrelaxation factor
-        real(kind(0.0d0)) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, m01, m02, pSi, TSat ! auxiliary variables for the pTg-solver
+        real(wp), dimension(num_fluids) :: p_infpTg
+        real(wp), dimension(2, 2) :: Jac, InvJac, TJac
+        real(wp), dimension(2) :: R2D, DeltamP
+        real(wp), dimension(3) :: Oc
+        real(wp) :: Om, OmI ! underrelaxation factor
+        real(wp) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, m01, m02, pSi, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts
 
         !< Generic loop iterators
@@ -660,14 +653,14 @@ contains
         m02 = q_cons_vf(vp + contxb - 1)%sf(j, k, l)
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
-        if ((pS < 0.0) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
-                                    > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1))/qvs(lp))) then
+        if ((pS < 0.0_wp) .and. (q_cons_vf(lp + contxb - 1)%sf(j, k, l) + q_cons_vf(vp + contxb - 1)%sf(j, k, l) &
+                                    > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp))) then
 
             ! transfer a bit of mass to the deficient phase, enforce phase0chane
             call s_correct_partial_densities(1, q_cons_vf, rM, rho, TR, i, j, k, l)
             
         ! the metastable state is not enough to sustain phase change
-        elseif (pS < 0.0d0) then
+        elseif (pS < 0.0_wp) then
             
             ! cancel any phase-change updates.
             TR = .false.
@@ -677,19 +670,19 @@ contains
 
         ! if not homogeneous, then heterogeneous. Thus, setting up an arbitrary initial condition in case the one from
         ! the p(T)-equilibrium solver could lead to numerical issues
-        elseif ((pS < 1.0d-1) .and. (pS >= 0.0d0)) then
+        elseif ((pS < 1.0d-1) .and. (pS >= 0.0_wp)) then
             ! improve this initial condition
-            pS = 1.0d4
+            pS = 1.0e4_wp
 
         end if
 
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
-        OmI = 1.0d-1
+        OmI = 1.0e-1_wp
         ! Critical relaxation factors, for variable sub-relaxation
         Oc(1) = OmI; Oc(2) = OmI; Oc(3) = OmI
 
-        R2D(1) = 0.0d0; R2D(2) = 0.0d0
-        DeltamP(1) = 0.0d0; DeltamP(2) = 0.0d0
+        R2D(1) = 0.0_wp; R2D(2) = 0.0_wp
+        DeltamP(1) = 0.0_wp; DeltamP(2) = 0.0_wp
         ! starting counter for the Newton solver
         ns = 0
 
@@ -702,7 +695,7 @@ contains
             ns = ns + 1
 
             ! Auxiliary variables to help in the calculation of the residue
-            mCP = 0.0d0; mCPD = 0.0d0; mCVGP = 0.0d0; mCVGP2 = 0.0d0; mQ = 0.0d0; mQD = 0.0d0
+            mCP = 0.0_wp; mCPD = 0.0_wp; mCVGP = 0.0_wp; mCVGP2 = 0.0_wp; mQ = 0.0_wp; mQD = 0.0_wp
             ! Those must be updated through the iterations, as they either depend on
             ! the partial masses for all fluids, or on the equilibrium pressure
             !$acc loop seq
@@ -738,7 +731,7 @@ contains
 
             ! Checking pressure and energy criteria for the (pT) solver to find a solution
 #ifndef MFC_OpenACC
-            if ((pS <= -1.0d0*minval(ps_inf)) .or. ((rhoe - mQ - minval(ps_inf)) < 0.0d0)) then
+            if ((pS <= -1.0d0*minval(ps_inf)) .or. ((rhoe - mQ - minval(ps_inf)) < 0.0_wp)) then
                 if (proc_rank == 0) then
                     call s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, ps_inf, pS &
                                       , R2D, rhoe, q_cons_vf, TS)
@@ -762,7 +755,7 @@ contains
 
 #ifndef MFC_OpenACC
             ! creating criteria for variable underrelaxation factor
-            if (q_cons_vf(lp + contxb - 1)%sf(j, k, l) - Om*DeltamP(1) <= 0.0d0) then
+            if (q_cons_vf(lp + contxb - 1)%sf(j, k, l) - Om*DeltamP(1) <= 0.0_wp) then
                 ! if ( DeltamP(1) < 0 ) then
                 ! end if
                 Oc(1) = q_cons_vf(lp + contxb - 1)%sf(j, k, l)/(2*DeltamP(1))
@@ -774,15 +767,15 @@ contains
                 ! PRINT *, 'mass correction', q_cons_vf(lp + contxb - 1)%sf(j, k, l) - Om*DeltamP(1)
                 ! PRINT *, 'proposed mass correction', q_cons_vf(lp + contxb - 1)%sf(j, k, l) - Oc(1)*DeltamP(1)
                 ! pause
-            elseif (q_cons_vf(lp + contxb - 1)%sf(j, k, l) - OmI*DeltamP(1) > 0.0d0) then
+            elseif (q_cons_vf(lp + contxb - 1)%sf(j, k, l) - OmI*DeltamP(1) > 0.0_wp) then
                 Oc(1) = OmI
             end if
-            if (q_cons_vf(vp + contxb - 1)%sf(j, k, l) + Om*DeltamP(1) <= 0.0d0) then
+            if (q_cons_vf(vp + contxb - 1)%sf(j, k, l) + Om*DeltamP(1) <= 0.0_wp) then
                 Oc(2) = -q_cons_vf(vp + contxb - 1)%sf(j, k, l)/(2*DeltamP(1))
-            else if (q_cons_vf(vp + contxb - 1)%sf(j, k, l) + OmI*DeltamP(1) > 0.0d0) then
+            else if (q_cons_vf(vp + contxb - 1)%sf(j, k, l) + OmI*DeltamP(1) > 0.0_wp) then
                 Oc(2) = OmI
             end if
-            if (pS + minval(ps_inf) - Om*DeltamP(2) <= 0.0d0) then
+            if (pS + minval(ps_inf) - Om*DeltamP(2) <= 0.0_wp) then
                 ! if ( DeltamP(2) < 0 ) then
                 
                 ! end if
@@ -795,7 +788,7 @@ contains
                 ! PRINT *, 'pressure correction', pS + minval(ps_inf) - Om*DeltamP(2)
                 ! PRINT *, 'propoedpressure correction', pS + minval(ps_inf) - Oc(2)*DeltamP(2)
                 ! pause
-            elseif (pS + minval(ps_inf) - OmI*DeltamP(2) > 0.0d0) then
+            elseif (pS + minval(ps_inf) - OmI*DeltamP(2) > 0.0_wp) then
                 Oc(3) = OmI
             end if
             ! choosing amonst the minimum relaxation maximum to ensure solver will not produce unphysical values
@@ -916,8 +909,8 @@ contains
         !> @name variables for the correction of the reacting partial densities
         !> @{
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
-        real(kind(0.0d0)), intent(INOUT) :: rM
-        real(kind(0.0d0)), intent(IN) :: rho
+        real(wp), intent(INOUT) :: rM
+        real(wp), intent(IN) :: rho
         logical, intent(INOUT) :: TR
         integer, intent(IN) :: CT, j, k, l
         integer :: i
@@ -936,7 +929,7 @@ contains
                 end if
             end do
         elseif (CT == 1) then
-            if (rM < 0.0d0) then
+            if (rM < 0.0_wp) then
                 ! reacting masses are very negative so as to affect the physics of the problem, so phase change will not be activated
                 if ((q_cons_vf(lp + contxb - 1)%sf(j, k, l)/rM < 0*mixM) .or. &
                     (q_cons_vf(vp + contxb - 1)%sf(j, k, l)/rM < 0*mixM)) then
@@ -1021,10 +1014,10 @@ contains
 #endif
 
         type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
-        real(kind(0.0d0)), intent(IN) :: pS, mCPD, mCVGP, mCVGP2
+        real(wp), intent(IN) :: pS, mCPD, mCVGP, mCVGP2
         integer, intent(IN) :: j, k, l
-        real(kind(0.0d0)), dimension(2, 2), intent(OUT) :: Jac, InvJac, TJac
-        real(kind(0.0d0)) :: ml, mT, TS, dFdT, dTdm, dTdp ! mass of the reacting fluid, total reacting mass, and auxiliary variables
+        real(wp), dimension(2, 2), intent(OUT) :: Jac, InvJac, TJac
+        real(wp) :: ml, mT, TS, dFdT, dTdm, dTdp ! mass of the reacting fluid, total reacting mass, and auxiliary variables
 
         ! mass of the reacting liquid
         ml = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
@@ -1039,10 +1032,10 @@ contains
                 + mCVGP)
 
         dFdT = &
-            -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*DLOG(TS) &
+            -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TS) &
             - (qvps(lp) - qvps(vp)) &
-            + cvs(lp)*(gs_min(lp) - 1)*DLOG(pS + ps_inf(lp)) &
-            - cvs(vp)*(gs_min(vp) - 1)*DLOG(pS + ps_inf(vp))
+            + cvs(lp)*(gs_min(lp) - 1)*log(pS + ps_inf(lp)) &
+            - cvs(vp)*(gs_min(vp) - 1)*log(pS + ps_inf(vp))
 
         dTdm = -(cvs(lp)*(gs_min(lp) - 1)/(pS + ps_inf(lp)) &
                  - cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)))*TS**2
@@ -1089,8 +1082,8 @@ contains
 
         ! intermediate elements of J^{-1}
         InvJac(1, 1) = Jac(2, 2)
-        InvJac(1, 2) = -1.0d0*Jac(1, 2)
-        InvJac(2, 1) = -1.0d0*Jac(2, 1)
+        InvJac(1, 2) = -1.0_wp*Jac(1, 2)
+        InvJac(2, 1) = -1.0_wp*Jac(2, 1)
         InvJac(2, 2) = Jac(1, 1)
 
         ! elements of J^{T}
@@ -1124,10 +1117,10 @@ contains
 #endif
 
         type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
-        real(kind(0.0d0)), intent(IN) :: pS, rhoe, mCPD, mCVGP, mQD
+        real(wp), intent(IN) :: pS, rhoe, mCPD, mCVGP, mQD
         integer, intent(IN) :: j, k, l
-        real(kind(0.0d0)), dimension(2), intent(OUT) :: R2D
-        real(kind(0.0d0)) :: ml, mT, TS !< mass of the reacting liquid, total reacting mass, equilibrium temperature
+        real(wp), dimension(2), intent(OUT) :: R2D
+        real(wp) :: ml, mT, TS !< mass of the reacting liquid, total reacting mass, equilibrium temperature
 
         ! mass of the reacting liquid
         ml = q_cons_vf(lp + contxb - 1)%sf(j, k, l)
@@ -1144,9 +1137,9 @@ contains
 
         ! Gibbs Free Energy Equality condition (DG)
         R2D(1) = TS*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
-                     *(1 - DLOG(TS)) - (qvps(lp) - qvps(vp)) &
-                     + cvs(lp)*(gs_min(lp) - 1)*DLOG(pS + ps_inf(lp)) &
-                     - cvs(vp)*(gs_min(vp) - 1)*DLOG(pS + ps_inf(vp))) &
+                     *(1 - log(TS)) - (qvps(lp) - qvps(vp)) &
+                     + cvs(lp)*(gs_min(lp) - 1)*log(pS + ps_inf(lp)) &
+                     - cvs(vp)*(gs_min(vp) - 1)*log(pS + ps_inf(vp))) &
                  + qvs(lp) - qvs(vp)
 
         ! Constant Energy Process condition (DE)
@@ -1161,13 +1154,13 @@ contains
     subroutine s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, p_infA, pS, R2D, rhoe, q_cons_vf, TS) ! ----------------
 
         type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
-        real(kind(0.0d0)), dimension(2, 2), intent(IN) :: Jac, InvJac
-        real(kind(0.0d0)), dimension(num_fluids), intent(IN) :: p_infA
-        real(kind(0.0d0)), dimension(2), intent(IN) :: R2D, DeltamP
-        real(kind(0.0d0)), intent(IN) :: pS, TS
-        real(kind(0.0d0)), intent(IN) :: rhoe, mQ
+        real(wp), dimension(2, 2), intent(IN) :: Jac, InvJac
+        real(wp), dimension(num_fluids), intent(IN) :: p_infA
+        real(wp), dimension(2), intent(IN) :: R2D, DeltamP
+        real(wp), intent(IN) :: pS, TS
+        real(wp), intent(IN) :: rhoe, mQ
         integer, intent(IN) :: j, k, l
-        real(kind(0.0d0)) :: rho
+        real(wp) :: rho
         !< Generic loop iterator
         integer :: i
 
@@ -1230,9 +1223,9 @@ contains
         !$acc routine seq
 #endif
 
-        real(kind(0.0d0)), intent(OUT) :: TSat
-        real(kind(0.0d0)), intent(IN) :: pSat, TSIn
-        real(kind(0.0d0)) :: dFdT, FT, Om !< auxiliary variables
+        real(wp), intent(OUT) :: TSat
+        real(wp), intent(IN) :: pSat, TSIn
+        real(wp) :: dFdT, FT, Om !< auxiliary variables
         character(20) :: nss, pSatS, TSatS
 
         ! Generic loop iterators
@@ -1240,10 +1233,10 @@ contains
 
         ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
         ! phisically sustained (p = 0, T = 0)
-        if ((pSat .le. 0.0d0) .and. (TSIn .ge. 0.0d0)) then
+        if ((pSat == 0.0_wp) .and. (TSIn == 0.0_wp)) then
 
             ! assigning Saturation temperature
-            TSat = 0.0d0
+            TSat = 0.0_wp
 
         else
 
@@ -1267,19 +1260,19 @@ contains
                 ! FT = A + B / TSat + C * DLOG( TSat ) + D * DLOG( ( pSat + ps_inf( lp ) ) ) - DLOG( pSat + ps_inf( vp ) )
                 
                 FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
-                           *(1 - DLOG(TSat)) - (qvps(lp) - qvps(vp)) &
-                           + cvs(lp)*(gs_min(lp) - 1)*DLOG(pSat + ps_inf(lp)) &
-                           - cvs(vp)*(gs_min(vp) - 1)*DLOG(pSat + ps_inf(vp))) &
+                           *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
+                           + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
+                           - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
                      + qvs(lp) - qvs(vp)
 
                 ! calculating the jacobian
                 ! dFdT = - B / ( TSat ** 2) + C / TSat
 
                 dFdT = &
-                    -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*DLOG(TSat) &
+                    -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TSat) &
                     - (qvps(lp) - qvps(vp)) &
-                    + cvs(lp)*(gs_min(lp) - 1)*DLOG(pSat + ps_inf(lp)) &
-                    - cvs(vp)*(gs_min(vp) - 1)*DLOG(pSat + ps_inf(vp))
+                    + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
+                    - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))
 
                 ! updating saturation temperature
                 TSat = TSat - Om*FT/dFdT
@@ -1314,8 +1307,8 @@ contains
         
         !$acc routine seq
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
-        real(kind(0.0d0)), intent(IN) :: pS
-        real(kind(0.0d0)), dimension(num_fluids), intent(IN) :: Tk
+        real(wp), intent(IN) :: pS
+        real(wp), dimension(num_fluids), intent(IN) :: Tk
         integer, intent(IN) :: j, k, l
         real(kind(0d0)), dimension(num_fluids) :: sk, hk, gk, ek, rhok
         integer :: i
@@ -1337,7 +1330,7 @@ contains
         ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
 
         ! calculating volume fractions, internal energies, and total entropy
-        ! rhos = 0.0d0
+        ! rhos =  0.0_wp
         !$acc loop seq
         do i = 1, num_fluids
 
@@ -1360,7 +1353,7 @@ contains
 
     subroutine s_real_to_str(rl, res)
         character(len=*) :: res
-        real(kind(0.0d0)), intent(IN) :: rl
+        real(wp), intent(IN) :: rl
         write (res, '(F10.4)') rl
         res = trim(res)
     end subroutine s_real_to_str

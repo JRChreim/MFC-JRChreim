@@ -12,11 +12,8 @@
 !!              and the numerical Schlieren function.
 program p_main
 
-    ! Dependencies =============================================================
     use m_global_parameters     !< Global parameters for the code
-
     use m_start_up
-    ! ==========================================================================
 
     implicit none
 
@@ -26,9 +23,9 @@ program p_main
     !! Generic storage for the name(s) of the flow variable(s) that will be added
     !! to the formatted database file(s)
 
-    real(kind(0d0)) :: pres
-    real(kind(0d0)) :: c
-    real(kind(0d0)) :: H
+    real(wp) :: pres
+    real(wp) :: c
+    real(wp) :: H
 
     call s_initialize_mpi_domain()
 
@@ -42,8 +39,16 @@ program p_main
         t_step = t_step_start
     end if
 
-    ! Time-Marching Loop =======================================================
+    ! Time-Marching Loop
     do
+
+        ! If all time-steps are not ready to be post-processed and one rank is
+        ! faster than another, the slower rank processing the last available
+        ! step might be killed when the faster rank attempts to process the
+        ! first missing step, before the slower rank finishes writing the last
+        ! available step. To avoid this, we force synchronization here.
+        call s_mpi_barrier()
+
         call s_perform_time_step(t_step)
 
         call s_save_data(t_step, varname, pres, c, H)
@@ -73,7 +78,7 @@ program p_main
         end if
 
     end do
-    ! END: Time-Marching Loop ==================================================
+    ! END: Time-Marching Loop
 
     close (11)
 

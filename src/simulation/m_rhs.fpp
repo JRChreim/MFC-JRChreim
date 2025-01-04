@@ -6,7 +6,7 @@
 #:include 'macros.fpp'
 
 !> @brief The module contains the subroutines used to calculate the right-
-!!              hand-side (RHS) in the quasi-conservative, shock- and interface-
+!!              hane-side (RHS) in the quasi-conservative, shock- and interface-
 !!              capturing finite-volume framework for the multicomponent Navier-
 !!              Stokes equations supplemented by appropriate advection equations
 !!              used to capture the material interfaces. The system of equations
@@ -19,7 +19,6 @@
 !!              in the volume fraction model.
 module m_rhs
 
-    ! Dependencies =============================================================
     use m_derived_types        !< Definitions of the derived types
 
     use m_global_parameters    !< Definitions of the global parameters
@@ -34,11 +33,13 @@ module m_rhs
 
     use m_cbc                  !< Characteristic boundary conditions (CBC)
 
-    use m_bubbles              !< Bubble dynamic routines
+    use m_bubbles_EE           !< Ensemble-averaged bubble dynamics routines
 
     use m_qbmm                 !< Moment inversion
 
     use m_hypoelastic
+
+    use m_hyperelastic
 
     use m_acoustic_src
 
@@ -57,7 +58,6 @@ module m_rhs
     use m_body_forces
 
     use m_chemistry
-    ! ==========================================================================
 
     implicit none
 
@@ -147,20 +147,20 @@ module m_rhs
     !> @}
     !$acc declare create(alf_sum)
 
-    real(kind(0d0)), allocatable, dimension(:, :, :) :: blkmod1, blkmod2, alpha1, alpha2, Kterm
-    real(kind(0d0)), allocatable, dimension(:, :, :, :) :: qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, qR_rsx_vf, qR_rsy_vf, qR_rsz_vf
-    real(kind(0d0)), allocatable, dimension(:, :, :, :) :: dqL_rsx_vf, dqL_rsy_vf, dqL_rsz_vf, dqR_rsx_vf, dqR_rsy_vf, dqR_rsz_vf
+    real(wp), allocatable, dimension(:, :, :) :: blkmod1, blkmod2, alpha1, alpha2, Kterm
+    real(wp), allocatable, dimension(:, :, :, :) :: qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, qR_rsx_vf, qR_rsy_vf, qR_rsz_vf
+    real(wp), allocatable, dimension(:, :, :, :) :: dqL_rsx_vf, dqL_rsy_vf, dqL_rsz_vf, dqR_rsx_vf, dqR_rsy_vf, dqR_rsz_vf
     !$acc declare create(blkmod1, blkmod2, alpha1, alpha2, Kterm)
     !$acc declare create(qL_rsx_vf, qL_rsy_vf, qL_rsz_vf, qR_rsx_vf, qR_rsy_vf, qR_rsz_vf)
     !$acc declare create(dqL_rsx_vf, dqL_rsy_vf, dqL_rsz_vf, dqR_rsx_vf, dqR_rsy_vf, dqR_rsz_vf)
 
-    real(kind(0d0)), allocatable, dimension(:) :: gamma_min, pres_inf
+    real(wp), allocatable, dimension(:) :: gamma_min, pres_inf
     !$acc declare create(gamma_min, pres_inf)
 
-    real(kind(0d0)), allocatable, dimension(:, :) :: Res
+    real(wp), allocatable, dimension(:, :) :: Res
     !$acc declare create(Res)
 
-    real(kind(0d0)), allocatable, dimension(:, :, :) :: nbub !< Bubble number density
+    real(wp), allocatable, dimension(:, :, :) :: nbub !< Bubble number density
     !$acc declare create(nbub)
 
 contains
@@ -235,8 +235,6 @@ contains
             @:ACC_SETUP_SFs(tau_Re_vf(E_idx))
         end if
 
-        ! ==================================================================
-
         if (qbmm) then
             @:ALLOCATE(mom_sp(1:nmomsp), mom_3d(0:2, 0:2, nb))
 
@@ -261,7 +259,7 @@ contains
             end do
         end if
 
-        ! Allocation/Association of qK_cons_n and qK_prim_n ==========
+        ! Allocation/Association of qK_cons_n and qK_prim_n
         @:ALLOCATE(qL_prim(1:num_dims))
         @:ALLOCATE(qR_prim(1:num_dims))
 
@@ -275,10 +273,10 @@ contains
             @:ACC_SETUP_VFs(qL_prim(i), qR_prim(i))
         end do
 
-        if (mpp_lim .and. bubbles) then
+        if (mpp_lim .and. bubbles_euler) then
             @:ALLOCATE(alf_sum%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
         end if
-        ! END: Allocation/Association of qK_cons_n and qK_prim_n ======
+        ! END: Allocation/Association of qK_cons_n and qK_prim_n
 
         @:ALLOCATE(qL_rsx_vf(idwbuff(1)%beg:idwbuff(1)%end, &
             idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end, 1:sys_size))
@@ -311,7 +309,7 @@ contains
 
         end if
 
-        ! Allocation of dq_prim_ds_qp ======================================
+        ! Allocation of dq_prim_ds_qp
 
         @:ALLOCATE(dq_prim_dx_qp(1:1))
         @:ALLOCATE(dq_prim_dy_qp(1:1))
@@ -373,9 +371,9 @@ contains
                 end if
             end do
         end if
-        ! END: Allocation of dq_prim_ds_qp =================================
+        ! END: Allocation of dq_prim_ds_qp
 
-        ! Allocation/Association of dqK_prim_ds_n =======================
+        ! Allocation/Association of dqK_prim_ds_n
         @:ALLOCATE(dqL_prim_dx_n(1:num_dims))
         @:ALLOCATE(dqL_prim_dy_n(1:num_dims))
         @:ALLOCATE(dqL_prim_dz_n(1:num_dims))
@@ -433,7 +431,7 @@ contains
                 @:ACC_SETUP_VFs(dqR_prim_dx_n(i), dqR_prim_dy_n(i), dqR_prim_dz_n(i))
             end do
         end if
-        ! END: Allocation/Association of d K_prim_ds_n ==================
+        ! END: Allocation/Association of d K_prim_ds_n
 
         if (viscous) then
             if (weno_Re_flux) then
@@ -471,14 +469,11 @@ contains
             end if
         end if
 
-        ! ==================================================================
-
-        ! Allocation of gm_alphaK_n =====================================
+        ! Allocation of gm_alphaK_n
         @:ALLOCATE(gm_alphaL_n(1:num_dims))
         @:ALLOCATE(gm_alphaR_n(1:num_dims))
-        ! ==================================================================
 
-        ! Allocation/Association of flux_n, flux_src_n, and flux_gsrc_n ===
+        ! Allocation/Association of flux_n, flux_src_n, and flux_gsrc_n
         @:ALLOCATE(flux_n(1:num_dims))
         @:ALLOCATE(flux_src_n(1:num_dims))
         @:ALLOCATE(flux_gsrc_n(1:num_dims))
@@ -548,7 +543,6 @@ contains
                 if (riemann_solver /= 1) then
                     do l = adv_idx%beg + 1, adv_idx%end
                         flux_src_n(i)%vf(l)%sf => flux_src_n(i)%vf(adv_idx%beg)%sf
-
                         !$acc enter data attach(flux_src_n(i)%vf(l)%sf)
                     end do
                 end if
@@ -556,13 +550,12 @@ contains
                 do l = 1, sys_size
                     flux_n(i)%vf(l)%sf => flux_n(1)%vf(l)%sf
                     flux_src_n(i)%vf(l)%sf => flux_src_n(1)%vf(l)%sf
-
                     !$acc enter data attach(flux_n(i)%vf(l)%sf,flux_src_n(i)%vf(l)%sf)
                 end do
             end if
         end do
 
-        ! END: Allocation/Association of flux_n, flux_src_n, and flux_gsrc_n ===
+        ! END: Allocation/Association of flux_n, flux_src_n, and flux_gsrc_n
 
         if (alt_soundspeed) then
             @:ALLOCATE(blkmod1(0:m, 0:n, 0:p), blkmod2(0:m, 0:n, 0:p), alpha1(0:m, 0:n, 0:p), alpha2(0:m, 0:n, 0:p), Kterm(0:m, 0:n, 0:p))
@@ -571,8 +564,8 @@ contains
         @:ALLOCATE(gamma_min(1:num_fluids), pres_inf(1:num_fluids))
 
         do i = 1, num_fluids
-            gamma_min(i) = 1d0/fluid_pp(i)%gamma + 1d0
-            pres_inf(i) = fluid_pp(i)%pi_inf/(1d0 + fluid_pp(i)%gamma)
+            gamma_min(i) = 1._wp/fluid_pp(i)%gamma + 1._wp
+            pres_inf(i) = fluid_pp(i)%pi_inf/(1._wp + fluid_pp(i)%gamma)
         end do
         !$acc update device(gamma_min, pres_inf)
 
@@ -595,37 +588,38 @@ contains
                 do l = startz, p - startz
                     do k = starty, n - starty
                         do j = startx, m - startx
-                            flux_gsrc_n(id)%vf(i)%sf(j, k, l) = 0d0
+                            flux_gsrc_n(id)%vf(i)%sf(j, k, l) = 0._wp
                         end do
                     end do
                 end do
             end do
         end do
 
-        if (bubbles) then
+        if (bubbles_euler) then
             @:ALLOCATE(nbub(0:m, 0:n, 0:p))
         end if
 
     end subroutine s_initialize_rhs_module
 
-    subroutine s_compute_rhs(q_cons_vf, q_prim_vf, rhs_vf, pb, rhs_pb, mv, rhs_mv, t_step, time_avg)
+    subroutine s_compute_rhs(q_cons_vf, q_T_sf, q_prim_vf, rhs_vf, pb, rhs_pb, mv, rhs_mv, t_step, time_avg)
 
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+        type(scalar_field), intent(inout) :: q_T_sf
         type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
-        real(kind(0d0)), dimension(startx:, starty:, startz:, 1:, 1:), intent(inout) :: pb, rhs_pb
-        real(kind(0d0)), dimension(startx:, starty:, startz:, 1:, 1:), intent(inout) :: mv, rhs_mv
+        real(wp), dimension(startx:, starty:, startz:, 1:, 1:), intent(inout) :: pb, rhs_pb
+        real(wp), dimension(startx:, starty:, startz:, 1:, 1:), intent(inout) :: mv, rhs_mv
         integer, intent(in) :: t_step
-        real(kind(0d0)), intent(inout) :: time_avg
+        real(wp), intent(inout) :: time_avg
 
-        real(kind(0d0)), dimension(0:m, 0:n, 0:p) :: nbub
-        real(kind(0d0)) :: t_start, t_finish
+        real(wp), dimension(0:m, 0:n, 0:p) :: nbub
+        real(wp) :: t_start, t_finish
         integer :: i, j, k, l, id !< Generic loop iterators
 
         call nvtxStartRange("COMPUTE-RHS")
 
         call cpu_time(t_start)
-        ! Association/Population of Working Variables ======================
+        ! Association/Population of Working Variables
         !$acc parallel loop collapse(4) gang vector default(present)
         do i = 1, sys_size
             do l = idwbuff(3)%beg, idwbuff(3)%end
@@ -637,33 +631,31 @@ contains
             end do
         end do
 
-        ! ==================================================================
+        ! Converting Conservative to Primitive Variables
 
-        ! Converting Conservative to Primitive Variables ==================
-
-        if (mpp_lim .and. bubbles) then
+        if (mpp_lim .and. bubbles_euler) then
             !$acc parallel loop collapse(3) gang vector default(present)
             do l = idwbuff(3)%beg, idwbuff(3)%end
                 do k = idwbuff(2)%beg, idwbuff(2)%end
                     do j = idwbuff(1)%beg, idwbuff(1)%end
-                        alf_sum%sf(j, k, l) = 0d0
+                        alf_sum%sf(j, k, l) = 0._wp
                         !$acc loop seq
                         do i = advxb, advxe - 1
                             alf_sum%sf(j, k, l) = alf_sum%sf(j, k, l) + q_cons_qp%vf(i)%sf(j, k, l)
                         end do
                         !$acc loop seq
                         do i = advxb, advxe - 1
-                            q_cons_qp%vf(i)%sf(j, k, l) = q_cons_qp%vf(i)%sf(j, k, l)*(1.d0 - q_cons_qp%vf(alf_idx)%sf(j, k, l)) &
+                            q_cons_qp%vf(i)%sf(j, k, l) = q_cons_qp%vf(i)%sf(j, k, l)*(1._wp - q_cons_qp%vf(alf_idx)%sf(j, k, l)) &
                                                           /alf_sum%sf(j, k, l)
                         end do
                     end do
                 end do
             end do
         end if
-
         call nvtxStartRange("RHS-CONVERT")
         call s_convert_conservative_to_primitive_variables( &
             q_cons_qp%vf, &
+            q_T_sf, &
             q_prim_qp%vf, &
             idwint, &
             gm_alpha_qp%vf)
@@ -673,13 +665,15 @@ contains
         call s_populate_variables_buffers(q_prim_qp%vf, pb, mv)
         call nvtxEndRange
 
+        call nvtxStartRange("RHS-ELASTIC")
+        if (hyperelasticity) call s_hyperelastic_rmt_stress_update(q_cons_qp%vf, q_prim_qp%vf)
+        call nvtxEndRange
+
         if (cfl_dt) then
             if (mytime >= t_stop) return
         else
             if (t_step == t_step_stop) return
         end if
-
-        ! ==================================================================
 
         if (qbmm) call s_mom_inv(q_cons_qp%vf, q_prim_qp%vf, mom_sp, mom_3d, pb, rhs_pb, mv, rhs_mv, idwbuff(1), idwbuff(2), idwbuff(3), nbub)
 
@@ -702,11 +696,11 @@ contains
             call s_get_capilary(q_prim_qp%vf)
             call nvtxEndRange
         end if
-        ! Dimensional Splitting Loop =======================================
+        ! Dimensional Splitting Loop
 
         do id = 1, num_dims
 
-            ! Reconstructing Primitive/Conservative Variables ===============
+            ! Reconstructing Primitive/Conservative Variables
 
             call nvtxStartRange("RHS-WENO")
 
@@ -770,7 +764,7 @@ contains
 
             call nvtxEndRange ! WENO
 
-            ! Configuring Coordinate Direction Indexes ======================
+            ! Configuring Coordinate Direction Indexes
             if (id == 1) then
                 irx%beg = -1; iry%beg = 0; irz%beg = 0
             elseif (id == 2) then
@@ -779,12 +773,9 @@ contains
                 irx%beg = 0; iry%beg = 0; irz%beg = -1
             end if
             irx%end = m; iry%end = n; irz%end = p
-            ! ===============================================================
 
+            ! Computing Riemann Solver Flux and Source Flux
             call nvtxStartRange("RHS-RIEMANN-SOLVER")
-
-            ! Computing Riemann Solver Flux and Source Flux =================
-
             call s_riemann_solver(qR_rsx_vf, qR_rsy_vf, qR_rsz_vf, &
                                   dqR_prim_dx_n(id)%vf, &
                                   dqR_prim_dy_n(id)%vf, &
@@ -802,8 +793,7 @@ contains
                                   id, irx, iry, irz)
             call nvtxEndRange
 
-            ! Additional physics and source terms ==============================
-
+            ! Additional physics and source terms
             ! RHS addition for advection source
             call nvtxStartRange("RHS-ADVECTION-SRC")
             call s_compute_advection_source_term(id, &
@@ -833,10 +823,10 @@ contains
                 call nvtxEndRange
             end if
 
-            ! RHS additions for sub-grid bubbles
-            if (bubbles) then
+            ! RHS additions for sub-grid bubbles_euler
+            if (bubbles_euler) then
                 call nvtxStartRange("RHS-BUBBLES-COMPUTE")
-                call s_compute_bubbles_rhs(id, q_prim_qp%vf)
+                call s_compute_bubbles_EE_rhs(id, q_prim_qp%vf)
                 call nvtxEndRange
             end if
 
@@ -855,16 +845,10 @@ contains
                                         rhs_mv)
                 call nvtxEndRange
             end if
-            ! END: Additional physics and source terms =========================
+            ! END: Additional physics and source terms
 
         end do
-        ! END: Dimensional Splitting Loop =================================
-
-        if (chemistry) then
-            call nvtxStartRange("RHS-CHEM-ADVECTION")
-            call s_compute_chemistry_advection_flux(flux_n, rhs_vf)
-            call nvtxEndRange
-        end if
+        ! END: Dimensional Splitting Loop
 
         if (ib) then
             !$acc parallel loop collapse(3) gang vector default(present)
@@ -873,7 +857,7 @@ contains
                     do j = 0, m
                         if (ib_markers%sf(j, k, l) /= 0) then
                             do i = 1, sys_size
-                                rhs_vf(i)%sf(j, k, l) = 0d0
+                                rhs_vf(i)%sf(j, k, l) = 0._wp
                             end do
                         end if
                     end do
@@ -881,7 +865,7 @@ contains
             end do
         end if
 
-        ! Additional Physics and Source Temrs ==================================
+        ! Additional Physics and Source Temrs
         ! Additions for acoustic_source
         if (acoustic_source) then
             call nvtxStartRange("RHS-ACOUSTIC-SRC")
@@ -893,9 +877,9 @@ contains
         end if
 
         ! Add bubles source term
-        if (bubbles .and. (.not. adap_dt) .and. (.not. qbmm)) then
+        if (bubbles_euler .and. (.not. adap_dt) .and. (.not. qbmm)) then
             call nvtxStartRange("RHS-BUBBLES-SRC")
-            call s_compute_bubble_source( &
+            call s_compute_bubble_EE_source( &
                 q_cons_qp%vf(1:sys_size), &
                 q_prim_qp%vf(1:sys_size), &
                 t_step, &
@@ -903,17 +887,15 @@ contains
             call nvtxEndRange
         end if
 
-        if (chemistry) then
-            if (chem_params%reactions) then
-                call nvtxStartRange("RHS-CHEM-REACTIONS")
-                call s_compute_chemistry_reaction_flux(rhs_vf, q_cons_qp%vf, q_prim_qp%vf)
-                call nvtxEndRange
-            end if
+        if (chemistry .and. chem_params%reactions) then
+            call nvtxStartRange("RHS-CHEM-REACTIONS")
+            call s_compute_chemistry_reaction_flux(rhs_vf, q_cons_qp%vf, q_T_sf, q_prim_qp%vf, idwint)
+            call nvtxEndRange
         end if
 
-        ! END: Additional pphysics and source terms ============================
+        ! END: Additional pphysics and source terms
 
-        if (run_time_info .or. probe_wrt .or. ib) then
+        if (run_time_info .or. probe_wrt .or. ib .or. bubbles_lagrange) then
             !$acc parallel loop collapse(4) gang vector default(present)
             do i = 1, sys_size
                 do l = idwbuff(3)%beg, idwbuff(3)%end
@@ -931,9 +913,8 @@ contains
         if (t_step >= 4) then
             time_avg = (abs(t_finish - t_start) + (t_step - 4)*time_avg)/(t_step - 3)
         else
-            time_avg = 0d0
+            time_avg = 0._wp
         end if
-        ! ==================================================================
 
         call nvtxEndRange
 
@@ -954,13 +935,13 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        blkmod1(j, k, l) = ((gammas(1) + 1d0)*q_prim_vf%vf(E_idx)%sf(j, k, l) + &
+                        blkmod1(j, k, l) = ((gammas(1) + 1._wp)*q_prim_vf%vf(E_idx)%sf(j, k, l) + &
                                             pi_infs(1))/gammas(1)
-                        blkmod2(j, k, l) = ((gammas(2) + 1d0)*q_prim_vf%vf(E_idx)%sf(j, k, l) + &
+                        blkmod2(j, k, l) = ((gammas(2) + 1._wp)*q_prim_vf%vf(E_idx)%sf(j, k, l) + &
                                             pi_infs(2))/gammas(2)
                         alpha1(j, k, l) = q_cons_vf%vf(advxb)%sf(j, k, l)
 
-                        if (bubbles) then
+                        if (bubbles_euler) then
                             alpha2(j, k, l) = q_cons_vf%vf(alf_idx - 1)%sf(j, k, l)
                         else
                             alpha2(j, k, l) = q_cons_vf%vf(advxe)%sf(j, k, l)
@@ -990,7 +971,7 @@ contains
                 do q = 0, p
                     do l = 0, n
                         do k = 0, m
-                            rhs_vf(j)%sf(k, l, q) = 1d0/dx(k)* &
+                            rhs_vf(j)%sf(k, l, q) = 1._wp/dx(k)* &
                                                     (flux_n(1)%vf(j)%sf(k - 1, l, q) &
                                                      - flux_n(1)%vf(j)%sf(k, l, q))
                         end do
@@ -1005,7 +986,7 @@ contains
                         do j = 0, m
                             do i = 1, num_fluids
                                 rhs_vf(i + intxb - 1)%sf(j, k, l) = &
-                                    rhs_vf(i + intxb - 1)%sf(j, k, l) - 1d0/dx(j)* &
+                                    rhs_vf(i + intxb - 1)%sf(j, k, l) - 1._wp/dx(j)* &
                                     q_cons_vf%vf(i + advxb - 1)%sf(j, k, l)* &
                                     q_prim_vf%vf(E_idx)%sf(j, k, l)* &
                                     (flux_src_n(1)%vf(advxb)%sf(j, k, l) - &
@@ -1023,7 +1004,7 @@ contains
                         do l = 0, n
                             do k = 0, m
                                 rhs_vf(j)%sf(k, l, q) = &
-                                    rhs_vf(j)%sf(k, l, q) + 1d0/dx(k)* &
+                                    rhs_vf(j)%sf(k, l, q) + 1._wp/dx(k)* &
                                     q_prim_vf%vf(contxe + idir)%sf(k, l, q)* &
                                     (flux_src_n(1)%vf(j)%sf(k - 1, l, q) &
                                      - flux_src_n(1)%vf(j)%sf(k, l, q))
@@ -1034,26 +1015,26 @@ contains
             else
                 if (alt_soundspeed) then
                     do j = advxb, advxe
-                        if ((j == advxe) .and. (bubbles .neqv. .true.)) then
+                        if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
                             !$acc parallel loop collapse(3) gang vector default(present)
                             do q = 0, p
                                 do l = 0, n
                                     do k = 0, m
                                         rhs_vf(j)%sf(k, l, q) = &
-                                            rhs_vf(j)%sf(k, l, q) + 1d0/dx(k)* &
+                                            rhs_vf(j)%sf(k, l, q) + 1._wp/dx(k)* &
                                             (q_cons_vf%vf(j)%sf(k, l, q) - Kterm(k, l, q))* &
                                             (flux_src_n(1)%vf(j)%sf(k, l, q) &
                                              - flux_src_n(1)%vf(j)%sf(k - 1, l, q))
                                     end do
                                 end do
                             end do
-                        else if ((j == advxb) .and. (bubbles .neqv. .true.)) then
+                        else if ((j == advxb) .and. (bubbles_euler .neqv. .true.)) then
                             !$acc parallel loop collapse(3) gang vector default(present)
                             do q = 0, p
                                 do l = 0, n
                                     do k = 0, m
                                         rhs_vf(j)%sf(k, l, q) = &
-                                            rhs_vf(j)%sf(k, l, q) + 1d0/dx(k)* &
+                                            rhs_vf(j)%sf(k, l, q) + 1._wp/dx(k)* &
                                             (q_cons_vf%vf(j)%sf(k, l, q) + Kterm(k, l, q))* &
                                             (flux_src_n(1)%vf(j)%sf(k, l, q) &
                                              - flux_src_n(1)%vf(j)%sf(k - 1, l, q))
@@ -1069,7 +1050,7 @@ contains
                             do l = 0, n
                                 do k = 0, m
                                     rhs_vf(j)%sf(k, l, q) = &
-                                        rhs_vf(j)%sf(k, l, q) + 1d0/dx(k)* &
+                                        rhs_vf(j)%sf(k, l, q) + 1._wp/dx(k)* &
                                         q_cons_vf%vf(j)%sf(k, l, q)* &
                                         (flux_src_n(1)%vf(j)%sf(k, l, q) &
                                          - flux_src_n(1)%vf(j)%sf(k - 1, l, q))
@@ -1081,7 +1062,7 @@ contains
             end if
 
         elseif (idir == 2) then
-            ! RHS Contribution in y-direction ===============================
+            ! RHS Contribution in y-direction
             ! Applying the Riemann fluxes
 
             if (bc_y%beg <= -5 .and. bc_y%beg >= -13) then
@@ -1100,7 +1081,7 @@ contains
                     do k = 0, n
                         do q = 0, m
                             rhs_vf(j)%sf(q, k, l) = &
-                                rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                 (flux_n(2)%vf(j)%sf(q, k - 1, l) &
                                  - flux_n(2)%vf(j)%sf(q, k, l))
                         end do
@@ -1115,7 +1096,7 @@ contains
                         do j = 0, m
                             do i = 1, num_fluids
                                 rhs_vf(i + intxb - 1)%sf(j, k, l) = &
-                                    rhs_vf(i + intxb - 1)%sf(j, k, l) - 1d0/dy(k)* &
+                                    rhs_vf(i + intxb - 1)%sf(j, k, l) - 1._wp/dy(k)* &
                                     q_cons_vf%vf(i + advxb - 1)%sf(j, k, l)* &
                                     q_prim_vf%vf(E_idx)%sf(j, k, l)* &
                                     (flux_src_n(2)%vf(advxb)%sf(j, k, l) - &
@@ -1132,7 +1113,7 @@ contains
                             do j = 0, m
                                 do i = 1, num_fluids
                                     rhs_vf(i + intxb - 1)%sf(j, k, l) = &
-                                        rhs_vf(i + intxb - 1)%sf(j, k, l) - 5d-1/y_cc(k)* &
+                                        rhs_vf(i + intxb - 1)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
                                         q_cons_vf%vf(i + advxb - 1)%sf(j, k, l)* &
                                         q_prim_vf%vf(E_idx)%sf(j, k, l)* &
                                         (flux_src_n(2)%vf(advxb)%sf(j, k, l) + &
@@ -1151,7 +1132,7 @@ contains
                         do k = 0, n
                             do q = 0, m
                                 rhs_vf(j)%sf(q, k, l) = &
-                                    rhs_vf(j)%sf(q, k, l) - 5d-1/y_cc(k)* &
+                                    rhs_vf(j)%sf(q, k, l) - 5e-1_wp/y_cc(k)* &
                                     (flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l) &
                                      + flux_gsrc_n(2)%vf(j)%sf(q, k, l))
                             end do
@@ -1167,7 +1148,7 @@ contains
                         do k = 0, n
                             do q = 0, m
                                 rhs_vf(j)%sf(q, k, l) = &
-                                    rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                    rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                     q_prim_vf%vf(contxe + idir)%sf(q, k, l)* &
                                     (flux_src_n(2)%vf(j)%sf(q, k - 1, l) &
                                      - flux_src_n(2)%vf(j)%sf(q, k, l))
@@ -1179,13 +1160,13 @@ contains
 
                 if (alt_soundspeed) then
                     do j = advxb, advxe
-                        if ((j == advxe) .and. (bubbles .neqv. .true.)) then
+                        if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
                             !$acc parallel loop collapse(3) gang vector default(present)
                             do l = 0, p
                                 do k = 0, n
                                     do q = 0, m
                                         rhs_vf(j)%sf(q, k, l) = &
-                                            rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                            rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                             (q_cons_vf%vf(j)%sf(q, k, l) - Kterm(q, k, l))* &
                                             (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                              - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
@@ -1199,20 +1180,20 @@ contains
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
                                                 rhs_vf(j)%sf(q, k, l) - &
-                                                (Kterm(q, k, l)/2d0/y_cc(k))* &
+                                                (Kterm(q, k, l)/2._wp/y_cc(k))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                  + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
                                     end do
                                 end do
                             end if
-                        else if ((j == advxb) .and. (bubbles .neqv. .true.)) then
+                        else if ((j == advxb) .and. (bubbles_euler .neqv. .true.)) then
                             !$acc parallel loop collapse(3) gang vector default(present)
                             do l = 0, p
                                 do k = 0, n
                                     do q = 0, m
                                         rhs_vf(j)%sf(q, k, l) = &
-                                            rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                            rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                             (q_cons_vf%vf(j)%sf(q, k, l) + Kterm(q, k, l))* &
                                             (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                              - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
@@ -1226,7 +1207,7 @@ contains
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
                                                 rhs_vf(j)%sf(q, k, l) + &
-                                                (Kterm(q, k, l)/2d0/y_cc(k))* &
+                                                (Kterm(q, k, l)/2._wp/y_cc(k))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                  + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
@@ -1242,7 +1223,7 @@ contains
                             do k = 0, n
                                 do q = 0, m
                                     rhs_vf(j)%sf(q, k, l) = &
-                                        rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                        rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                         q_cons_vf%vf(j)%sf(q, k, l)* &
                                         (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                          - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
@@ -1254,7 +1235,7 @@ contains
             end if
 
         elseif (idir == 3) then
-            ! RHS Contribution in z-direction ===============================
+            ! RHS Contribution in z-direction
 
             ! Applying the Riemann fluxes
 
@@ -1275,7 +1256,7 @@ contains
                         do q = 0, n
                             do l = 0, m
                                 rhs_vf(j)%sf(l, q, k) = &
-                                    rhs_vf(j)%sf(l, q, k) + 1d0/dz(k)/y_cc(q)* &
+                                    rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)/y_cc(q)* &
                                     q_prim_vf%vf(contxe + idir)%sf(l, q, k)* &
                                     (flux_n(3)%vf(j)%sf(l, q, k - 1) &
                                      - flux_n(3)%vf(j)%sf(l, q, k))
@@ -1290,7 +1271,7 @@ contains
                         do q = 0, n
                             do l = 0, m
                                 rhs_vf(j)%sf(l, q, k) = &
-                                    rhs_vf(j)%sf(l, q, k) - 5d-1/y_cc(q)* &
+                                    rhs_vf(j)%sf(l, q, k) - 5e-1_wp/y_cc(q)* &
                                     (flux_gsrc_n(3)%vf(j)%sf(l, q, k - 1) &
                                      - flux_gsrc_n(3)%vf(j)%sf(l, q, k))
                             end do
@@ -1305,7 +1286,7 @@ contains
                         do q = 0, n
                             do l = 0, m
                                 rhs_vf(j)%sf(l, q, k) = &
-                                    rhs_vf(j)%sf(l, q, k) + 1d0/dz(k)* &
+                                    rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
                                     (flux_n(3)%vf(j)%sf(l, q, k - 1) &
                                      - flux_n(3)%vf(j)%sf(l, q, k))
                             end do
@@ -1321,7 +1302,7 @@ contains
                         do j = 0, m
                             do i = 1, num_fluids
                                 rhs_vf(i + intxb - 1)%sf(j, k, l) = &
-                                    rhs_vf(i + intxb - 1)%sf(j, k, l) - 1d0/dz(l)* &
+                                    rhs_vf(i + intxb - 1)%sf(j, k, l) - 1._wp/dz(l)* &
                                     q_cons_vf%vf(i + advxb - 1)%sf(j, k, l)* &
                                     q_prim_vf%vf(E_idx)%sf(j, k, l)* &
                                     (flux_src_n(3)%vf(advxb)%sf(j, k, l) - &
@@ -1340,7 +1321,7 @@ contains
                             do k = 0, n
                                 do q = 0, m
                                     rhs_vf(j)%sf(q, k, l) = &
-                                        rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                        rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                         q_prim_vf%vf(contxe + idir)%sf(q, k, l)* &
                                         (flux_src_n(2)%vf(j)%sf(q, k - 1, l) &
                                          - flux_src_n(2)%vf(j)%sf(q, k, l))
@@ -1352,13 +1333,13 @@ contains
 
                     if (alt_soundspeed) then
                         do j = advxb, advxe
-                            if ((j == advxe) .and. (bubbles .neqv. .true.)) then
+                            if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
-                                                rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                                rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                                 (q_cons_vf%vf(j)%sf(q, k, l) - Kterm(q, k, l))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                  - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
@@ -1372,20 +1353,20 @@ contains
                                             do q = 0, m
                                                 rhs_vf(j)%sf(q, k, l) = &
                                                     rhs_vf(j)%sf(q, k, l) - &
-                                                    (Kterm(q, k, l)/2d0/y_cc(k))* &
+                                                    (Kterm(q, k, l)/2._wp/y_cc(k))* &
                                                     (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                      + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                             end do
                                         end do
                                     end do
                                 end if
-                            else if ((j == advxb) .and. (bubbles .neqv. .true.)) then
+                            else if ((j == advxb) .and. (bubbles_euler .neqv. .true.)) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
-                                                rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                                rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                                 (q_cons_vf%vf(j)%sf(q, k, l) + Kterm(q, k, l))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                  - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
@@ -1399,7 +1380,7 @@ contains
                                             do q = 0, m
                                                 rhs_vf(j)%sf(q, k, l) = &
                                                     rhs_vf(j)%sf(q, k, l) + &
-                                                    (Kterm(q, k, l)/2d0/y_cc(k))* &
+                                                    (Kterm(q, k, l)/2._wp/y_cc(k))* &
                                                     (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                      + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                             end do
@@ -1415,7 +1396,7 @@ contains
                                 do k = 0, n
                                     do q = 0, m
                                         rhs_vf(j)%sf(q, k, l) = &
-                                            rhs_vf(j)%sf(q, k, l) + 1d0/dy(k)* &
+                                            rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
                                             q_cons_vf%vf(j)%sf(q, k, l)* &
                                             (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                              - flux_src_n(2)%vf(j)%sf(q, k - 1, l))
@@ -1433,7 +1414,7 @@ contains
                             do q = 0, n
                                 do l = 0, m
                                     rhs_vf(j)%sf(l, q, k) = &
-                                        rhs_vf(j)%sf(l, q, k) + 1d0/dz(k)* &
+                                        rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
                                         q_prim_vf%vf(contxe + idir)%sf(l, q, k)* &
                                         (flux_src_n(3)%vf(j)%sf(l, q, k - 1) &
                                          - flux_src_n(3)%vf(j)%sf(l, q, k))
@@ -1444,26 +1425,26 @@ contains
                 else
                     if (alt_soundspeed) then
                         do j = advxb, advxe
-                            if ((j == advxe) .and. (bubbles .neqv. .true.)) then
+                            if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do k = 0, p
                                     do q = 0, n
                                         do l = 0, m
                                             rhs_vf(j)%sf(l, q, k) = &
-                                                rhs_vf(j)%sf(l, q, k) + 1d0/dz(k)* &
+                                                rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
                                                 (q_cons_vf%vf(j)%sf(l, q, k) - Kterm(l, q, k))* &
                                                 (flux_src_n(3)%vf(j)%sf(l, q, k) &
                                                  - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
                                         end do
                                     end do
                                 end do
-                            else if ((j == advxb) .and. (bubbles .neqv. .true.)) then
+                            else if ((j == advxb) .and. (bubbles_euler .neqv. .true.)) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do k = 0, p
                                     do q = 0, n
                                         do l = 0, m
                                             rhs_vf(j)%sf(l, q, k) = &
-                                                rhs_vf(j)%sf(l, q, k) + 1d0/dz(k)* &
+                                                rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
                                                 (q_cons_vf%vf(j)%sf(l, q, k) + Kterm(l, q, k))* &
                                                 (flux_src_n(3)%vf(j)%sf(l, q, k) &
                                                  - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
@@ -1479,7 +1460,7 @@ contains
                                 do q = 0, n
                                     do l = 0, m
                                         rhs_vf(j)%sf(l, q, k) = &
-                                            rhs_vf(j)%sf(l, q, k) + 1d0/dz(k)* &
+                                            rhs_vf(j)%sf(l, q, k) + 1._wp/dz(k)* &
                                             q_cons_vf%vf(j)%sf(l, q, k)* &
                                             (flux_src_n(3)%vf(j)%sf(l, q, k) &
                                              - flux_src_n(3)%vf(j)%sf(l, q, k - 1))
@@ -1513,7 +1494,7 @@ contains
                     do k = 0, n
                         do j = 0, m
                             rhs_vf(c_idx)%sf(j, k, l) = &
-                                rhs_vf(c_idx)%sf(j, k, l) + 1d0/dx(j)* &
+                                rhs_vf(c_idx)%sf(j, k, l) + 1._wp/dx(j)* &
                                 q_prim_vf(c_idx)%sf(j, k, l)* &
                                 (flux_src_n(advxb)%sf(j, k, l) - &
                                  flux_src_n(advxb)%sf(j - 1, k, l))
@@ -1529,7 +1510,7 @@ contains
                         !$acc loop seq
                         do i = momxb, E_idx
                             rhs_vf(i)%sf(j, k, l) = &
-                                rhs_vf(i)%sf(j, k, l) + 1d0/dx(j)* &
+                                rhs_vf(i)%sf(j, k, l) + 1._wp/dx(j)* &
                                 (flux_src_n(i)%sf(j - 1, k, l) &
                                  - flux_src_n(i)%sf(j, k, l))
                         end do
@@ -1545,7 +1526,7 @@ contains
                     do k = 0, n
                         do j = 0, m
                             rhs_vf(c_idx)%sf(j, k, l) = &
-                                rhs_vf(c_idx)%sf(j, k, l) + 1d0/dy(k)* &
+                                rhs_vf(c_idx)%sf(j, k, l) + 1._wp/dy(k)* &
                                 q_prim_vf(c_idx)%sf(j, k, l)* &
                                 (flux_src_n(advxb)%sf(j, k, l) - &
                                  flux_src_n(advxb)%sf(j, k - 1, l))
@@ -1578,7 +1559,7 @@ contains
                             !$acc loop seq
                             do i = momxb, E_idx
                                 rhs_vf(i)%sf(j, 0, l) = &
-                                    rhs_vf(i)%sf(j, 0, l) + 1d0/(y_cc(1) - y_cc(-1))* &
+                                    rhs_vf(i)%sf(j, 0, l) + 1._wp/(y_cc(1) - y_cc(-1))* &
                                     (tau_Re_vf(i)%sf(j, -1, l) &
                                      - tau_Re_vf(i)%sf(j, 1, l))
                             end do
@@ -1594,7 +1575,7 @@ contains
                             !$acc loop seq
                             do i = momxb, E_idx
                                 rhs_vf(i)%sf(j, k, l) = &
-                                    rhs_vf(i)%sf(j, k, l) + 1d0/dy(k)* &
+                                    rhs_vf(i)%sf(j, k, l) + 1._wp/dy(k)* &
                                     (flux_src_n(i)%sf(j, k - 1, l) &
                                      - flux_src_n(i)%sf(j, k, l))
                             end do
@@ -1610,7 +1591,7 @@ contains
                             !$acc loop seq
                             do i = momxb, E_idx
                                 rhs_vf(i)%sf(j, k, l) = &
-                                    rhs_vf(i)%sf(j, k, l) + 1d0/dy(k)* &
+                                    rhs_vf(i)%sf(j, k, l) + 1._wp/dy(k)* &
                                     (flux_src_n(i)%sf(j, k - 1, l) &
                                      - flux_src_n(i)%sf(j, k, l))
                             end do
@@ -1631,7 +1612,7 @@ contains
                                 !$acc loop seq
                                 do i = momxb, E_idx
                                     rhs_vf(i)%sf(j, k, l) = &
-                                        rhs_vf(i)%sf(j, k, l) - 5d-1/y_cc(k)* &
+                                        rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
                                         (flux_src_n(i)%sf(j, k - 1, l) &
                                          + flux_src_n(i)%sf(j, k, l))
                                 end do
@@ -1646,7 +1627,7 @@ contains
                                 !$acc loop seq
                                 do i = momxb, E_idx
                                     rhs_vf(i)%sf(j, 0, l) = &
-                                        rhs_vf(i)%sf(j, 0, l) - 1d0/y_cc(0)* &
+                                        rhs_vf(i)%sf(j, 0, l) - 1._wp/y_cc(0)* &
                                         tau_Re_vf(i)%sf(j, 0, l)
                                 end do
                             end do
@@ -1661,7 +1642,7 @@ contains
                                 !$acc loop seq
                                 do i = momxb, E_idx
                                     rhs_vf(i)%sf(j, k, l) = &
-                                        rhs_vf(i)%sf(j, k, l) - 5d-1/y_cc(k)* &
+                                        rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
                                         (flux_src_n(i)%sf(j, k - 1, l) &
                                          + flux_src_n(i)%sf(j, k, l))
                                 end do
@@ -1680,7 +1661,7 @@ contains
                     do k = 0, n
                         do j = 0, m
                             rhs_vf(c_idx)%sf(j, k, l) = &
-                                rhs_vf(c_idx)%sf(j, k, l) + 1d0/dz(l)* &
+                                rhs_vf(c_idx)%sf(j, k, l) + 1._wp/dz(l)* &
                                 q_prim_vf(c_idx)%sf(j, k, l)* &
                                 (flux_src_n(advxb)%sf(j, k, l) - &
                                  flux_src_n(advxb)%sf(j, k, l - 1))
@@ -1696,7 +1677,7 @@ contains
                         !$acc loop seq
                         do i = momxb, E_idx
                             rhs_vf(i)%sf(j, k, l) = &
-                                rhs_vf(i)%sf(j, k, l) + 1d0/dz(l)* &
+                                rhs_vf(i)%sf(j, k, l) + 1._wp/dz(l)* &
                                 (flux_src_n(i)%sf(j, k, l - 1) &
                                  - flux_src_n(i)%sf(j, k, l))
                         end do
@@ -1710,12 +1691,12 @@ contains
                     do k = 0, n
                         do j = 0, m
                             rhs_vf(momxb + 1)%sf(j, k, l) = &
-                                rhs_vf(momxb + 1)%sf(j, k, l) + 5d-1* &
+                                rhs_vf(momxb + 1)%sf(j, k, l) + 5e-1_wp* &
                                 (flux_src_n(momxe)%sf(j, k, l - 1) &
                                  + flux_src_n(momxe)%sf(j, k, l))
 
                             rhs_vf(momxe)%sf(j, k, l) = &
-                                rhs_vf(momxe)%sf(j, k, l) - 5d-1* &
+                                rhs_vf(momxe)%sf(j, k, l) - 5e-1_wp* &
                                 (flux_src_n(momxb + 1)%sf(j, k, l - 1) &
                                  + flux_src_n(momxb + 1)%sf(j, k, l))
                         end do
@@ -1743,19 +1724,19 @@ contains
             !! function, liquid stiffness function (two variations of the last two
             !! ones), shear and volume Reynolds numbers and the Weber numbers
         !> @{
-        real(kind(0d0)) :: pres_relax
-        real(kind(0d0)), dimension(num_fluids) :: pres_K_init
-        real(kind(0d0)) :: f_pres
-        real(kind(0d0)) :: df_pres
-        real(kind(0d0)), dimension(num_fluids) :: rho_K_s
-        real(kind(0d0)), dimension(num_fluids) :: alpha_rho
-        real(kind(0d0)), dimension(num_fluids) :: alpha
-        real(kind(0d0)) :: sum_alpha
-        real(kind(0d0)) :: rho
-        real(kind(0d0)) :: dyn_pres
-        real(kind(0d0)) :: gamma
-        real(kind(0d0)) :: pi_inf
-        real(kind(0d0)), dimension(2) :: Re
+        real(wp) :: pres_relax
+        real(wp), dimension(num_fluids) :: pres_K_init
+        real(wp) :: f_pres
+        real(wp) :: df_pres
+        real(wp), dimension(num_fluids) :: rho_K_s
+        real(wp), dimension(num_fluids) :: alpha_rho
+        real(wp), dimension(num_fluids) :: alpha
+        real(wp) :: sum_alpha
+        real(wp) :: rho
+        real(wp) :: dyn_pres
+        real(wp) :: gamma
+        real(wp) :: pi_inf
+        real(wp), dimension(2) :: Re
 
         integer :: i, j, k, l, q, iter !< Generic loop iterators
         integer :: relax !< Relaxation procedure determination variable
@@ -1767,21 +1748,21 @@ contains
 
                     ! Numerical correction of the volume fractions
                     if (mpp_lim) then
-                        sum_alpha = 0d0
+                        sum_alpha = 0._wp
 
                         !$acc loop seq
                         do i = 1, num_fluids
-                            if ((q_cons_vf(i + contxb - 1)%sf(j, k, l) < 0d0) .or. &
-                                (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0d0)) then
+                            if ((q_cons_vf(i + contxb - 1)%sf(j, k, l) < 0._wp) .or. &
+                                (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0._wp)) then
                                 !    PRINT *, 'm_rhs line 1875, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
-                                q_cons_vf(i + contxb - 1)%sf(j, k, l) = 0d0
-                                q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0d0
-                                q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0d0
+                                q_cons_vf(i + contxb - 1)%sf(j, k, l) = 0._wp
+                                q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0._wp
+                                q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0._wp
                                 !    PRINT *, 'm_rhs line 1879, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                             end if
 
-                            if (q_cons_vf(i + advxb - 1)%sf(j, k, l) > 1d0) &
-                                q_cons_vf(i + advxb - 1)%sf(j, k, l) = 1d0
+                            if (q_cons_vf(i + advxb - 1)%sf(j, k, l) > 1._wp) &
+                                q_cons_vf(i + advxb - 1)%sf(j, k, l) = 1._wp
                             sum_alpha = sum_alpha + q_cons_vf(i + advxb - 1)%sf(j, k, l)
                         end do
 
@@ -1793,19 +1774,19 @@ contains
                         end do
                     end if
 
-                    ! Pressures relaxation procedure ===================================
+                    ! Pressures relaxation procedure
 
                     ! Is the pressure relaxation procedure necessary?
                     relax = 1
 
                     !$acc loop seq
                     do i = 1, num_fluids
-                        if (q_cons_vf(i + advxb - 1)%sf(j, k, l) > (1d0 - sgm_eps)) relax = 0
+                        if (q_cons_vf(i + advxb - 1)%sf(j, k, l) > (1._wp - sgm_eps)) relax = 0
                     end do
 
                     if (relax == 1) then
                         ! Initial state
-                        pres_relax = 0d0
+                        pres_relax = 0._wp
 
                         !$acc loop seq
                         do i = 1, num_fluids
@@ -1815,38 +1796,38 @@ contains
                                      q_cons_vf(i + advxb - 1)%sf(j, k, l) &
                                      - pi_infs(i))/gammas(i)
 
-                                if (pres_K_init(i) <= -(1d0 - 1d-8)*pres_inf(i) + 1d-8) &
-                                    pres_K_init(i) = -(1d0 - 1d-8)*pres_inf(i) + 1d-8
+                                if (pres_K_init(i) <= -(1._wp - 1e-8_wp)*pres_inf(i) + 1e-8_wp) &
+                                    pres_K_init(i) = -(1._wp - 1e-8_wp)*pres_inf(i) + 1e-8_wp
                             else
-                                pres_K_init(i) = 0d0
+                                pres_K_init(i) = 0._wp
                             end if
                             pres_relax = pres_relax + q_cons_vf(i + advxb - 1)%sf(j, k, l)*pres_K_init(i)
                         end do
 
                         ! Iterative process for relaxed pressure determination
-                        f_pres = 1d-9
-                        df_pres = 1d9
+                        f_pres = 1e-9_wp
+                        df_pres = 1e9_wp
 
                         !$acc loop seq
                         do i = 1, num_fluids
-                            rho_K_s(i) = 0d0
+                            rho_K_s(i) = 0._wp
                         end do
 
                         !$acc loop seq
                         do iter = 0, 49
 
-                            if (DABS(f_pres) > 1d-10) then
+                            if (abs(f_pres) > 1e-10_wp) then
                                 pres_relax = pres_relax - f_pres/df_pres
 
                                 ! Physical pressure
                                 do i = 1, num_fluids
-                                    if (pres_relax <= -(1d0 - 1d-8)*pres_inf(i) + 1d-8) &
-                                        pres_relax = -(1d0 - 1d-8)*pres_inf(i) + 1d0
+                                    if (pres_relax <= -(1._wp - 1e-8_wp)*pres_inf(i) + 1e-8_wp) &
+                                        pres_relax = -(1._wp - 1e-8_wp)*pres_inf(i) + 1._wp
                                 end do
 
                                 ! Newton-Raphson method
-                                f_pres = -1d0
-                                df_pres = 0d0
+                                f_pres = -1._wp
+                                df_pres = 0._wp
 
                                 !$acc loop seq
                                 do i = 1, num_fluids
@@ -1854,7 +1835,7 @@ contains
                                         rho_K_s(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/ &
                                                      max(q_cons_vf(i + advxb - 1)%sf(j, k, l), sgm_eps) &
                                                      *((pres_relax + pres_inf(i))/(pres_K_init(i) + &
-                                                                                   pres_inf(i)))**(1d0/gamma_min(i))
+                                                                                   pres_inf(i)))**(1._wp/gamma_min(i))
 
                                         f_pres = f_pres + q_cons_vf(i + contxb - 1)%sf(j, k, l) &
                                                  /rho_K_s(i)
@@ -1876,9 +1857,7 @@ contains
                         end do
                     end if
 
-                    ! ==================================================================
-
-                    ! Mixture-total-energy correction ==================================
+                    ! Mixture-total-energy correction
 
                     ! The mixture-total-energy correction of the mixture pressure P is not necessary here
                     ! because the primitive variables are directly recovered later on by the conservative
@@ -1892,10 +1871,10 @@ contains
                         alpha(i) = q_cons_vf(E_idx + i)%sf(j, k, l)
                     end do
 
-                    if (bubbles) then
-                        rho = 0d0
-                        gamma = 0d0
-                        pi_inf = 0d0
+                    if (bubbles_euler) then
+                        rho = 0._wp
+                        gamma = 0._wp
+                        pi_inf = 0._wp
 
                         if (mpp_lim .and. (model_eqns == 2) .and. (num_fluids > 2)) then
                             !$acc loop seq
@@ -1917,11 +1896,11 @@ contains
                             pi_inf = pi_infs(1)
                         end if
                     else
-                        rho = 0d0
-                        gamma = 0d0
-                        pi_inf = 0d0
+                        rho = 0._wp
+                        gamma = 0._wp
+                        pi_inf = 0._wp
 
-                        sum_alpha = 0d0
+                        sum_alpha = 0._wp
 
                         if (mpp_lim) then
                             ! if ( alpha(2) > 1E-16) then
@@ -1931,8 +1910,8 @@ contains
                             
                             !$acc loop seq
                             do i = 1, num_fluids
-                                alpha_rho(i) = max(0d0, alpha_rho(i))
-                                alpha(i) = min(max(0d0, alpha(i)), 1d0)
+                                alpha_rho(i) = max(0._wp, alpha_rho(i))
+                                alpha(i) = min(max(0._wp, alpha(i)), 1._wp)
                                 sum_alpha = sum_alpha + alpha(i)
                             end do
 
@@ -1957,24 +1936,24 @@ contains
                             do i = 1, 2
                                 Re(i) = dflt_real
 
-                                if (Re_size(i) > 0) Re(i) = 0d0
+                                if (Re_size(i) > 0) Re(i) = 0._wp
                                 !$acc loop seq
                                 do q = 1, Re_size(i)
                                     Re(i) = alpha(Re_idx(i, q))/Res(i, q) &
                                             + Re(i)
                                 end do
 
-                                Re(i) = 1d0/max(Re(i), sgm_eps)
+                                Re(i) = 1._wp/max(Re(i), sgm_eps)
 
                             end do
                         end if
                     end if
 
-                    dyn_pres = 0d0
+                    dyn_pres = 0._wp
 
                     !$acc loop seq
                     do i = momxb, momxe
-                        dyn_pres = dyn_pres + 5d-1*q_cons_vf(i)%sf(j, k, l)* &
+                        dyn_pres = dyn_pres + 5e-1_wp*q_cons_vf(i)%sf(j, k, l)* &
                                    q_cons_vf(i)%sf(j, k, l)/max(rho, sgm_eps)
                     end do
 
@@ -1986,7 +1965,6 @@ contains
                             q_cons_vf(i + advxb - 1)%sf(j, k, l)* &
                             (gammas(i)*pres_relax + pi_infs(i))
                     end do
-                    ! ==================================================================
                 end do
             end do
         end do
@@ -2007,13 +1985,13 @@ contains
                                                   norm_dir)
 
         type(scalar_field), dimension(iv%beg:iv%end), intent(in) :: v_vf
-        real(kind(0d0)), dimension(startx:, starty:, startz:, 1:), intent(inout) :: vL_x, vL_y, vL_z
-        real(kind(0d0)), dimension(startx:, starty:, startz:, 1:), intent(inout) :: vR_x, vR_y, vR_z
+        real(wp), dimension(startx:, starty:, startz:, 1:), intent(inout) :: vL_x, vL_y, vL_z
+        real(wp), dimension(startx:, starty:, startz:, 1:), intent(inout) :: vR_x, vR_y, vR_z
         integer, intent(in) :: norm_dir
 
         integer :: weno_dir !< Coordinate direction of the WENO reconstruction
 
-        ! Reconstruction in s1-direction ===================================
+        ! Reconstruction in s1-direction
 
         if (norm_dir == 1) then
             is1 = idwbuff(1); is2 = idwbuff(2); is3 = idwbuff(3)
@@ -2053,21 +2031,20 @@ contains
                         is1, is2, is3)
         end if
 
-        ! ==================================================================
     end subroutine s_reconstruct_cell_boundary_values
 
     subroutine s_reconstruct_cell_boundary_values_first_order(v_vf, vL_x, vL_y, vL_z, vR_x, vR_y, vR_z, &
                                                               norm_dir)
 
         type(scalar_field), dimension(iv%beg:iv%end), intent(in) :: v_vf
-        real(kind(0d0)), dimension(startx:, starty:, startz:, 1:), intent(inout) :: vL_x, vL_y, vL_z
-        real(kind(0d0)), dimension(startx:, starty:, startz:, 1:), intent(inout) :: vR_x, vR_y, vR_z
+        real(wp), dimension(startx:, starty:, startz:, 1:), intent(inout) :: vL_x, vL_y, vL_z
+        real(wp), dimension(startx:, starty:, startz:, 1:), intent(inout) :: vR_x, vR_y, vR_z
         integer, intent(in) :: norm_dir
 
         integer :: recon_dir !< Coordinate direction of the WENO reconstruction
 
         integer :: i, j, k, l
-        ! Reconstruction in s1-direction ===================================
+        ! Reconstruction in s1-direction
 
         if (norm_dir == 1) then
             is1 = idwbuff(1); is2 = idwbuff(2); is3 = idwbuff(3)
@@ -2174,7 +2151,7 @@ contains
             end if
         end if
 
-        if (mpp_lim .and. bubbles) then
+        if (mpp_lim .and. bubbles_euler) then
             !$acc exit data delete(alf_sum%sf)
             deallocate (alf_sum%sf)
         end if

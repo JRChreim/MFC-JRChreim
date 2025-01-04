@@ -8,7 +8,6 @@
 !!                initial condition procedures.
 module m_start_up
 
-    ! Dependencies =============================================================
     use m_derived_types         !< Definitions of the derived types
 
     use m_global_parameters     !< Global parameters for the code
@@ -50,7 +49,6 @@ module m_start_up
     use m_checker_common
 
     use m_checker
-    ! ==========================================================================
 
     implicit none
 
@@ -70,7 +68,7 @@ module m_start_up
               s_apply_initial_condition, &
               s_save_data, s_read_grid
 
-    abstract interface ! ===================================================
+    abstract interface
 
         subroutine s_read_abstract_grid_data_files
 
@@ -91,7 +89,7 @@ module m_start_up
 
         end subroutine s_read_abstract_ic_data_files
 
-    end interface ! ========================================================
+    end interface
 
     character(LEN=path_len + name_len) :: proc_rank_dir !<
     !! Location of the folder associated with the rank of the local processor
@@ -135,14 +133,14 @@ contains
             pi_fac, perturb_flow, perturb_flow_fluid, perturb_flow_mag, &
             perturb_sph, perturb_sph_fluid, fluid_rho, &
             cyl_coord, loops_x, loops_y, loops_z, &
-            rhoref, pref, bubbles, R0ref, nb, &
+            rhoref, pref, bubbles_euler, R0ref, nb, &
             polytropic, thermal, Ca, Web, Re_inv, &
             polydisperse, poly_sigma, qbmm, &
             sigR, sigV, dist_type, rhoRV, R0_type, &
             file_per_process, relax, relax_model, &
             palpha_eps, ptgalpha_eps, ib, num_ibs, patch_ib, &
             sigma, adv_n, cfl_adap_dt, cfl_const_dt, n_start, &
-            n_start_old, surface_tension
+            n_start_old, surface_tension, hyperelasticity, pre_stress, rkck_adap_dt
 
         ! Inquiring the status of the pre_process.inp file
         file_loc = 'pre_process.inp'
@@ -159,7 +157,7 @@ contains
                 read (1, fmt='(A)') line
                 print *, 'Invalid line in namelist: '//trim(line)
                 call s_mpi_abort('Invalid line in pre_process.inp. It is '// &
-                                 'likely due to a datatype mismatch. Exiting ...')
+                                 'likely due to a datatype mismatch. Exiting.')
             end if
             close (1)
             ! Store m,n,p into global m,n,p
@@ -169,10 +167,10 @@ contains
 
             nGlobal = (m_glb + 1)*(n_glb + 1)*(p_glb + 1)
 
-            if (cfl_adap_dt .or. cfl_const_dt) cfl_dt = .true.
+            if (cfl_adap_dt .or. cfl_const_dt .or. rkck_adap_dt) cfl_dt = .true.
 
         else
-            call s_mpi_abort('File pre_process.inp is missing. Exiting ...')
+            call s_mpi_abort('File pre_process.inp is missing. Exiting.')
         end if
 
     end subroutine s_read_input_file
@@ -200,7 +198,7 @@ contains
             print '(A)', 'WARNING: Ensure that compiler flags/choices in Makefiles match your compiler! '
             print '(A)', 'WARNING: Ensure that preprocessor flags are enabled! '
             call s_mpi_abort('Unsupported choice for the value of case_dir.'// &
-                             'Exiting ...')
+                             'Exiting.')
         end if
 
         call s_check_inputs_common()
@@ -242,10 +240,10 @@ contains
         ! If the time-step directory is missing, the pre-process exits
         if (dir_check .neqv. .true.) then
             call s_mpi_abort('Time-step folder '//trim(t_step_dir)// &
-                             ' is missing. Exiting ...')
+                             ' is missing. Exiting.')
         end if
 
-        ! Reading the Grid Data File for the x-direction ===================
+        ! Reading the Grid Data File for the x-direction
 
         ! Checking whether x_cb.dat exists
         file_loc = trim(t_step_dir)//'/x_cb.dat'
@@ -259,11 +257,11 @@ contains
             close (1)
         else
             call s_mpi_abort('File x_cb.dat is missing in '// &
-                             trim(t_step_dir)//'. Exiting ...')
+                             trim(t_step_dir)//'. Exiting.')
         end if
 
         ! Computing cell-center locations
-        x_cc(0:m) = (x_cb(0:m) + x_cb(-1:(m - 1)))/2d0
+        x_cc(0:m) = (x_cb(0:m) + x_cb(-1:(m - 1)))/2._wp
 
         ! Computing minimum cell-width
         dx = minval(x_cb(0:m) - x_cb(-1:m - 1))
@@ -273,9 +271,7 @@ contains
         x_domain%beg = x_cb(-1)
         x_domain%end = x_cb(m)
 
-        ! ==================================================================
-
-        ! Reading the Grid Data File for the y-direction ===================
+        ! Reading the Grid Data File for the y-direction
 
         if (n > 0) then
 
@@ -291,11 +287,11 @@ contains
                 close (1)
             else
                 call s_mpi_abort('File y_cb.dat is missing in '// &
-                                 trim(t_step_dir)//'. Exiting ...')
+                                 trim(t_step_dir)//'. Exiting.')
             end if
 
             ! Computing cell-center locations
-            y_cc(0:n) = (y_cb(0:n) + y_cb(-1:(n - 1)))/2d0
+            y_cc(0:n) = (y_cb(0:n) + y_cb(-1:(n - 1)))/2._wp
 
             ! Computing minimum cell-width
             dy = minval(y_cb(0:n) - y_cb(-1:n - 1))
@@ -305,10 +301,7 @@ contains
             y_domain%beg = y_cb(-1)
             y_domain%end = y_cb(n)
 
-            ! ==================================================================
-
-            ! Reading the Grid Data File for the z-direction ===================
-
+            ! Reading the Grid Data File for the z-direction
             if (p > 0) then
 
                 ! Checking whether z_cb.dat exists
@@ -323,11 +316,11 @@ contains
                     close (1)
                 else
                     call s_mpi_abort('File z_cb.dat is missing in '// &
-                                     trim(t_step_dir)//'. Exiting ...')
+                                     trim(t_step_dir)//'. Exiting.')
                 end if
 
                 ! Computing cell-center locations
-                z_cc(0:p) = (z_cb(0:p) + z_cb(-1:(p - 1)))/2d0
+                z_cc(0:p) = (z_cb(0:p) + z_cb(-1:(p - 1)))/2._wp
 
                 ! Computing minimum cell-width
                 dz = minval(z_cb(0:p) - z_cb(-1:p - 1))
@@ -340,8 +333,6 @@ contains
             end if
 
         end if
-
-        ! ==================================================================
 
         ! If only the preexisting grid data files are read in and there will
         ! not be any preexisting initial condition data files imported, then
@@ -362,42 +353,36 @@ contains
         !!      the cell-widths are positively valued
     subroutine s_check_grid_data_files
 
-        ! Cell-boundary Data Consistency Check in x-direction ==============
+        ! Cell-boundary Data Consistency Check in x-direction
 
-        if (any(x_cb(0:m) - x_cb(-1:m - 1) <= 0d0)) then
+        if (any(x_cb(0:m) - x_cb(-1:m - 1) <= 0._wp)) then
             call s_mpi_abort('x_cb.dat in '//trim(t_step_dir)// &
-                             ' contains non-positive cell-spacings. Exiting ...')
+                             ' contains non-positive cell-spacings. Exiting.')
         end if
 
-        ! ==================================================================
-
-        ! Cell-boundary Data Consistency Check in y-direction ==============
+        ! Cell-boundary Data Consistency Check in y-direction
 
         if (n > 0) then
 
-            if (any(y_cb(0:n) - y_cb(-1:n - 1) <= 0d0)) then
+            if (any(y_cb(0:n) - y_cb(-1:n - 1) <= 0._wp)) then
                 call s_mpi_abort('y_cb.dat in '//trim(t_step_dir)// &
                                  ' contains non-positive cell-spacings. '// &
-                                 'Exiting ...')
+                                 'Exiting.')
             end if
 
-            ! ==================================================================
-
-            ! Cell-boundary Data Consistency Check in z-direction ==============
+            ! Cell-boundary Data Consistency Check in z-direction
 
             if (p > 0) then
 
-                if (any(z_cb(0:p) - z_cb(-1:p - 1) <= 0d0)) then
+                if (any(z_cb(0:p) - z_cb(-1:p - 1) <= 0._wp)) then
                     call s_mpi_abort('z_cb.dat in '//trim(t_step_dir)// &
                                      ' contains non-positive cell-spacings'// &
-                                     ' .Exiting ...')
+                                     ' .Exiting.')
                 end if
 
             end if
 
         end if
-
-        ! ==================================================================
 
     end subroutine s_check_grid_data_files
 
@@ -420,7 +405,7 @@ contains
         ! Generic string used to store the address of a particular file
 
         character(LEN= &
-                  int(floor(log10(real(sys_size, kind(0d0))))) + 1) :: file_num !<
+                  int(floor(log10(real(sys_size, wp)))) + 1) :: file_num !<
             !! Used to store the variable position, in character form, of the
             !! currently manipulated conservative variable file
 
@@ -430,7 +415,7 @@ contains
 
         integer :: i, r !< Generic loop iterator
 
-        ! Reading the Conservative Variables Data Files ====================
+        ! Reading the Conservative Variables Data Files
         do i = 1, sys_size
 
             ! Checking whether data file associated with variable position
@@ -449,7 +434,7 @@ contains
             else
                 call s_mpi_abort('File q_cons_vf'//trim(file_num)// &
                                  '.dat is missing in '//trim(t_step_dir)// &
-                                 '. Exiting ...')
+                                 '. Exiting.')
             end if
 
         end do
@@ -474,7 +459,7 @@ contains
                     else
                         call s_mpi_abort('File pb'//trim(file_num)// &
                                          '.dat is missing in '//trim(t_step_dir)// &
-                                         '. Exiting ...')
+                                         '. Exiting.')
                     end if
                 end do
 
@@ -498,7 +483,7 @@ contains
                     else
                         call s_mpi_abort('File mv'//trim(file_num)// &
                                          '.dat is missing in '//trim(t_step_dir)// &
-                                         '. Exiting ...')
+                                         '. Exiting.')
                     end if
                 end do
 
@@ -520,11 +505,9 @@ contains
             else
                 call s_mpi_abort('File ib.dat is missing in ' &
                                  //trim(t_step_dir)// &
-                                 '. Exiting ...')
+                                 '. Exiting.')
             end if
         end if
-
-        ! ==================================================================
 
         ! Since the preexisting grid and initial condition data files have
         ! been read in, the directory associated with the rank of the local
@@ -544,7 +527,7 @@ contains
 
 #ifdef MFC_MPI
 
-        real(kind(0d0)), allocatable, dimension(:) :: x_cb_glb, y_cb_glb, z_cb_glb
+        real(wp), allocatable, dimension(:) :: x_cb_glb, y_cb_glb, z_cb_glb
 
         integer :: ifile, ierr, data_size
         integer, dimension(MPI_STATUS_SIZE) :: status
@@ -563,16 +546,16 @@ contains
         if (file_exist) then
             data_size = m_glb + 2
             call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-            call MPI_FILE_READ_ALL(ifile, x_cb_glb, data_size, MPI_DOUBLE_PRECISION, status, ierr)
+            call MPI_FILE_READ_ALL(ifile, x_cb_glb, data_size, mpi_p, status, ierr)
             call MPI_FILE_CLOSE(ifile, ierr)
         else
-            call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting... ')
+            call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting. ')
         end if
 
         ! Assigning local cell boundary locations
         x_cb(-1:m) = x_cb_glb((start_idx(1) - 1):(start_idx(1) + m))
         ! Computing cell center locations
-        x_cc(0:m) = (x_cb(0:m) + x_cb(-1:(m - 1)))/2d0
+        x_cc(0:m) = (x_cb(0:m) + x_cb(-1:(m - 1)))/2._wp
         ! Computing minimum cell width
         dx = minval(x_cb(0:m) - x_cb(-1:(m - 1)))
         if (num_procs > 1) call s_mpi_reduce_min(dx)
@@ -588,16 +571,16 @@ contains
             if (file_exist) then
                 data_size = n_glb + 2
                 call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-                call MPI_FILE_READ_ALL(ifile, y_cb_glb, data_size, MPI_DOUBLE_PRECISION, status, ierr)
+                call MPI_FILE_READ_ALL(ifile, y_cb_glb, data_size, mpi_p, status, ierr)
                 call MPI_FILE_CLOSE(ifile, ierr)
             else
-                call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting... ')
+                call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting. ')
             end if
 
             ! Assigning local cell boundary locations
             y_cb(-1:n) = y_cb_glb((start_idx(2) - 1):(start_idx(2) + n))
             ! Computing cell center locations
-            y_cc(0:n) = (y_cb(0:n) + y_cb(-1:(n - 1)))/2d0
+            y_cc(0:n) = (y_cb(0:n) + y_cb(-1:(n - 1)))/2._wp
             ! Computing minimum cell width
             dy = minval(y_cb(0:n) - y_cb(-1:(n - 1)))
             if (num_procs > 1) call s_mpi_reduce_min(dy)
@@ -613,16 +596,16 @@ contains
                 if (file_exist) then
                     data_size = p_glb + 2
                     call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-                    call MPI_FILE_READ_ALL(ifile, z_cb_glb, data_size, MPI_DOUBLE_PRECISION, status, ierr)
+                    call MPI_FILE_READ_ALL(ifile, z_cb_glb, data_size, mpi_p, status, ierr)
                     call MPI_FILE_CLOSE(ifile, ierr)
                 else
-                    call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting... ')
+                    call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting. ')
                 end if
 
                 ! Assigning local cell boundary locations
                 z_cb(-1:p) = z_cb_glb((start_idx(3) - 1):(start_idx(3) + p))
                 ! Computing cell center locations
-                z_cc(0:p) = (z_cb(0:p) + z_cb(-1:(p - 1)))/2d0
+                z_cc(0:p) = (z_cb(0:p) + z_cb(-1:(p - 1)))/2._wp
                 ! Computing minimum cell width
                 dz = minval(z_cb(0:p) - z_cb(-1:(p - 1)))
                 if (num_procs > 1) call s_mpi_reduce_min(dz)
@@ -695,8 +678,8 @@ contains
             m_MOK = int(m_glb + 1, MPI_OFFSET_KIND)
             n_MOK = int(n_glb + 1, MPI_OFFSET_KIND)
             p_MOK = int(p_glb + 1, MPI_OFFSET_KIND)
-            WP_MOK = int(8d0, MPI_OFFSET_KIND)
-            MOK = int(1d0, MPI_OFFSET_KIND)
+            WP_MOK = int(8._wp, MPI_OFFSET_KIND)
+            MOK = int(1._wp, MPI_OFFSET_KIND)
             str_MOK = int(name_len, MPI_OFFSET_KIND)
             NVARS_MOK = int(sys_size, MPI_OFFSET_KIND)
 
@@ -707,10 +690,10 @@ contains
                 ! Initial displacement to skip at beginning of file
                 disp = m_MOK*max(MOK, n_MOK)*max(MOK, p_MOK)*WP_MOK*(var_MOK - 1)
 
-                call MPI_FILE_SET_VIEW(ifile, disp, MPI_DOUBLE_PRECISION, MPI_IO_DATA%view(i), &
+                call MPI_FILE_SET_VIEW(ifile, disp, mpi_p, MPI_IO_DATA%view(i), &
                                        'native', mpi_info_int, ierr)
                 call MPI_FILE_READ(ifile, MPI_IO_DATA%var(i)%sf, data_size, &
-                                   MPI_DOUBLE_PRECISION, status, ierr)
+                                   mpi_p, status, ierr)
             end do
 
             if (qbmm .and. .not. polytropic) then
@@ -720,10 +703,10 @@ contains
                     ! Initial displacement to skip at beginning of file
                     disp = m_MOK*max(MOK, n_MOK)*max(MOK, p_MOK)*WP_MOK*(var_MOK - 1)
 
-                    call MPI_FILE_SET_VIEW(ifile, disp, MPI_DOUBLE_PRECISION, MPI_IO_DATA%view(i), &
+                    call MPI_FILE_SET_VIEW(ifile, disp, mpi_p, MPI_IO_DATA%view(i), &
                                            'native', mpi_info_int, ierr)
                     call MPI_FILE_READ(ifile, MPI_IO_DATA%var(i)%sf, data_size, &
-                                       MPI_DOUBLE_PRECISION, status, ierr)
+                                       mpi_p, status, ierr)
                 end do
             end if
 
@@ -732,7 +715,7 @@ contains
             call MPI_FILE_CLOSE(ifile, ierr)
 
         else
-            call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting... ')
+            call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting. ')
         end if
 
         if (ib) then
@@ -753,7 +736,7 @@ contains
                                    MPI_INTEGER, status, ierr)
 
             else
-                call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting...')
+                call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
             end if
 
         end if
@@ -769,18 +752,18 @@ contains
         ! needed to properly setup the modules
         call s_initialize_global_parameters_module()
         !Quadrature weights and nodes for polydisperse simulations
-        if (bubbles .and. nb > 1) then
+        if (bubbles_euler .and. nb > 1) then
             call s_simpson
         end if
         !Initialize variables for non-polytropic (Preston) model
-        if (bubbles .and. .not. polytropic) then
+        if (bubbles_euler .and. .not. polytropic) then
             call s_initialize_nonpoly()
         end if
         !Initialize pb based on surface tension for qbmm (polytropic)
         if (qbmm .and. polytropic .and. (.not. f_is_default(Web))) then
-            pb0 = pref + 2d0*fluid_pp(1)%ss/(R0*R0ref)
+            pb0 = pref + 2._wp*fluid_pp(1)%ss/(R0*R0ref)
             pb0 = pb0/pref
-            pref = 1d0
+            pref = 1._wp
         end if
         call s_initialize_data_output_module()
         call s_initialize_variables_conversion_module()
@@ -789,16 +772,16 @@ contains
         call s_initialize_perturbation_module()
         call s_initialize_assign_variables_module()
 
+        ! Create the D directory if it doesn't exit, to store
+        ! the serial data files
+        call s_create_directory('D')
+
         ! Associate pointers for serial or parallel I/O
         if (parallel_io .neqv. .true.) then
             s_generate_grid => s_generate_serial_grid
             s_read_grid_data_files => s_read_serial_grid_data_files
             s_read_ic_data_files => s_read_serial_ic_data_files
             s_write_data_files => s_write_serial_data_files
-
-            ! Create the D directory if it doesn't exit, to store
-            ! the serial data files
-            call s_create_directory('D')
         else
             s_generate_grid => s_generate_parallel_grid
             s_read_grid_data_files => s_read_parallel_grid_data_files
@@ -828,9 +811,9 @@ contains
 
     subroutine s_apply_initial_condition(start, finish, proc_time, time_avg, time_final, file_exists)
 
-        real(kind(0d0)), intent(inout) :: start, finish
-        real(kind(0d0)), dimension(:), intent(inout) :: proc_time
-        real(kind(0d0)), intent(inout) :: time_avg, time_final
+        real(wp), intent(inout) :: start, finish
+        real(wp), dimension(:), intent(inout) :: proc_time
+        real(wp), intent(inout) :: time_avg, time_final
         logical, intent(inout) :: file_exists
 
         ! Setting up the grid and the initial condition. If the grid is read in from
@@ -865,8 +848,8 @@ contains
 
     subroutine s_save_data(proc_time, time_avg, time_final, file_exists)
 
-        real(kind(0d0)), dimension(:), intent(inout) :: proc_time
-        real(kind(0d0)), intent(inout) :: time_avg, time_final
+        real(wp), dimension(:), intent(inout) :: proc_time
+        real(wp), intent(inout) :: time_avg, time_final
         logical, intent(inout) :: file_exists
 
         call s_mpi_barrier()
@@ -876,7 +859,7 @@ contains
         end if
 
         if (proc_rank == 0) then
-            time_final = 0d0
+            time_final = 0._wp
             if (num_procs == 1) then
                 time_final = time_avg
                 print *, "Elapsed Time", time_final

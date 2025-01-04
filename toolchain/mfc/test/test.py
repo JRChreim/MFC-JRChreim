@@ -1,5 +1,5 @@
 import os, typing, shutil, time, itertools
-from random import sample
+from random import sample, seed
 
 import rich, rich.table
 
@@ -21,6 +21,7 @@ nPASS = 0
 nSKIP = 0
 errors = []
 
+# pylint: disable=too-many-branches, trailing-whitespace
 def __filter(cases_) -> typing.List[TestCase]:
     cases = cases_[:]
     selected_cases = []
@@ -55,9 +56,22 @@ def __filter(cases_) -> typing.List[TestCase]:
         if case.ppn > 1 and not ARG("mpi"):
             cases.remove(case)
             skipped_cases.append(case)
+    
+    for case in cases[:]:
+        if ARG("single"):
+            skip = ['low_Mach', 'Hypoelasticity', 'teno', 'Chemistry', 'Phase Change model 6'
+            ,'Axisymmetric', 'Transducer', 'Transducer Array', 'Cylindrical', 'Example']
+            if any(label in case.trace for label in skip):
+                cases.remove(case)
+
+
+    if ARG("no_examples"):
+        cases = [case for case in cases if not "Example" in case.trace]
 
     if ARG("percent") == 100:
         return cases, skipped_cases
+
+    seed(time.time())
 
     selected_cases = sample(cases, k=int(len(cases)*ARG("percent")/100.0))
     skipped_cases = [item for item in cases if item not in selected_cases]
@@ -153,17 +167,20 @@ def test():
     exit(nFAIL)
 
 
-# pylint: disable=too-many-locals, too-many-branches, too-many-statements
+# pylint: disable=too-many-locals, too-many-branches, too-many-statements, trailing-whitespace
 def _handle_case(case: TestCase, devices: typing.Set[int]):
+    # pylint: disable=global-statement, global-variable-not-assigned
     start_time = time.time()
 
     tol = case.compute_tolerance()
-
     case.delete_output()
     case.create_directory()
 
-    cmd = case.run([PRE_PROCESS, SIMULATION], gpus=devices)
+    if ARG("dry_run"):
+        cons.print(f"  [bold magenta]{case.get_uuid()}[/bold magenta]     SKIP     {case.trace}")
+        return
 
+    cmd = case.run([PRE_PROCESS, SIMULATION], gpus=devices)
     out_filepath = os.path.join(case.get_dirpath(), "out_pre_sim.txt")
 
     common.file_write(out_filepath, cmd.stdout)
@@ -190,9 +207,13 @@ def _handle_case(case: TestCase, devices: typing.Set[int]):
         golden = packer.load(golden_filepath)
 
         if ARG("add_new_variables"):
-            for pfilepath, pentry in pack.entries.items():
+            for pfilepath, pentry in list(pack.entries.items()):
                 if golden.find(pfilepath) is None:
                     golden.set(pentry)
+
+            for gfilepath, gentry in list(golden.entries.items()):
+                if pack.find(gfilepath) is None:
+                    golden.remove(gentry)
 
             golden.save(golden_filepath)
         else:
@@ -241,17 +262,22 @@ def handle_case(case: TestCase, devices: typing.Set[int]):
     global errors
 
     nAttempts = 0
+    if ARG('single'):
+        max_attempts = max(ARG('max_attempts'), 3)
+    else:
+        max_attempts = ARG('max_attempts')
 
     while True:
         nAttempts += 1
 
         try:
             _handle_case(case, devices)
-            nPASS += 1
+            if ARG("dry_run"):
+                nSKIP += 1
+            else:
+                nPASS += 1
         except Exception as exc:
-            if nAttempts < ARG("max_attempts"):
-                cons.print(f"[bold yellow] Attempt {nAttempts}: Failed test {case.get_uuid()}. Retrying...[/bold yellow]")
-                errors.append(f"[bold yellow] Attempt {nAttempts}: Failed test {case.get_uuid()}. Retrying...[/bold yellow]")
+            if nAttempts < max_attempts:
                 continue
             nFAIL += 1
             cons.print(f"[bold red]Failed test {case} after {nAttempts} attempt(s).[/bold red]")

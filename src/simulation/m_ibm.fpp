@@ -7,7 +7,6 @@
 !> @brief This module is used to handle all operations related to immersed
 !!              boundary methods (IBMs)
 module m_ibm
-    ! Dependencies =============================================================
 
     use m_derived_types        !< Definitions of the derived types
 
@@ -18,8 +17,6 @@ module m_ibm
     use m_variables_conversion !< State variables type conversion procedures
 
     use m_helper
-
-    ! ==========================================================================
 
     implicit none
 
@@ -125,31 +122,31 @@ contains
             dimension(sys_size), &
             intent(INOUT) :: q_prim_vf !< Primitive Variables
 
-        real(kind(0d0)), dimension(startx:, starty:, startz:, 1:, 1:), optional, intent(INOUT) :: pb, mv
+        real(wp), dimension(startx:, starty:, startz:, 1:, 1:), optional, intent(INOUT) :: pb, mv
 
         integer :: i, j, k, l, q, r!< Iterator variables
         integer :: patch_id !< Patch ID of ghost point
-        real(kind(0d0)) :: rho, gamma, pi_inf, dyn_pres !< Mixture variables
-        real(kind(0d0)), dimension(2) :: Re_K
-        real(kind(0d0)) :: G_K
-        real(kind(0d0)) :: qv_K
-        real(kind(0d0)), dimension(num_fluids) :: Gs
+        real(wp) :: rho, gamma, pi_inf, dyn_pres !< Mixture variables
+        real(wp), dimension(2) :: Re_K
+        real(wp) :: G_K
+        real(wp) :: qv_K
+        real(wp), dimension(num_fluids) :: Gs
 
-        real(kind(0d0)) :: pres_IP, coeff
-        real(kind(0d0)), dimension(3) :: vel_IP, vel_norm_IP
-        real(kind(0d0)), dimension(num_fluids) :: alpha_rho_IP, alpha_IP
-        real(kind(0d0)), dimension(nb) :: r_IP, v_IP, pb_IP, mv_IP
-        real(kind(0d0)), dimension(nb*nmom) :: nmom_IP
-        real(kind(0d0)), dimension(nb*nnode) :: presb_IP, massv_IP
+        real(wp) :: pres_IP, coeff
+        real(wp), dimension(3) :: vel_IP, vel_norm_IP
+        real(wp), dimension(num_fluids) :: alpha_rho_IP, alpha_IP
+        real(wp), dimension(nb) :: r_IP, v_IP, pb_IP, mv_IP
+        real(wp), dimension(nb*nmom) :: nmom_IP
+        real(wp), dimension(nb*nnode) :: presb_IP, massv_IP
         !! Primitive variables at the image point associated with a ghost point,
         !! interpolated from surrounding fluid cells.
 
-        real(kind(0d0)), dimension(3) :: norm !< Normal vector from GP to IP
-        real(kind(0d0)), dimension(3) :: physical_loc !< Physical loc of GP
-        real(kind(0d0)), dimension(3) :: vel_g !< Velocity of GP
+        real(wp), dimension(3) :: norm !< Normal vector from GP to IP
+        real(wp), dimension(3) :: physical_loc !< Physical loc of GP
+        real(wp), dimension(3) :: vel_g !< Velocity of GP
 
-        real(kind(0d0)) :: nbub
-        real(kind(0d0)) :: buf
+        real(wp) :: nbub
+        real(wp) :: buf
         type(ghost_point) :: gp
         type(ghost_point) :: innerp
 
@@ -166,11 +163,11 @@ contains
             if (p > 0) then
                 physical_loc = [x_cc(j), y_cc(k), z_cc(l)]
             else
-                physical_loc = [x_cc(j), y_cc(k), 0d0]
+                physical_loc = [x_cc(j), y_cc(k), 0._wp]
             end if
 
             !Interpolate primitive variables at image point associated w/ GP
-            if (bubbles .and. .not. qbmm) then
+            if (bubbles_euler .and. .not. qbmm) then
                 call s_interpolate_image_point(q_prim_vf, gp, &
                                                alpha_rho_IP, alpha_IP, pres_IP, vel_IP, &
                                                r_IP, v_IP, pb_IP, mv_IP)
@@ -187,7 +184,7 @@ contains
                                                alpha_rho_IP, alpha_IP, pres_IP, vel_IP)
             end if
 
-            dyn_pres = 0d0
+            dyn_pres = 0._wp
 
             ! Set q_prim_vf params at GP so that mixture vars calculated properly
             !$acc loop seq
@@ -198,10 +195,10 @@ contains
 
             if (model_eqns /= 4) then
                 ! If in simulation, use acc mixture subroutines
-                if (hypoelasticity) then
+                if (elasticity) then
                     call s_convert_species_to_mixture_variables_acc(rho, gamma, pi_inf, qv_K, alpha_IP, &
                                                                     alpha_rho_IP, Re_K, j, k, l, G_K, Gs)
-                else if (bubbles) then
+                else if (bubbles_euler) then
                     call s_convert_species_to_mixture_variables_bubbles_acc(rho, gamma, pi_inf, qv_K, alpha_IP, &
                                                                             alpha_rho_IP, Re_K, j, k, l)
                 else
@@ -216,7 +213,7 @@ contains
                 vel_norm_IP = sum(vel_IP*norm)*norm
                 vel_g = vel_IP - vel_norm_IP
             else
-                vel_g = 0d0
+                vel_g = 0._wp
             end if
 
             ! Set momentum
@@ -224,7 +221,7 @@ contains
             do q = momxb, momxe
                 q_cons_vf(q)%sf(j, k, l) = rho*vel_g(q - momxb + 1)
                 dyn_pres = dyn_pres + q_cons_vf(q)%sf(j, k, l)* &
-                           vel_g(q - momxb + 1)/2d0
+                           vel_g(q - momxb + 1)/2._wp
             end do
 
             ! Set continuity and adv vars
@@ -235,14 +232,14 @@ contains
             end do
 
             ! Set Energy
-            if (bubbles) then
+            if (bubbles_euler) then
                 q_cons_vf(E_idx)%sf(j, k, l) = (1 - alpha_IP(1))*(gamma*pres_IP + pi_inf + dyn_pres)
             else
                 q_cons_vf(E_idx)%sf(j, k, l) = gamma*pres_IP + pi_inf + dyn_pres
             end if
 
             ! Set bubble vars
-            if (bubbles .and. .not. qbmm) then
+            if (bubbles_euler .and. .not. qbmm) then
                 call s_comp_n_from_prim(alpha_IP(1), r_IP, nbub, weight)
                 do q = 1, nb
                     q_cons_vf(bubxb + (q - 1)*2)%sf(j, k, l) = nbub*r_IP(q)
@@ -289,7 +286,7 @@ contains
         !$acc parallel loop gang vector private(physical_loc, dyn_pres, alpha_rho_IP, alpha_IP, vel_g, rho, gamma, pi_inf, Re_K, innerp, j, k, l, q)
         do i = 1, num_inner_gps
 
-            vel_g = 0d0
+            vel_g = 0._wp
             innerp = inner_points(i)
             j = innerp%loc(1)
             k = innerp%loc(2)
@@ -300,7 +297,7 @@ contains
             if (p > 0) then
                 physical_loc = [x_cc(j), y_cc(k), z_cc(l)]
             else
-                physical_loc = [x_cc(j), y_cc(k), 0d0]
+                physical_loc = [x_cc(j), y_cc(k), 0._wp]
             end if
 
             !$acc loop seq
@@ -312,13 +309,13 @@ contains
             call s_convert_species_to_mixture_variables_acc(rho, gamma, pi_inf, qv_K, alpha_IP, &
                                                             alpha_rho_IP, Re_K, j, k, l)
 
-            dyn_pres = 0d0
+            dyn_pres = 0._wp
 
             !$acc loop seq
             do q = momxb, momxe
                 q_cons_vf(q)%sf(j, k, l) = rho*vel_g(q - momxb + 1)
                 dyn_pres = dyn_pres + q_cons_vf(q)%sf(j, k, l)* &
-                           vel_g(q - momxb + 1)/2d0
+                           vel_g(q - momxb + 1)/2._wp
             end do
         end do
 
@@ -334,11 +331,11 @@ contains
         type(levelset_field), intent(IN) :: levelset
         type(levelset_norm_field), intent(IN) :: levelset_norm
 
-        real(kind(0d0)) :: dist
-        real(kind(0d0)), dimension(3) :: norm
-        real(kind(0d0)), dimension(3) :: physical_loc
-        real(kind(0d0)) :: temp_loc
-        real(kind(0d0)), pointer, dimension(:) :: s_cc => null()
+        real(wp) :: dist
+        real(wp), dimension(3) :: norm
+        real(wp), dimension(3) :: physical_loc
+        real(wp) :: temp_loc
+        real(wp), pointer, dimension(:) :: s_cc => null()
         integer :: bound
         type(ghost_point) :: gp
 
@@ -358,7 +355,7 @@ contains
             if (p > 0) then
                 physical_loc = [x_cc(i), y_cc(j), z_cc(k)]
             else
-                physical_loc = [x_cc(i), y_cc(j), 0d0]
+                physical_loc = [x_cc(i), y_cc(j), 0._wp]
             end if
 
             ! Calculate and store the precise location of the image point
@@ -406,32 +403,7 @@ contains
                     end if
                 end if
             end do
-
-            ! print *, "GP Loc: ", ghost_points(q)%loc(:)
-            ! print *, "Norm: ", norm(:)
-            ! print *, "Dist: ", abs(dist)
-            ! print *, "IP Loc: ", ghost_points(q)%ip_grid(:)
-            ! print *, "------"
         end do
-
-#if 0
-        if (proc_rank == 0) then
-
-            open (unit=10, file=trim(case_dir)//'/gp.txt', status='replace')
-            do i = 1, num_gps
-                write (10, '(3F36.12)') x_cc(ghost_points(i)%loc(1)), y_cc(ghost_points(i)%loc(2))
-            end do
-            close (10)
-
-            open (unit=10, file=trim(case_dir)//'/ip.txt', status='replace')
-            do i = 1, num_gps
-                write (10, '(3F36.12)') ghost_points(i)%ip_loc(1), ghost_points(i)%ip_loc(2)
-            end do
-            close (10)
-
-        end if
-
-#endif
 
     end subroutine s_compute_image_points
 
@@ -599,11 +571,11 @@ contains
 
         type(ghost_point), dimension(num_gps), intent(INOUT) :: ghost_points
 
-        real(kind(0d0)), dimension(2, 2, 2) :: dist
-        real(kind(0d0)), dimension(2, 2, 2) :: alpha
-        real(kind(0d0)), dimension(2, 2, 2) :: interp_coeffs
-        real(kind(0d0)) :: buf
-        real(kind(0d0)), dimension(2, 2, 2) :: eta
+        real(wp), dimension(2, 2, 2) :: dist
+        real(wp), dimension(2, 2, 2) :: alpha
+        real(wp), dimension(2, 2, 2) :: interp_coeffs
+        real(wp) :: buf
+        real(wp), dimension(2, 2, 2) :: eta
         type(ghost_point) :: gp
         integer :: i, j, k, l, q !< Iterator variables
         integer :: i1, i2, j1, j2, k1, k2 !< Grid indexes
@@ -617,8 +589,8 @@ contains
                 i1 = gp%ip_grid(1); i2 = i1 + 1
                 j1 = gp%ip_grid(2); j2 = j1 + 1
 
-                dist = 0d0
-                buf = 1d0
+                dist = 0._wp
+                buf = 1._wp
                 dist(1, 1, 1) = sqrt( &
                                 (x_cc(i1) - gp%ip_loc(1))**2 + &
                                 (y_cc(j1) - gp%ip_loc(2))**2)
@@ -632,26 +604,26 @@ contains
                                 (x_cc(i2) - gp%ip_loc(1))**2 + &
                                 (y_cc(j2) - gp%ip_loc(2))**2)
 
-                interp_coeffs = 0d0
+                interp_coeffs = 0._wp
 
-                if (dist(1, 1, 1) <= 1d-16) then
-                    interp_coeffs(1, 1, 1) = 1d0
-                else if (dist(2, 1, 1) <= 1d-16) then
-                    interp_coeffs(2, 1, 1) = 1d0
-                else if (dist(1, 2, 1) <= 1d-16) then
-                    interp_coeffs(1, 2, 1) = 1d0
-                else if (dist(2, 2, 1) <= 1d-16) then
-                    interp_coeffs(2, 2, 1) = 1d0
+                if (dist(1, 1, 1) <= 1e-16_wp) then
+                    interp_coeffs(1, 1, 1) = 1._wp
+                else if (dist(2, 1, 1) <= 1e-16_wp) then
+                    interp_coeffs(2, 1, 1) = 1._wp
+                else if (dist(1, 2, 1) <= 1e-16_wp) then
+                    interp_coeffs(1, 2, 1) = 1._wp
+                else if (dist(2, 2, 1) <= 1e-16_wp) then
+                    interp_coeffs(2, 2, 1) = 1._wp
                 else
-                    eta(:, :, 1) = 1d0/dist(:, :, 1)**2
-                    alpha = 1d0
+                    eta(:, :, 1) = 1._wp/dist(:, :, 1)**2
+                    alpha = 1._wp
                     patch_id = gp%ib_patch_id
-                    if (ib_markers%sf(i1, j1, 0) /= 0) alpha(1, 1, 1) = 0d0
-                    if (ib_markers%sf(i2, j1, 0) /= 0) alpha(2, 1, 1) = 0d0
-                    if (ib_markers%sf(i1, j2, 0) /= 0) alpha(1, 2, 1) = 0d0
-                    if (ib_markers%sf(i2, j2, 0) /= 0) alpha(2, 2, 1) = 0d0
+                    if (ib_markers%sf(i1, j1, 0) /= 0) alpha(1, 1, 1) = 0._wp
+                    if (ib_markers%sf(i2, j1, 0) /= 0) alpha(2, 1, 1) = 0._wp
+                    if (ib_markers%sf(i1, j2, 0) /= 0) alpha(1, 2, 1) = 0._wp
+                    if (ib_markers%sf(i2, j2, 0) /= 0) alpha(2, 2, 1) = 0._wp
                     buf = sum(alpha(:, :, 1)*eta(:, :, 1))
-                    if (buf > 0d0) then
+                    if (buf > 0._wp) then
                         interp_coeffs(:, :, 1) = alpha(:, :, 1)*eta(:, :, 1)/buf
                     else
                         buf = sum(eta(:, :, 1))
@@ -703,37 +675,37 @@ contains
                                 (x_cc(i2) - gp%ip_loc(1))**2 + &
                                 (y_cc(j2) - gp%ip_loc(2))**2 + &
                                 (z_cc(k2) - gp%ip_loc(3))**2)
-                interp_coeffs = 0d0
-                buf = 1d0
-                if (dist(1, 1, 1) <= 1d-16) then
-                    interp_coeffs(1, 1, 1) = 1d0
-                else if (dist(2, 1, 1) <= 1d-16) then
-                    interp_coeffs(2, 1, 1) = 1d0
-                else if (dist(1, 2, 1) <= 1d-16) then
-                    interp_coeffs(1, 2, 1) = 1d0
-                else if (dist(2, 2, 1) <= 1d-16) then
-                    interp_coeffs(2, 2, 1) = 1d0
-                else if (dist(1, 1, 2) <= 1d-16) then
-                    interp_coeffs(1, 1, 2) = 1d0
-                else if (dist(2, 1, 2) <= 1d-16) then
-                    interp_coeffs(2, 1, 2) = 1d0
-                else if (dist(1, 2, 2) <= 1d-16) then
-                    interp_coeffs(1, 2, 2) = 1d0
-                else if (dist(2, 2, 2) <= 1d-16) then
-                    interp_coeffs(2, 2, 2) = 1d0
+                interp_coeffs = 0._wp
+                buf = 1._wp
+                if (dist(1, 1, 1) <= 1e-16_wp) then
+                    interp_coeffs(1, 1, 1) = 1._wp
+                else if (dist(2, 1, 1) <= 1e-16_wp) then
+                    interp_coeffs(2, 1, 1) = 1._wp
+                else if (dist(1, 2, 1) <= 1e-16_wp) then
+                    interp_coeffs(1, 2, 1) = 1._wp
+                else if (dist(2, 2, 1) <= 1e-16_wp) then
+                    interp_coeffs(2, 2, 1) = 1._wp
+                else if (dist(1, 1, 2) <= 1e-16_wp) then
+                    interp_coeffs(1, 1, 2) = 1._wp
+                else if (dist(2, 1, 2) <= 1e-16_wp) then
+                    interp_coeffs(2, 1, 2) = 1._wp
+                else if (dist(1, 2, 2) <= 1e-16_wp) then
+                    interp_coeffs(1, 2, 2) = 1._wp
+                else if (dist(2, 2, 2) <= 1e-16_wp) then
+                    interp_coeffs(2, 2, 2) = 1._wp
                 else
-                    eta = 1d0/dist**2
-                    alpha = 1d0
-                    if (ib_markers%sf(i1, j1, k1) /= 0) alpha(1, 1, 1) = 0d0
-                    if (ib_markers%sf(i2, j1, k1) /= 0) alpha(2, 1, 1) = 0d0
-                    if (ib_markers%sf(i1, j2, k1) /= 0) alpha(1, 2, 1) = 0d0
-                    if (ib_markers%sf(i2, j2, k1) /= 0) alpha(2, 2, 1) = 0d0
-                    if (ib_markers%sf(i1, j1, k2) /= 0) alpha(1, 1, 2) = 0d0
-                    if (ib_markers%sf(i2, j1, k2) /= 0) alpha(2, 1, 2) = 0d0
-                    if (ib_markers%sf(i1, j2, k2) /= 0) alpha(1, 2, 2) = 0d0
-                    if (ib_markers%sf(i2, j2, k2) /= 0) alpha(2, 2, 2) = 0d0
+                    eta = 1._wp/dist**2
+                    alpha = 1._wp
+                    if (ib_markers%sf(i1, j1, k1) /= 0) alpha(1, 1, 1) = 0._wp
+                    if (ib_markers%sf(i2, j1, k1) /= 0) alpha(2, 1, 1) = 0._wp
+                    if (ib_markers%sf(i1, j2, k1) /= 0) alpha(1, 2, 1) = 0._wp
+                    if (ib_markers%sf(i2, j2, k1) /= 0) alpha(2, 2, 1) = 0._wp
+                    if (ib_markers%sf(i1, j1, k2) /= 0) alpha(1, 1, 2) = 0._wp
+                    if (ib_markers%sf(i2, j1, k2) /= 0) alpha(2, 1, 2) = 0._wp
+                    if (ib_markers%sf(i1, j2, k2) /= 0) alpha(1, 2, 2) = 0._wp
+                    if (ib_markers%sf(i2, j2, k2) /= 0) alpha(2, 2, 2) = 0._wp
                     buf = sum(alpha*eta)
-                    if (buf > 0d0) then
+                    if (buf > 0._wp) then
                         interp_coeffs = alpha*eta/buf
                     else
                         buf = sum(eta)
@@ -754,19 +726,19 @@ contains
         type(scalar_field), &
             dimension(sys_size), &
             intent(IN) :: q_prim_vf !< Primitive Variables
-        real(kind(0d0)), optional, dimension(startx:, starty:, startz:, 1:, 1:), intent(INOUT) :: pb, mv
+        real(wp), optional, dimension(startx:, starty:, startz:, 1:, 1:), intent(INOUT) :: pb, mv
 
         type(ghost_point), intent(IN) :: gp
-        real(kind(0d0)), intent(INOUT) :: pres_IP
-        real(kind(0d0)), dimension(3), intent(INOUT) :: vel_IP
-        real(kind(0d0)), dimension(num_fluids), intent(INOUT) :: alpha_IP, alpha_rho_IP
-        real(kind(0d0)), optional, dimension(:), intent(INOUT) :: r_IP, v_IP, pb_IP, mv_IP
-        real(kind(0d0)), optional, dimension(:), intent(INOUT) :: nmom_IP
-        real(kind(0d0)), optional, dimension(:), intent(INOUT) :: presb_IP, massv_IP
+        real(wp), intent(INOUT) :: pres_IP
+        real(wp), dimension(3), intent(INOUT) :: vel_IP
+        real(wp), dimension(num_fluids), intent(INOUT) :: alpha_IP, alpha_rho_IP
+        real(wp), optional, dimension(:), intent(INOUT) :: r_IP, v_IP, pb_IP, mv_IP
+        real(wp), optional, dimension(:), intent(INOUT) :: nmom_IP
+        real(wp), optional, dimension(:), intent(INOUT) :: presb_IP, massv_IP
 
         integer :: i, j, k, l, q !< Iterator variables
         integer :: i1, i2, j1, j2, k1, k2 !< Iterator variables
-        real(kind(0d0)) :: coeff
+        real(wp) :: coeff
 
         i1 = gp%ip_grid(1); i2 = i1 + 1
         j1 = gp%ip_grid(2); j2 = j1 + 1
@@ -777,25 +749,25 @@ contains
             k2 = 0
         end if
 
-        alpha_rho_IP = 0d0
-        alpha_IP = 0d0
-        pres_IP = 0d0
-        vel_IP = 0d0
+        alpha_rho_IP = 0._wp
+        alpha_IP = 0._wp
+        pres_IP = 0._wp
+        vel_IP = 0._wp
 
-        if (bubbles) then
-            r_IP = 0d0
-            v_IP = 0d0
+        if (bubbles_euler) then
+            r_IP = 0._wp
+            v_IP = 0._wp
             if (.not. polytropic) then
-                mv_IP = 0d0
-                pb_IP = 0d0
+                mv_IP = 0._wp
+                pb_IP = 0._wp
             end if
         end if
 
         if (qbmm) then
-            nmom_IP = 0d0
+            nmom_IP = 0._wp
             if (.not. polytropic) then
-                presb_IP = 0d0
-                massv_IP = 0d0
+                presb_IP = 0._wp
+                massv_IP = 0._wp
             end if
         end if
 
@@ -825,7 +797,7 @@ contains
                                       q_prim_vf(advxb + l - 1)%sf(i, j, k)
                     end do
 
-                    if (bubbles .and. .not. qbmm) then
+                    if (bubbles_euler .and. .not. qbmm) then
                         !$acc loop seq
                         do l = 1, nb
                             if (polytropic) then

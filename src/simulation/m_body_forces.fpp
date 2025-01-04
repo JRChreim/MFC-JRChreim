@@ -2,8 +2,6 @@
 
 module m_body_forces
 
-    ! Dependencies =============================================================
-
     use m_derived_types        !< Definitions of the derived types
 
     use m_global_parameters    !< Definitions of the global parameters
@@ -15,7 +13,6 @@ module m_body_forces
 #ifdef MFC_OpenACC
     use openacc
 #endif
-    ! ==========================================================================
 
     implicit none
 
@@ -24,7 +21,7 @@ module m_body_forces
               s_initialize_body_forces_module, &
               s_finalize_body_forces_module
 
-    real(kind(0d0)), allocatable, dimension(:, :, :) :: rhoM
+    real(wp), allocatable, dimension(:, :, :) :: rhoM
     !$acc declare create(rhoM)
 
 contains
@@ -58,7 +55,7 @@ contains
     !> This subroutine computes the acceleration at time t
     subroutine s_compute_acceleration(t)
 
-        real(kind(0d0)), intent(in) :: t
+        real(wp), intent(in) :: t
 
         if (m > 0) then
             accel_bf(1) = g_x + k_x*sin(w_x*t - p_x)
@@ -86,7 +83,7 @@ contains
         do l = 0, p
             do k = 0, n
                 do j = 0, m
-                    rhoM(j, k, l) = 0d0
+                    rhoM(j, k, l) = 0._wp
                     do i = 1, num_fluids
                         rhoM(j, k, l) = rhoM(j, k, l) + &
                                         q_cons_vf(contxb + i - 1)%sf(j, k, l)
@@ -117,7 +114,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        rhs_vf(i)%sf(j, k, l) = 0d0
+                        rhs_vf(i)%sf(j, k, l) = 0._wp
                     end do
                 end do
             end do
