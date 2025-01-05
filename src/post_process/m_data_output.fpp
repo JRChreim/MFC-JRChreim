@@ -1275,7 +1275,7 @@ contains
     subroutine s_write_energy_data_file(q_prim_vf, q_cons_vf)
         type(scalar_field), dimension(sys_size), intent(IN) :: q_prim_vf, q_cons_vf
         real(wp) :: Elk, Egk, Elp, Egint, Vb, Vl, pres_av, Et
-        real(wp) :: rho, pres, dV, tmp, gamma, pi_inf, MaxMa, MaxMa_glb, maxvel, c, Ma, H
+        real(wp) :: rho, pres, dV, tmp, gamma, pi_inf, MaxMa, MaxMa_glb, maxvel, c, Ma, H, qv
         real(wp), dimension(num_dims) :: vel
         real(wp), dimension(num_fluids) :: gammas, pi_infs, adv
         integer :: i, j, k, l, s !looping indices
@@ -1295,6 +1295,7 @@ contains
         pres_av = 0_wp
         pres = 0_wp
         c = 0._wp
+        qv = 0._wp
 
         do k = 0, p
             do j = 0, n
@@ -1319,13 +1320,14 @@ contains
                         gamma = gamma + adv(l)*fluid_pp(l)%gamma
                         pi_inf = pi_inf + adv(l)*fluid_pp(l)%pi_inf
                         rho = rho + adv(l)*q_prim_vf(l)%sf(i, j, k)
+                        qv = qv + adv(l)*q_prim_vf(l)%sf(i, j, k)*fluid_pp(l)%qv
                     end do
 
-                    H = ((gamma + 1_wp)*pres + pi_inf)/rho
+                    H = ((gamma + 1_wp)*pres + pi_inf + qv)/rho
 
                     call s_compute_speed_of_sound(pres, rho, &
                                                   gamma, pi_inf, &
-                                                  H, adv, 0._wp, 0._wp, c)
+                                                  H, adv, 0._wp, 0._wp, c, qv)
 
                     Ma = maxvel/c
                     if (Ma > MaxMa .and. (adv(1) > (1.0_wp - 1.0e-10_wp))) then

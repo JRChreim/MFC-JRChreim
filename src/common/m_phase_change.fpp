@@ -495,7 +495,7 @@ contains
             end if
 #endif
 
-            if ( ( bubbles .eqv. .false. ) .or. ( bubbles .and. (i /= num_fluids) ) ) then
+            if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
                 ! sum of the total alpha*rho*cp of the system                
                 mCP = mCP + q_cons_vf(i + contxb - 1)%sf(j, k, l)*cvs(i)*gs_min(i)
 
@@ -700,7 +700,7 @@ contains
             ! the partial masses for all fluids, or on the equilibrium pressure
             !$acc loop seq
             do i = 1, num_fluids
-                if ( ( bubbles .eqv. .false. ) .or. ( bubbles .and. (i /= num_fluids) ) ) then
+                if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
 
                     ! sum of the total alpha*rho*cp of the system
                     mCP = mCP + q_cons_vf(i + contxb - 1)%sf(j, k, l) &
@@ -1334,7 +1334,7 @@ contains
         !$acc loop seq
         do i = 1, num_fluids
 
-            if ( ( bubbles .eqv. .false. ) .or. ( bubbles .and. (i /= num_fluids) ) ) then
+            if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
                 ! volume fractions
                 q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/rhok(i)
 
