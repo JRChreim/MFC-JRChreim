@@ -94,6 +94,17 @@ contains
         @:PROHIBIT(cyl_coord .and. p > 0 .and. (z_domain%beg /= 0._wp .or. z_domain%end /= 2._wp*pi), &
             "z_domain%beg must be 0 and z_domain%end must be 2*pi for 3D cylindrical coordinates")
 
+        @:PROHIBIT(sph_coord .and. n == 0, &
+            "n must be positive for 1D axisymmetric spherical coordinates")
+        @:PROHIBIT(sph_coord .and. (f_is_default(y_domain%beg) .or. f_is_default(y_domain%end)), &
+            "y_domain%beg and y_domain%end must be set for n > 0 (1D axisymmetric spherical coordinates)")
+        @:PROHIBIT(sph_coord .and. (y_domain%beg /= 0._wp .or. y_domain%end <= 0._wp), &
+            "y_domain%beg must be 0 and y_domain%end must be positive for 1D axisymmetric spherical coordinates")
+        @:PROHIBIT(sph_coord .and. p == 0 .and. ((.not. f_is_default(z_domain%beg)) .or. (.not. f_is_default(z_domain%end))), &
+            "z_domain%beg and z_domain%end are not supported for p = 0 (1D spherical coordinates)")
+        @:PROHIBIT(sph_coord .and. p > 0 &
+            "only 1D axisymmetric (m = 1, n > 0, p = 0) is supported with spherical coordinates")
+                    
         @:PROHIBIT(num_patches < 0)
         @:PROHIBIT(num_patches == 0 .and. t_step_old == dflt_int, &
             "num_patches must be positive for the non-restart case")

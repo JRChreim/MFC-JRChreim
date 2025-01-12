@@ -1430,7 +1430,7 @@ contains
 
                                 ! Geometrical source flux for cylindrical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         !Substituting the advective flux into the inviscid geometrical source flux
                                         !$acc loop seq
                                         do i = 1, E_idx
@@ -1670,7 +1670,7 @@ contains
                                 ! Geometrical source flux for cylindrical coordinates
 
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         ! Substituting the advective flux into the inviscid geometrical source flux
                                         !$acc loop seq
                                         do i = 1, E_idx
@@ -2134,7 +2134,7 @@ contains
 
                                 ! Geometrical source flux for cylindrical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         ! Substituting the advective flux into the inviscid geometrical source flux
                                         !$acc loop seq
                                         do i = 1, E_idx
@@ -2633,7 +2633,7 @@ contains
 
                                 ! Geometrical source flux for cylindrical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         !Substituting the advective flux into the inviscid geometrical source flux
                                         !$acc loop seq
                                         do i = 1, E_idx
@@ -4419,7 +4419,7 @@ contains
                 end do
             end do
 
-            if (cyl_coord) then
+            if (cyl_coord .or. sph_coord) then
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do i = 1, sys_size
                     do l = is3%beg, is3%end

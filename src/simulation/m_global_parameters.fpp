@@ -51,9 +51,10 @@ module m_global_parameters
     !> @name Cylindrical coordinates (either axisymmetric or full 3D)
     !> @{
     logical :: cyl_coord
+    logical :: sph_coord
     integer :: grid_geometry
     !> @}
-    !$acc declare create(cyl_coord, grid_geometry)
+    !$acc declare create(cyl_coord, grid_geometry, sph_coord)
 
     !> @name Cell-boundary (CB) locations in the x-, y- and z-directions, respectively
     !> @{
@@ -488,6 +489,7 @@ contains
         m = dflt_int; n = 0; p = 0
 
         cyl_coord = .false.
+        sph_coord = .false.
 
         dt = dflt_real
 
@@ -1158,7 +1160,7 @@ contains
 
         if (cyl_coord .neqv. .true.) then ! Cartesian grid
             grid_geometry = 1
-        elseif (cyl_coord .and. p == 0) then ! Axisymmetric cylindrical grid
+        elseif ((cyl_coord .or. sph_coord) .and. p == 0) then ! Axisymmetric cylindrical grid
             grid_geometry = 2
         else ! Fully 3D cylindrical grid
             grid_geometry = 3
@@ -1188,7 +1190,7 @@ contains
         !$acc update device(cfl_target, m, n, p)
 
         !$acc update device(alt_soundspeed, acoustic_source, num_source)
-        !$acc update device(dt, sys_size, buff_size, pref, rhoref, gamma_idx, pi_inf_idx, E_idx, alf_idx, stress_idx, mpp_lim, bubbles_euler, hypoelasticity, alt_soundspeed, avg_state, num_fluids, model_eqns, num_dims, mixture_err, grid_geometry, cyl_coord, mp_weno, weno_eps, teno_CT, hyperelasticity, hyper_model, elasticity, xi_idx, low_Mach)
+        !$acc update device(dt, sys_size, buff_size, pref, rhoref, gamma_idx, pi_inf_idx, E_idx, alf_idx, stress_idx, mpp_lim, bubbles_euler, hypoelasticity, alt_soundspeed, avg_state, num_fluids, model_eqns, num_dims, mixture_err, grid_geometry, cyl_coord, mp_weno, weno_eps, teno_CT, hyperelasticity, hyper_model, elasticity, xi_idx, low_Mach, sph_coord)
 
         #:if not MFC_CASE_OPTIMIZATION
             !$acc update device(wenojs, mapped_weno, wenoz, teno)

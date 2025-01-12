@@ -158,6 +158,7 @@ contains
         @:PROHIBIT(patch_icpp(patch_id)%length_x <= 0._wp, "Line segment patch "//trim(iStr)//": length_x must be greater than zero")
         @:PROHIBIT(f_is_default(patch_icpp(patch_id)%x_centroid), "Line segment patch "//trim(iStr)//": x_centroid must be set")
         @:PROHIBIT(cyl_coord, "Line segment patch "//trim(iStr)//": cyl_coord is not supported")
+        @:PROHIBIT(sph_coord, "Line segment patch "//trim(iStr)//": sph_coord is not supported")
 
     end subroutine s_check_line_segment_patch_geometry
 

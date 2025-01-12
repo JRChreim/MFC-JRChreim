@@ -47,6 +47,7 @@ module m_global_parameters
     integer :: num_dims !< Number of spatial dimensions
 
     logical :: cyl_coord
+    logical :: sph_coord    
     integer :: grid_geometry !< Cylindrical coordinates (either axisymmetric or full 3D)
 
     real(wp), allocatable, dimension(:) :: x_cc, y_cc, z_cc !<
@@ -275,6 +276,7 @@ contains
         m = dflt_int; n = 0; p = 0
 
         cyl_coord = .false.
+        sph_coord = .false.
 
         x_domain%beg = dflt_real
         x_domain%end = dflt_real
@@ -828,7 +830,7 @@ contains
 
         if (cyl_coord .neqv. .true.) then ! Cartesian grid
             grid_geometry = 1
-        elseif (cyl_coord .and. p == 0) then ! Axisymmetric cylindrical grid
+        elseif ((cyl_coord .or. sph_coord) .and. p == 0) then ! Axisymmetric cylindrical grid
             grid_geometry = 2
         else ! Fully 3D cylindrical grid
             grid_geometry = 3
