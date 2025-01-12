@@ -102,7 +102,7 @@ contains
             "y_domain%beg must be 0 and y_domain%end must be positive for 1D axisymmetric spherical coordinates")
         @:PROHIBIT(sph_coord .and. p == 0 .and. ((.not. f_is_default(z_domain%beg)) .or. (.not. f_is_default(z_domain%end))), &
             "z_domain%beg and z_domain%end are not supported for p = 0 (1D spherical coordinates)")
-        @:PROHIBIT(sph_coord .and. p > 0 &
+        @:PROHIBIT(sph_coord .and. p > 0, &
             "only 1D axisymmetric (m = 1, n > 0, p = 0) is supported with spherical coordinates")
                     
         @:PROHIBIT(num_patches < 0)
