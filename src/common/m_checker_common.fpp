@@ -187,7 +187,7 @@ contains
         @:PROHIBIT(n < 0)
         @:PROHIBIT(p < 0)
         @:PROHIBIT(cyl_coord .and. p > 0 .and. mod(p, 2) /= 1, "p must be odd for cylindrical coordinates")
-        @:PROHIBIT(sph_coord .and. m /= 1 .and. p > 0, "m must not be different than 1 and p not greater than 0 for axysimmetric spherical coordinates")
+        @:PROHIBIT(sph_coord .and. p > 0, "p must not be greater than 0 for axysimmetric spherical coordinates")
         @:PROHIBIT(n == 0 .and. p > 0, "p must be 0 if n = 0")
     end subroutine s_check_inputs_simulation_domain
 
@@ -251,7 +251,7 @@ contains
 
         ! Check for y and z directions for cylindrical coordinates
         @: PROHIBIT(cyl_coord .and. n == 0, "n must be positive (2D or 3D) for cylindrical coordinates")
-        @: PROHIBIT(sph_coord .and. m /= 1, "m must be one (1D) for axysimmetric spherical coordinates")
+        @: PROHIBIT(sph_coord .and. n == 0, "n must be positive (1D) for axysimmetric spherical coordinates")
         @: PROHIBIT(cyl_coord .and. p == 0 .and. bc_y%beg /= -2, "bc_y%beg must be -2 for 2D cylindrical coordinates (p = 0)")
         @: PROHIBIT(sph_coord .and. p == 0 .and. bc_y%beg /= -2, "bc_y%beg must be -2 axysimmetric spherical coordinates (p = 0)")
         @: PROHIBIT(cyl_coord .and. p > 0 .and. bc_y%beg /= -14, "bc_y%beg must be -14 for 3D cylindrical coordinates (p > 0)")
