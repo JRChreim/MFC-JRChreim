@@ -1617,7 +1617,7 @@ contains
                 end do
             end if
 
-            if (cyl_coord .and. ((bc_y%beg == -2) .or. (bc_y%beg == -14))) then
+            if ((cyl_coord .or. sph_coord) .and. ((bc_y%beg == -2) .or. (bc_y%beg == -14))) then
                 if (viscous) then
                     if (p > 0) then
                         call s_compute_viscous_stress_tensor(q_prim_vf, &
@@ -1727,6 +1727,57 @@ contains
                                         rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
                                         (flux_src_n(i)%sf(j, k - 1, l) &
                                          + flux_src_n(i)%sf(j, k, l))
+                                end do
+                            end do
+                        end do
+                    end do
+
+                end if
+            ! Applying the geometrical viscous Riemann source fluxes calculated as average
+            ! of values at cell boundaries
+            else if (sph_coord) then
+                if ((bc_y%beg == -2) .or. (bc_y%beg == -14)) then
+
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = 0, p
+                        do k = 1, n
+                            do j = 0, m
+                                !$acc loop seq
+                                do i = momxb, E_idx
+                                    rhs_vf(i)%sf(j, k, l) = &
+                                        rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
+                                        (flux_src_n(i)%sf(j, k - 1, l) &
+                                            + flux_src_n(i)%sf(j, k, l))
+                                end do
+                            end do
+                        end do
+                    end do
+
+                    if (viscous) then
+                        !$acc parallel loop collapse(2) gang vector default(present)
+                        do l = 0, p
+                            do j = 0, m
+                                !$acc loop seq
+                                do i = momxb, E_idx
+                                    rhs_vf(i)%sf(j, 0, l) = &
+                                        rhs_vf(i)%sf(j, 0, l) - 1._wp/y_cc(0)* &
+                                        tau_Re_vf(i)%sf(j, 0, l)
+                                end do
+                            end do
+                        end do
+                    end if
+                else
+
+                    !$acc parallel loop collapse(3) gang vector default(present)
+                    do l = 0, p
+                        do k = 0, n
+                            do j = 0, m
+                                !$acc loop seq
+                                do i = momxb, E_idx
+                                    rhs_vf(i)%sf(j, k, l) = &
+                                        rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
+                                        (flux_src_n(i)%sf(j, k - 1, l) &
+                                            + flux_src_n(i)%sf(j, k, l))
                                 end do
                             end do
                         end do
