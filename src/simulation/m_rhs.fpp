@@ -932,8 +932,11 @@ contains
         integer :: i, j, k, l, q
 
         ! determining what the multiplying factor will be for the source terms in the cylindrical/spherical coordinates
-        if ( cyl_coord ) multip = 5e-1_wp
-        else if ( sph_coord ) multip = 1e-0_wp
+        if (cyl_coord) then
+            multip = 5e-1_wp
+        else if (sph_coord) then
+            multip = 1e-0_wp
+        end if
 
         if (alt_soundspeed) then
             !$acc parallel loop collapse(3) gang vector default(present)
@@ -1205,27 +1208,14 @@ contains
                                     end do
                                 end do
                             end do
-                            if (cyl_coord) then
+                            if (cyl_coord .or. sph_coord) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
                                                 rhs_vf(j)%sf(q, k, l) + &
-                                                (Kterm(q, k, l)/2._wp/y_cc(k))* &
-                                                (flux_src_n(2)%vf(j)%sf(q, k, l) &
-                                                 + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
-                                        end do
-                                    end do
-                                end do
-                            elseif (sph_coord) then
-                                !$acc parallel loop collapse(3) gang vector default(present)
-                                do l = 0, p
-                                    do k = 0, n
-                                        do q = 0, m
-                                            rhs_vf(j)%sf(q, k, l) = &
-                                                rhs_vf(j)%sf(q, k, l) + &
-                                                (Kterm(q, k, l)/1._wp/y_cc(k))* &
+                                                multip * (Kterm(q, k, l)/y_cc(k))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                  + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
@@ -1364,27 +1354,14 @@ contains
                                         end do
                                     end do
                                 end do
-                                if (cyl_coord) then
+                                if (cyl_coord .or. sph_coord) then
                                     !$acc parallel loop collapse(3) gang vector default(present)
                                     do l = 0, p
                                         do k = 0, n
                                             do q = 0, m
                                                 rhs_vf(j)%sf(q, k, l) = &
                                                     rhs_vf(j)%sf(q, k, l) - &
-                                                    (Kterm(q, k, l)/2._wp/y_cc(k))* &
-                                                    (flux_src_n(2)%vf(j)%sf(q, k, l) &
-                                                     + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
-                                            end do
-                                        end do
-                                    end do
-                                elseif (sph_coord) then
-                                    !$acc parallel loop collapse(3) gang vector default(present)
-                                    do l = 0, p
-                                        do k = 0, n
-                                            do q = 0, m
-                                                rhs_vf(j)%sf(q, k, l) = &
-                                                    rhs_vf(j)%sf(q, k, l) - &
-                                                    (Kterm(q, k, l)/1._wp/y_cc(k))* &
+                                                    multip * (Kterm(q, k, l)/y_cc(k))* &
                                                     (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                      + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                             end do
@@ -1404,27 +1381,14 @@ contains
                                         end do
                                     end do
                                 end do
-                                if (cyl_coord) then
+                                if (cyl_coord .or. sph_coord) then
                                     !$acc parallel loop collapse(3) gang vector default(present)
                                     do l = 0, p
                                         do k = 0, n
                                             do q = 0, m
                                                 rhs_vf(j)%sf(q, k, l) = &
                                                     rhs_vf(j)%sf(q, k, l) + &
-                                                    (Kterm(q, k, l)/2._wp/y_cc(k))* &
-                                                    (flux_src_n(2)%vf(j)%sf(q, k, l) &
-                                                     + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
-                                            end do
-                                        end do
-                                    end do
-                                elseif (sph_coord) then
-                                    !$acc parallel loop collapse(3) gang vector default(present)
-                                    do l = 0, p
-                                        do k = 0, n
-                                            do q = 0, m
-                                                rhs_vf(j)%sf(q, k, l) = &
-                                                    rhs_vf(j)%sf(q, k, l) + &
-                                                    (Kterm(q, k, l)/1._wp/y_cc(k))* &
+                                                    multip * (Kterm(q, k, l)/y_cc(k))* &
                                                     (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                      + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                             end do
@@ -1527,8 +1491,16 @@ contains
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
         type(scalar_field), dimension(sys_size), intent(in) :: flux_src_n
         type(scalar_field), dimension(sys_size), intent(in) :: dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf
+        real(wp) :: multip
 
         integer :: i, j, k, l
+
+        ! determining what the multiplying factor will be for the source terms in the cylindrical/spherical coordinates
+        if (cyl_coord) then
+            multip = 5e-1_wp
+        else if (sph_coord) then
+            multip = 1e-0_wp
+        end if
 
         if (idir == 1) then ! x-direction
 
@@ -1646,7 +1618,7 @@ contains
 
             ! Applying the geometrical viscous Riemann source fluxes calculated as average
             ! of values at cell boundaries
-            if (cyl_coord) then
+            if (cyl_coord .or. sph_coord) then
                 if ((bc_y%beg == -2) .or. (bc_y%beg == -14)) then
 
                     !$acc parallel loop collapse(3) gang vector default(present)
@@ -1656,7 +1628,7 @@ contains
                                 !$acc loop seq
                                 do i = momxb, E_idx
                                     rhs_vf(i)%sf(j, k, l) = &
-                                        rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
+                                        rhs_vf(i)%sf(j, k, l) - multip/y_cc(k)* &
                                         (flux_src_n(i)%sf(j, k - 1, l) &
                                          + flux_src_n(i)%sf(j, k, l))
                                 end do
@@ -1686,60 +1658,9 @@ contains
                                 !$acc loop seq
                                 do i = momxb, E_idx
                                     rhs_vf(i)%sf(j, k, l) = &
-                                        rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
+                                        rhs_vf(i)%sf(j, k, l) - multip/y_cc(k)* &
                                         (flux_src_n(i)%sf(j, k - 1, l) &
                                          + flux_src_n(i)%sf(j, k, l))
-                                end do
-                            end do
-                        end do
-                    end do
-
-                end if
-            ! Applying the geometrical viscous Riemann source fluxes calculated as average
-            ! of values at cell boundaries
-            else if (sph_coord) then
-                if ((bc_y%beg == -2) .or. (bc_y%beg == -14)) then
-
-                    !$acc parallel loop collapse(3) gang vector default(present)
-                    do l = 0, p
-                        do k = 1, n
-                            do j = 0, m
-                                !$acc loop seq
-                                do i = momxb, E_idx
-                                    rhs_vf(i)%sf(j, k, l) = &
-                                        rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
-                                        (flux_src_n(i)%sf(j, k - 1, l) &
-                                            + flux_src_n(i)%sf(j, k, l))
-                                end do
-                            end do
-                        end do
-                    end do
-
-                    if (viscous) then
-                        !$acc parallel loop collapse(2) gang vector default(present)
-                        do l = 0, p
-                            do j = 0, m
-                                !$acc loop seq
-                                do i = momxb, E_idx
-                                    rhs_vf(i)%sf(j, 0, l) = &
-                                        rhs_vf(i)%sf(j, 0, l) - 1._wp/y_cc(0)* &
-                                        tau_Re_vf(i)%sf(j, 0, l)
-                                end do
-                            end do
-                        end do
-                    end if
-                else
-
-                    !$acc parallel loop collapse(3) gang vector default(present)
-                    do l = 0, p
-                        do k = 0, n
-                            do j = 0, m
-                                !$acc loop seq
-                                do i = momxb, E_idx
-                                    rhs_vf(i)%sf(j, k, l) = &
-                                        rhs_vf(i)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
-                                        (flux_src_n(i)%sf(j, k - 1, l) &
-                                            + flux_src_n(i)%sf(j, k, l))
                                 end do
                             end do
                         end do
