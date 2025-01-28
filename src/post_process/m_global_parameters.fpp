@@ -834,7 +834,7 @@ contains
 
         allocate (adv(num_fluids))
 
-        if (cyl_coord .neqv. .true.) then ! Cartesian grid
+        if ( (cyl_coord .or. sph_coord) .neqv. .true.) then ! Cartesian grid
             grid_geometry = 1
         elseif ((cyl_coord .or. sph_coord) .and. p == 0) then ! Axisymmetric cylindrical grid
             grid_geometry = 2
