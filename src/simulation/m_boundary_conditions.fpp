@@ -460,6 +460,12 @@ contains
                                 q_prim_vf(xibeg + 1)%sf(l, -j, k) = &
                                     -q_prim_vf(xibeg + 1)%sf(l, j - 1, k)
                             end if
+
+                            ! adding to conditions into the gradients to
+                            ! properly enforce cylindrical/spherical BCs
+                            if (cyl_coord .or. sph_coord) then
+                                
+                            end if
                         end do
                     end do
                 end do
