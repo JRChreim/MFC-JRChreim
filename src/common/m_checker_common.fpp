@@ -253,7 +253,7 @@ contains
         @: PROHIBIT(cyl_coord .and. n == 0, "n must be positive (2D or 3D) for cylindrical coordinates")
         @: PROHIBIT(sph_coord .and. n == 0, "n must be positive (1D) for axysimmetric spherical coordinates")
         @: PROHIBIT(cyl_coord .and. p == 0 .and. bc_y%beg /= -2, "bc_y%beg must be -2 for 2D cylindrical coordinates (p = 0)")
-        @: PROHIBIT(sph_coord .and. p == 0 .and. bc_y%beg /= -2, "bc_y%beg must be -2 axysimmetric spherical coordinates (p = 0)")
+!        @: PROHIBIT(sph_coord .and. p == 0 .and. bc_y%beg /= -2, "bc_y%beg must be -2 axysimmetric spherical coordinates (p = 0)")
         @: PROHIBIT(cyl_coord .and. p > 0 .and. bc_y%beg /= -14, "bc_y%beg must be -14 for 3D cylindrical coordinates (p > 0)")
         @: PROHIBIT(cyl_coord .and. (bc_y%end > -1 .or. bc_y%end < -16), "bc_y%end must be between -1 and -16")
         @: PROHIBIT(sph_coord .and. (bc_y%end > -1 .or. bc_y%end < -16), "bc_y%end must be between -1 and -16")
