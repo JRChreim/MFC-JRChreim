@@ -1085,11 +1085,11 @@ contains
                            flux_src_n(idir)%vf, idir, 1, irx, iry, irz)
             end if
 
-            print *, 'y_cb', y_cb
-            print *, 'y_cc', y_cc
-            print *, 'dy', dy
+            ! print *, 'y_cb', y_cb
+            ! print *, 'y_cc', y_cc
+            ! print *, 'dy', dy
 
-            pause
+            ! pause
 
             !$acc parallel loop collapse(4) gang vector default(present)
             do j = 1, sys_size

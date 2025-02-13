@@ -129,6 +129,10 @@
             q_prim_vf(advxe)%sf(i, j, 0) = patch_icpp(1)%alpha(2)
         end if
 
+    case (207) ! Spherical Pressure Pulse (Meng's Thesis, 2016) - Solution to Wave Equation
+
+        q_prim_vf(E_idx)%sf(i, j, 0) = 1.1 * patch_icpp(1)%pres * exp( - pi * y_cc(j) ** 2 )
+
     case default
         if (proc_rank == 0) then
             call s_int_to_str(patch_id, iStr)
