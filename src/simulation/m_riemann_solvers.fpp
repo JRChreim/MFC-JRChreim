@@ -861,7 +861,7 @@ contains
                             end if
 
                             #:if (NORM_DIR == 2)
-                                if (cyl_coord) then
+                                if (cyl_coord .or. sph_coord) then
                                     !Substituting the advective flux into the inviscid geometrical source flux
                                     !$acc loop seq
                                     do i = 1, E_idx
@@ -879,7 +879,7 @@ contains
                                     ! Geometrical source of the void fraction(s) is zero
                                     !$acc loop seq
                                     do i = advxb, advxe
-                                        flux_gsrc_rs${XYZ}$_vf(j, k, l, i) = flux_rs${XYZ}$_vf(j, k, l, i)
+                                        flux_gsrc_rs${XYZ}$_vf(j, k, l, i) = 0*flux_rs${XYZ}$_vf(j, k, l, i)
                                     end do
                                 end if
                             #:endif

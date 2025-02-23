@@ -927,7 +927,7 @@ contains
         type(vector_field), intent(inout) :: q_cons_vf
         type(vector_field), intent(inout) :: q_prim_vf
         type(vector_field), intent(inout) :: flux_src_n_vf
-        real(wp) :: multip, dyaux
+        real(wp) :: multip
 
         integer :: i, j, k, l, q
 
@@ -1084,22 +1084,11 @@ contains
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, &
                            flux_src_n(idir)%vf, idir, 1, irx, iry, irz)
             end if
-
-            ! print *, 'y_cb', y_cb
-            ! print *, 'y_cc', y_cc
-            ! print *, 'dy', dy
-
-            ! pause
-
+            
             !$acc parallel loop collapse(4) gang vector default(present)
             do j = 1, sys_size
                 do l = 0, p
                     do k = 0, n
-                        if (k == 0) then
-                            dyaux = 0._wp
-                        else 
-                            dyaux = 1._wp
-                        end if
                         do q = 0, m
                             rhs_vf(j)%sf(q, k, l) = &
                                 rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
@@ -1108,19 +1097,15 @@ contains
                                 ! geometric source term. For Cartesian, multip == 0.
                                 ! for Cylindrical, multip == 1/2. For Sperical,
                                 ! multip == 1.
-                                - dyaux * multip/y_cc(k)* &
+                                - multip/y_cc(k)* &
                                 (flux_gsrc_n(2)%vf(j)%sf(q, k, l) &
                                  + flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l))
 
-                                 if (k == 0) then
-                                    if ( abs( flux_gsrc_n(2)%vf(j)%sf(q, k, l) ) .ne. &
-                                         abs( flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l) ) ) then
-
-                                            print *, 'gsrck', flux_gsrc_n(2)%vf(j)%sf(q, k, l)
-                                            print *, 'gsrck-1', flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l)
-                                            pause
-                                    end if 
-                                 end if
+                                if ( (k .eq. 0) .and. abs(flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l)) .ge. 1E-1 ) then
+                                    print *, 'crap 1106'
+                                    print *, 'k-1', flux_n(2)%vf(j)%sf(q, k - 1, l)
+                                    print *, 'gsrck-1', flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l)
+                                end if
                         end do
                     end do
                 end do
@@ -1130,11 +1115,6 @@ contains
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do l = 0, p
                     do k = 0, n
-                        if (k == 0) then
-                            dyaux = 0._wp
-                        else 
-                            dyaux = 1._wp
-                        end if
                         do j = 0, m
                             do i = 1, num_fluids
                                 rhs_vf(i + intxb - 1)%sf(j, k, l) = &
@@ -1146,11 +1126,16 @@ contains
                                      ! geometric source term. For Cartesian, multip == 0.
                                      ! for Cylindrical, multip == 1/2. For Sperical,
                                      ! multip == 1.
-                                     - dyaux * multip/y_cc(k)* &
+                                     - multip/y_cc(k)* &
                                      q_cons_vf%vf(i + advxb - 1)%sf(j, k, l)* &
                                      q_prim_vf%vf(E_idx)%sf(j, k, l)* &
                                      (flux_src_n(2)%vf(advxb)%sf(j, k, l) + &
                                       flux_src_n(2)%vf(advxb)%sf(j, k - 1, l))
+
+                                    if ( (k .eq. 0) .and. abs(flux_src_n(2)%vf(advxb)%sf(j, k - 1, l)) .ge. 1E-1 ) then
+                                        ! print *, 'crap 1137'
+                                        ! print *, 'srck-1', flux_src_n(2)%vf(advxb)%sf(j, k - 1, l)
+                                    end if
                             end do
                         end do
                     end do
@@ -1162,11 +1147,6 @@ contains
                 do j = advxb, advxe
                     do l = 0, p
                         do k = 0, n
-                            if (k == 0) then
-                                dyaux = 0._wp
-                            else 
-                                dyaux = 1._wp
-                            end if
                             do q = 0, m
                                 rhs_vf(j)%sf(q, k, l) = &
                                     rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
@@ -1176,7 +1156,7 @@ contains
                                     ! geometric source term. For Cartesian, multip == 0.
                                     ! for Cylindrical, multip == 1/2. For Sperical,
                                     ! multip == 1.
-                                    - dyaux * multip / y_cc(k) * &
+                                    - multip / y_cc(k) * &
                                     (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                     + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                             end do
@@ -1190,11 +1170,6 @@ contains
                             !$acc parallel loop collapse(3) gang vector default(present)
                             do l = 0, p
                                 do k = 0, n
-                                    if (k == 0) then
-                                        dyaux = 0._wp
-                                    else 
-                                        dyaux = 1._wp
-                                    end if
                                     do q = 0, m
                                         rhs_vf(j)%sf(q, k, l) = &
                                             rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
@@ -1204,7 +1179,7 @@ contains
                                             ! geometric source term. For Cartesian, multip == 0.
                                             ! for Cylindrical, multip == 1/2. For Sperical,
                                             ! multip == 1.
-                                            - dyaux * multip * (Kterm(q, k, l)/y_cc(k))* &
+                                            - multip * (Kterm(q, k, l)/y_cc(k))* &
                                             (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                             + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                     end do
@@ -1214,11 +1189,6 @@ contains
                             !$acc parallel loop collapse(3) gang vector default(present)
                             do l = 0, p
                                 do k = 0, n
-                                    if (k == 0) then
-                                        dyaux = 0._wp
-                                    else 
-                                        dyaux = 1._wp
-                                    end if
                                     do q = 0, m
                                         rhs_vf(j)%sf(q, k, l) = &
                                             rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
@@ -1228,7 +1198,7 @@ contains
                                             ! geometric source term. For Cartesian, multip == 0.
                                             ! for Cylindrical, multip == 1/2. For Sperical,
                                             ! multip == 1.
-                                            + dyaux * multip * (Kterm(q, k, l)/y_cc(k))* &
+                                            + multip * (Kterm(q, k, l)/y_cc(k))* &
                                             (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                              + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                     end do
@@ -1241,11 +1211,6 @@ contains
                     do j = advxb, advxe
                         do l = 0, p
                             do k = 0, n
-                                if (k == 0) then
-                                    dyaux = 0._wp
-                                else 
-                                    dyaux = 1._wp
-                                end if
                                 do q = 0, m
                                     rhs_vf(j)%sf(q, k, l) = &
                                         rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
@@ -1255,7 +1220,7 @@ contains
                                         ! geometric source term. For Cartesian, multip == 0.
                                         ! for Cylindrical, multip == 1/2. For Sperical,
                                         ! multip == 1.
-                                        - dyaux * multip / y_cc(k) * &
+                                        - multip / y_cc(k) * &
                                         (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                         + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                 end do
@@ -1368,11 +1333,6 @@ contains
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
-                                        if (k == 0) then
-                                            dyaux = 0._wp
-                                        else 
-                                            dyaux = 1._wp
-                                        end if
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
                                                 rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
@@ -1382,7 +1342,7 @@ contains
                                                 ! geometric source term. For Cartesian, multip == 0.
                                                 ! for Cylindrical, multip == 1/2. For Sperical,
                                                 ! multip == 1.
-                                                - dyaux * multip * (Kterm(q, k, l)/y_cc(k))* &
+                                                - multip * (Kterm(q, k, l)/y_cc(k))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                 + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
@@ -1392,11 +1352,6 @@ contains
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
-                                        if (k == 0) then
-                                            dyaux = 0._wp
-                                        else 
-                                            dyaux = 1._wp
-                                        end if
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
                                                 rhs_vf(j)%sf(q, k, l) + 1._wp/dy(k)* &
@@ -1406,7 +1361,7 @@ contains
                                                 ! geometric source term. For Cartesian, multip == 0.
                                                 ! for Cylindrical, multip == 1/2. For Sperical,
                                                 ! multip == 1.
-                                                + dyaux * multip * (Kterm(q, k, l)/y_cc(k))* &
+                                                + multip * (Kterm(q, k, l)/y_cc(k))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                 + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
@@ -1787,11 +1742,9 @@ contains
                         do i = 1, num_fluids
                             if ((q_cons_vf(i + contxb - 1)%sf(j, k, l) < 0._wp) .or. &
                                 (q_cons_vf(i + advxb - 1)%sf(j, k, l) < 0._wp)) then
-                                !    PRINT *, 'm_rhs line 1875, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                                 q_cons_vf(i + contxb - 1)%sf(j, k, l) = 0._wp
                                 q_cons_vf(i + advxb - 1)%sf(j, k, l) = 0._wp
                                 q_cons_vf(i + intxb - 1)%sf(j, k, l) = 0._wp
-                                !    PRINT *, 'm_rhs line 1879, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                             end if
 
                             if (q_cons_vf(i + advxb - 1)%sf(j, k, l) > 1._wp) &
@@ -1801,9 +1754,7 @@ contains
 
                         !$acc loop seq
                         do i = 1, num_fluids
-                        !    PRINT *, 'm_rhs line 1889, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                             q_cons_vf(i + advxb - 1)%sf(j, k, l) = q_cons_vf(i + advxb - 1)%sf(j, k, l)/sum_alpha
-                        !    PRINT *, 'm_rhs line 1891, vf', q_cons_vf(i + advxb - 1)%sf(j, k, l)
                         end do
                     end if
 
@@ -1936,10 +1887,6 @@ contains
                         sum_alpha = 0._wp
 
                         if (mpp_lim) then
-                            ! if ( alpha(2) > 1E-16) then
-                            !     PRINT *, 'm_rhs, m, vf, 2027'
-                            !     PRINT *, alpha_rho(2), alpha(2)
-                            ! end if
                             
                             !$acc loop seq
                             do i = 1, num_fluids
@@ -1949,11 +1896,6 @@ contains
                             end do
 
                             alpha = alpha/max(sum_alpha, sgm_eps)
-
-                            ! if ( alpha(2) > 1E-16) then
-                            !    PRINT *, 'm_rhs, m, vf, 2041'
-                            !    PRINT *, alpha_rho(2), alpha(2)
-                            ! end if
 
                         end if
 
