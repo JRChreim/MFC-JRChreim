@@ -1377,6 +1377,9 @@ contains
                     ! mass flux, this should be \alpha_i \rho_i u_i
                     !$acc loop seq
                     do i = 1, contxe
+                        print *, j, k, l, i
+                        print *, is3b, is3e, is2b, is2e, is1b, is1e
+                        print *, dir_idx(1)
                         FK_vf(j, k, l, i) = alpha_rho_K(i)*vel_K(dir_idx(1))
                     end do
 

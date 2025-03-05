@@ -879,7 +879,7 @@ contains
                                     ! Geometrical source of the void fraction(s) is zero
                                     !$acc loop seq
                                     do i = advxb, advxe
-                                        flux_gsrc_rs${XYZ}$_vf(j, k, l, i) = 0*flux_rs${XYZ}$_vf(j, k, l, i)
+                                        flux_gsrc_rs${XYZ}$_vf(j, k, l, i) = 1*flux_rs${XYZ}$_vf(j, k, l, i)
                                     end do
                                 end if
                             #:endif
