@@ -1100,12 +1100,6 @@ contains
                                 - multip/y_cc(k)* &
                                 (flux_gsrc_n(2)%vf(j)%sf(q, k, l) &
                                  + flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l))
-
-                                if ( (k .eq. 0) .and. abs(flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l)) .ge. 1E-1 ) then
-                                    ! print *, 'crap 1106'
-                                    ! print *, 'k-1', flux_n(2)%vf(j)%sf(q, k - 1, l)
-                                    ! print *, 'gsrck-1', flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l)
-                                end if
                         end do
                     end do
                 end do
@@ -1131,11 +1125,6 @@ contains
                                      q_prim_vf%vf(E_idx)%sf(j, k, l)* &
                                      (flux_src_n(2)%vf(advxb)%sf(j, k, l) + &
                                       flux_src_n(2)%vf(advxb)%sf(j, k - 1, l))
-
-                                    if ( (k .eq. 0) .and. abs(flux_src_n(2)%vf(advxb)%sf(j, k - 1, l)) .ge. 1E-1 ) then
-                                        ! print *, 'crap 1137'
-                                        ! print *, 'srck-1', flux_src_n(2)%vf(advxb)%sf(j, k - 1, l)
-                                    end if
                             end do
                         end do
                     end do

@@ -280,22 +280,12 @@ contains
         end do
 
         if (mpp_lim) then
-            ! if ( alpha_K(2) > 1E-8) then
-            !     PRINT *, 'mpp_variables, m, vf, 266'
-            !     PRINT *, alpha_rho_K(2), alpha_K(2)
-            ! end if
-
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0._wp, alpha_rho_K(i))
                 alpha_K(i) = min(max(0._wp, alpha_K(i)), 1._wp)
             end do
 
             alpha_K = alpha_K/max(sum(alpha_K), 1e-16_wp)
-            
-            ! if ( alpha_K(2) > 1E-8) then
-            !     PRINT *, 'mpp_variables, m, vf, 278'
-            !     PRINT *, alpha_rho_K(2), alpha_K(2)
-            ! end if
 
         end if
 
@@ -339,14 +329,6 @@ contains
                 pi_inf = fluid_pp(1)%pi_inf
                 qv = fluid_pp(1)%qv
             end if
-
-            do i = 1, num_fluids
-                if (isnan(alpha_rho_K(i))) then
-                    print *, 's_convert_species_to_mixture_variables_bubbles'
-                    print *, i, alpha_K(i)
-                    print *, i, alpha_rho_K(i)
-                end if
-            end do
 
         end if
 
@@ -424,22 +406,12 @@ contains
 
         if (mpp_lim) then
 
-            ! if ( alpha_K(2) > 1E-8) then
-            !     PRINT *, 'mpp_variables, m, vf, 402'
-            !     PRINT *, alpha_rho_K(2), alpha_K(2)
-            ! end if
-
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0._wp, alpha_rho_K(i))
                 alpha_K(i) = min(max(0._wp, alpha_K(i)), 1._wp)
             end do
 
             alpha_K = alpha_K/max(sum(alpha_K), 1e-16_wp)
-
-            ! if ( alpha_K(2) > 1E-8) then
-            !     PRINT *, 'mpp_variables, m, vf, 414'
-            !     PRINT *, alpha_rho_K(2), alpha_K(2)
-            ! end if
 
         end if
 
@@ -525,11 +497,6 @@ contains
         alpha_K_sum = 0._wp
 
         if (mpp_lim) then
-            
-            ! if ( alpha_K(2) > 1E-8) then
-            !     PRINT *, 'mpp_variables, m, vf, 505'
-            !     PRINT *, alpha_rho_K(2), alpha_K(2)
-            ! end if
 
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0._wp, alpha_rho_K(i))
@@ -538,11 +505,6 @@ contains
             end do
 
             alpha_K = alpha_K/max(alpha_K_sum, sgm_eps)
-
-            ! if ( alpha_K(2) > 1E-8) then
-            !     PRINT *, 'mpp_variables, m, vf, 517'
-            !     PRINT *, alpha_rho_K(2), alpha_K(2)
-            ! end if
 
         end if
 
@@ -1377,9 +1339,6 @@ contains
                     ! mass flux, this should be \alpha_i \rho_i u_i
                     !$acc loop seq
                     do i = 1, contxe
-                        print *, j, k, l, i
-                        print *, is3b, is3e, is2b, is2e, is1b, is1e
-                        print *, dir_idx(1)
                         FK_vf(j, k, l, i) = alpha_rho_K(i)*vel_K(dir_idx(1))
                     end do
 
