@@ -1571,8 +1571,6 @@ contains
 
                                 call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
                                                               vel_avg_rms, 0._wp, c_avg, qv_avg)
-
-                                ! print *, 'm_riemann_solvers 1364', alt_soundspeed, c_L, c_R, c_avg
                                     
                                 if (wave_speeds == 1) then
                                     s_L = min(vel_L(dir_idx(1)) - c_L, vel_R(dir_idx(1)) - c_R)
