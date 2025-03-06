@@ -1493,8 +1493,16 @@ contains
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
         type(scalar_field), dimension(sys_size), intent(in) :: flux_src_n
         type(scalar_field), dimension(sys_size), intent(in) :: dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf
+        real(wp) :: multip
 
         integer :: i, j, k, l
+
+        ! determining what the multiplying factor will be for the source terms in the cylindrical/spherical coordinates
+        if (cyl_coord) then
+            multip = 5e-1_wp
+        else if (sph_coord) then
+            multip = 1e-0_wp
+        end if
 
         if (idir == 1) then ! x-direction
 
@@ -1545,7 +1553,7 @@ contains
                 end do
             end if
 
-            if (cyl_coord .and. ((bc_y%beg == -2) .or. (bc_y%beg == -14))) then
+            if ((cyl_coord .or. sph_coord) .and. ((bc_y%beg == -2) .or. (bc_y%beg == -14))) then
                 if (viscous) then
                     if (p > 0) then
                         call s_compute_viscous_stress_tensor(q_prim_vf, &
