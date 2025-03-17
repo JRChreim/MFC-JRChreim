@@ -41,14 +41,14 @@ print(
             "mapped_weno": "F",
             "null_weights": "F",
             "mp_weno": "F",
-            "riemann_solver": 1,
+            "riemann_solver": 2,
             "wave_speeds": 1,
             "avg_state": 2,
             "bc_x%beg": -3,
             "bc_x%end": -3,
             # Turning on Hypoelasticity
-            "hypoelasticity": "T",
-            "fd_order": 4,
+#            "hypoelasticity": "T",
+#            "fd_order": 4,
             # Formatted Database Files Structure Parameters
             "format": 1,
             "precision": 2,

@@ -4615,4 +4615,13 @@ contains
 
     end subroutine s_finalize_riemann_solvers_module
 
+    ! subroutine s_calculate_hllc_riemann_fluxes
+    !     ! this subroutine serve to calculate the general structure of the HLLC Riemann Solver. 
+    !     ! In general, one can write for the HLLC Riemann Solver
+    !     ! f^HLLC = (1 + sign(s*))/2 * [fL + s-(q*L - qL)] + (1 - sign(s*))/2 * [fR + s-(q*R - qR)]
+
+    !     fHLLC = 
+
+
+    ! end subroutine s_calculate_hll_riemann_fluxes
 end module m_riemann_solvers

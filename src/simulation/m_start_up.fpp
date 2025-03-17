@@ -1654,7 +1654,6 @@ contains
         call s_finalize_mpi_common_module()
         call s_finalize_mpi_proxy_module()
         call s_finalize_global_parameters_module()
-        if (relax) call s_finalize_relaxation_solver_module()
         if (bubbles_lagrange) call s_finalize_lagrangian_solver()
         if (viscous) then
             call s_finalize_viscous_module()

@@ -926,7 +926,6 @@ contains
         call s_finalize_global_parameters_module()
         call s_finalize_assign_variables_module()
         call s_finalize_perturbation_module()
-        if (relax) call s_finalize_relaxation_solver_module()
 
         ! Finalization of the MPI environment
         call s_mpi_finalize()
