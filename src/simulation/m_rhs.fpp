@@ -1127,6 +1127,12 @@ contains
             end if
 
         elseif (idir == 2) then
+
+            ! this is unnecessary later on. it is for the purpose of testing
+            do j = 1, sys_size
+                rhs_vfT(j)%sf(:, :, :) = rhs_vf(j)%sf(:, :, :)
+            end do
+
             ! RHS Contribution in y-direction
             ! Applying the Riemann fluxes
 
@@ -1161,26 +1167,9 @@ contains
                 end do
             end do
 
-                ! testing
-                call s_calculate_rhs_operator(idir, 1, sys_size, 0, m, 0, n, 0, p, multip, rhs_vfT, flux_n, flux_gsrc_n, &
-                                            KNill, iden_cons_vf, iden_prim_vf, 0, 1, KNill, iden_cons_vf, iden_prim_vf, 0, 1, 'L')
-                do j = 1, sys_size
-                do q = 0, p
-                do l = 0, n
-                do k = 0, m
-                if ( abs( rhs_vf(j)%sf(k, l, q) - rhs_vfT(j)%sf(k, l, q) ) .ge. 1e-10_wp ) then
-                if ( ( ( rhs_vf(j)%sf(k, l, q) - rhs_vfT(j)%sf(k, l, q) ) / rhs_vf(j)%sf(k, l, q) ) .ge. 1e-16_wp ) then
-                print *, 'line 1135'
-                print *, rhs_vf(j)%sf(k, l, q)
-                print *, rhs_vfT(j)%sf(k, l, q) 
-                print *, ( rhs_vf(j)%sf(k, l, q) - rhs_vfT(j)%sf(k, l, q) )
-                print *, ( rhs_vf(j)%sf(k, l, q) - rhs_vfT(j)%sf(k, l, q) ) / rhs_vf(j)%sf(k, l, q)
-                end if
-                end if
-                end do
-                end do
-                end do
-                end do
+            ! tested as of 17/03/2025
+            call s_calculate_rhs_operator(idir, 1, sys_size, 0, m, 0, n, 0, p, multip, rhs_vfT, flux_n, flux_gsrc_n, &
+                                        KNill, iden_cons_vf, iden_prim_vf, 0, 1, KNill, iden_cons_vf, iden_prim_vf, 0, 1, 'L')
 
             if (model_eqns == 3) then
                 !$acc parallel loop collapse(4) gang vector default(present)
@@ -1209,9 +1198,6 @@ contains
             end if
 
             if (riemann_solver == 1) then
-                ! testing
-                ! call s_calculate_rhs_operator(idir, advxb, advxe, 0, m, 0, n, 0, p, multip, rhs_vfT, flux_src_n, &
-                !                               flux_src_n, iden_cons_vf, q_prim_vf, 0, contxe + idir, iden_cons_vf, iden_prim_vf, 0, contxe + idir)
 
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do j = advxb, advxe
@@ -1229,10 +1215,30 @@ contains
                                     - multip / y_cc(k) * &
                                     (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                     + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
-                                    ! print *, rhs_vf(j)%sf(q, k, l)
-                                    ! print *, rhs_vf(j)%sf(q, k, l) - rhs_vfT(j)%sf(q, k, l)
                             end do
                         end do
+                    end do
+                end do
+
+                ! testing
+                call s_calculate_rhs_operator(idir, advxb, advxe, 0, m, 0, n, 0, p, multip, rhs_vfT, flux_src_n, flux_src_n, &
+                                              KNill, iden_cons_vf, q_prim_vf, 0, contxe + idir, KNill, iden_cons_vf, iden_prim_vf, 0, contxe + idir, 'L')
+
+                do j = 1, sys_size
+                    do q = 0, p
+                    do l = 0, n
+                    do k = 0, m
+                    if ( abs( rhs_vf(j)%sf(k, l, q) - rhs_vfT(j)%sf(k, l, q) ) .ge. 1e-10_wp ) then
+                    if ( ( ( rhs_vf(j)%sf(k, l, q) - rhs_vfT(j)%sf(k, l, q) ) / rhs_vf(j)%sf(k, l, q) ) .ge. 1e-15_wp ) then
+                    print *, 'line 1235'
+                    print *, rhs_vf(j)%sf(k, l, q)
+                    print *, rhs_vfT(j)%sf(k, l, q) 
+                    print *, ( rhs_vf(j)%sf(k, l, q) - rhs_vfT(j)%sf(k, l, q) )
+                    print *, ( rhs_vf(j)%sf(k, l, q) - rhs_vfT(j)%sf(k, l, q) ) / rhs_vf(j)%sf(k, l, q)
+                    end if
+                    end if
+                    end do
+                    end do
                     end do
                 end do
             else
