@@ -1441,7 +1441,7 @@ contains
                 c = 0._wp
                 !$acc loop seq
                 do q = 1, num_fluids
-                    c = c + adv(q)*(1._wp/gammas(q) + 1._wp)* &
+                    c = c + adv(q)* gs_min(q) * &
                         (pres + pi_infs(q)/(gammas(q) + 1._wp))
                 end do
                 c = c/rho
