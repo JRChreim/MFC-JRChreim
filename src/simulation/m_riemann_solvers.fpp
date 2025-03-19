@@ -1338,7 +1338,12 @@ contains
                                                                   (rho_L*s_S + pres_L/(s_L - vel_L(dir_idx(1))))) - E_L)) + &
                                          xi_P*(E_R + xi_PP*(xi_R*(E_R + (s_S - vel_R(dir_idx(1)))* &
                                                                   (rho_R*s_S + pres_R/(s_R - vel_R(dir_idx(1))))) - E_R))
+
+
+
                                 p_Star = xi_M*(pres_L + xi_MP*(rho_L*(s_L - vel_L(dir_idx(1)))*(s_S - vel_L(dir_idx(1))))) + &
+
+
                                          xi_P*(pres_R + xi_PP*(rho_R*(s_R - vel_R(dir_idx(1)))*(s_S - vel_R(dir_idx(1)))))
 
                                 rho_Star = xi_M*(rho_L*(xi_MP*xi_L + 1._wp - xi_MP)) + &
@@ -4620,8 +4625,7 @@ contains
     !     ! In general, one can write for the HLLC Riemann Solver
     !     ! f^HLLC = (1 + sign(s*))/2 * [fL + s-(q*L - qL)] + (1 - sign(s*))/2 * [fR + s-(q*R - qR)]
 
-    !     fHLLC = 
+    !     ! fHLLC = 0
 
-
-    ! end subroutine s_calculate_hll_riemann_fluxes
+    ! end subroutine s_calculate_hllc_riemann_fluxes
 end module m_riemann_solvers
