@@ -110,17 +110,16 @@ contains
                         ! original volume fractions, before any relaxation
                         alpha0k(i) = q_cons_vf(i + advxb - 1)%sf(j, k, l)
                         
-                        ! original mass fractions, before any relaxation
+                        ! original partial density, before any relaxation
                         m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
                               
                         ! Mixture density
-                        rho = rho + q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                        rho = rho + m0k(i)
 
                         ! calculating the total internal energy such that the energy-fraction for each of the
                         ! fluids can be proportionally distributed when the sum of the internal energies differs from the
-
-                        if ( ieee_is_nan( q_cons_vf(i + contxb - 1)%sf(j, k, l) ) ) then
-                            print *, 'partial densities', q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                        if ( ieee_is_nan( m0k(i) ) ) then
+                            print *, 'partial densities', m0k(i)
                         end if
 
                         if (model_eqns == 3) then
@@ -177,7 +176,7 @@ contains
                             ! if ( ( pS < pCr ) .and. ( pS > 0 ) .and. &
                             if ( ( pS < pCr ) .and. &
                             ! 2.1 Homogeneous pTg-equilibrium criterium
-                            ( ( ( pS < 0 ) .and. ( pS + minval(p_infpT) > 0.0 ) ) &
+                            ( ( ( pS < 0 ) .and. ( pS + minval(p_infpT) > 0.0_wp ) ) &
                             .or. &
                             ! 2.2. Heterogeneous pTg-equilibrium.
                             ( (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps) ) ) &
@@ -278,7 +277,6 @@ contains
                                                
                         ! updating conservative variables through either p- or pT-equilibrium
                         call update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
-
                     else
                         !$acc loop seq
                         do i = 1, num_fluids

@@ -624,7 +624,7 @@ contains
         real(wp), intent(inout) :: time_avg
 
         real(wp), dimension(0:m, 0:n, 0:p) :: nbub
-        real(wp) :: t_start, t_finish
+        real(wp) :: t_start, t_finish, multip
         integer :: i, j, k, l, id !< Generic loop iterators
 
         call nvtxStartRange("COMPUTE-RHS")
@@ -644,7 +644,14 @@ contains
             end do
         end do
 
-        ! Converting Conservative to Primitive Variables
+        ! determining what the multiplying factor will be for the source terms in the cylindrical/spherical coordinates
+        if (cyl_coord) then
+            multip = 5e-1_wp
+        else if (sph_coord) then
+            multip = 1.0_wp
+        else 
+            multip = 0.0_wp
+        end if
 
         if (mpp_lim .and. bubbles_euler) then
             !$acc parallel loop collapse(3) gang vector default(present)
@@ -817,7 +824,8 @@ contains
                                                  iden_cons_qp, &
                                                  iden_prim_qp, &
                                                  nill_cons_qp, &
-                                                 nill_prim_qp)
+                                                 nill_prim_qp, &
+                                                 multip)
             call nvtxEndRange
 
             ! RHS additions for hypoelasticity
@@ -836,7 +844,8 @@ contains
                                                       flux_src_n(id)%vf, &
                                                       dq_prim_dx_qp(1)%vf, &
                                                       dq_prim_dy_qp(1)%vf, &
-                                                      dq_prim_dz_qp(1)%vf)
+                                                      dq_prim_dz_qp(1)%vf, &
+                                                      multip)
                 call nvtxEndRange
             end if
 
@@ -937,7 +946,7 @@ contains
 
     end subroutine s_compute_rhs
 
-    subroutine s_compute_advection_source_term(idir, rhs_vf, q_cons_vf, q_prim_vf, flux_src_n_vf, iden_cons_vf, iden_prim_vf, nill_cons_vf, nill_prim_vf)
+    subroutine s_compute_advection_source_term(idir, rhs_vf, q_cons_vf, q_prim_vf, flux_src_n_vf, iden_cons_vf, iden_prim_vf, nill_cons_vf, nill_prim_vf, multip)
 
         integer, intent(in) :: idir
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
@@ -945,20 +954,11 @@ contains
         type(vector_field), intent(inout) :: q_prim_vf
         type(vector_field), intent(inout) :: flux_src_n_vf
         type(vector_field), intent(in) :: iden_cons_vf, iden_prim_vf, nill_cons_vf, nill_prim_vf
-        real(wp) :: multip
+        real(wp), intent(in) :: multip
 
         real(wp), dimension(0:m, 0:n, 0:p) :: KNeg, KNill
 
         integer :: i, j, k, l, q
-
-        ! determining what the multiplying factor will be for the source terms in the cylindrical/spherical coordinates
-        if (cyl_coord) then
-            multip = 5e-1_wp
-        else if (sph_coord) then
-            multip = 1.0_wp
-        else 
-            multip = 0.0_wp
-        end if        
 
         if (alt_soundspeed) then
             !$acc parallel loop collapse(3) gang vector default(present)
@@ -979,15 +979,14 @@ contains
 
                         Kterm(j, k, l) = alpha1(j, k, l)*alpha2(j, k, l)*(blkmod2(j, k, l) - blkmod1(j, k, l))/ &
                                          (alpha1(j, k, l)*blkmod2(j, k, l) + alpha2(j, k, l)*blkmod1(j, k, l))
-        
-                        KNill(j, k, l) = 0.0_wp
-
-                        KNeg(j, k, l) = -1.0_wp * Kterm(j, k, l)
                     end do
                 end do
             end do
+            KNeg(0:m, 0:n, 0:p) = -1.0_wp * Kterm(0:m, 0:n, 0:p)
         end if
-        
+
+        KNill(0:m, 0:n, 0:p) = 0.0_wp
+
         if (idir == 1) then
 
             if (bc_x%beg <= -5 .and. bc_x%beg >= -13) then
@@ -1034,7 +1033,6 @@ contains
             end if
 
         elseif (idir == 2) then
-
             ! RHS Contribution in y-direction
             ! Applying the Riemann fluxes
 
@@ -1084,7 +1082,6 @@ contains
             end if
 
             if (grid_geometry == 3) then ! Cylindrical Coordinates
-
                 !$acc parallel loop collapse(4) gang vector default(present)
                 do j = 1, sys_size
                     do k = 0, p
@@ -1150,6 +1147,7 @@ contains
                     ! call s_calculate_rhs_operator(idir, 1, sys_size, 0, m, 0, n, 0, p, multip, rhs_vf, flux_n, flux_gsrc_n, &
                     !                                 KNill, iden_cons_vf, iden_prim_vf, 0, 1, KNill, iden_cons_vf, iden_prim_vf, 0, 1, 'L')
                 else
+
                     if (alt_soundspeed) then
                         do j = advxb, advxe
                             if ((j == advxe) .and. (bubbles_euler .neqv. .true.)) then
@@ -1244,23 +1242,16 @@ contains
     end subroutine s_compute_advection_source_term
 
     subroutine s_compute_additional_physics_rhs(idir, q_prim_vf, rhs_vf, flux_src_n, &
-                                                dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf)
+                                                dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf, multip)
 
         integer, intent(in) :: idir
         type(scalar_field), dimension(sys_size), intent(in) :: q_prim_vf
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
         type(scalar_field), dimension(sys_size), intent(in) :: flux_src_n
         type(scalar_field), dimension(sys_size), intent(in) :: dq_prim_dx_vf, dq_prim_dy_vf, dq_prim_dz_vf
-        real(wp) :: multip
+        real(wp), intent(in) :: multip
 
         integer :: i, j, k, l
-
-        ! determining what the multiplying factor will be for the source terms in the cylindrical/spherical coordinates
-        if (cyl_coord) then
-            multip = 5e-1_wp
-        else if (sph_coord) then
-            multip = 1.0_wp
-        end if
 
         if (idir == 1) then ! x-direction
 
