@@ -277,6 +277,7 @@ contains
                                                
                         ! updating conservative variables through either p- or pT-equilibrium
                         call update_conservative_vars( j, k, l, pS, q_cons_vf, Tk )
+
                     else
                         !$acc loop seq
                         do i = 1, num_fluids
