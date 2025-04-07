@@ -879,7 +879,7 @@ contains
                                     ! Geometrical source of the void fraction(s) is zero
                                     !$acc loop seq
                                     do i = advxb, advxe
-                                        flux_gsrc_rs${XYZ}$_vf(j, k, l, i) = 1*flux_rs${XYZ}$_vf(j, k, l, i)
+                                        flux_gsrc_rs${XYZ}$_vf(j, k, l, i) = flux_rs${XYZ}$_vf(j, k, l, i)
                                     end do
                                 end if
                             #:endif
@@ -1338,12 +1338,7 @@ contains
                                                                   (rho_L*s_S + pres_L/(s_L - vel_L(dir_idx(1))))) - E_L)) + &
                                          xi_P*(E_R + xi_PP*(xi_R*(E_R + (s_S - vel_R(dir_idx(1)))* &
                                                                   (rho_R*s_S + pres_R/(s_R - vel_R(dir_idx(1))))) - E_R))
-
-
-
                                 p_Star = xi_M*(pres_L + xi_MP*(rho_L*(s_L - vel_L(dir_idx(1)))*(s_S - vel_L(dir_idx(1))))) + &
-
-
                                          xi_P*(pres_R + xi_PP*(rho_R*(s_R - vel_R(dir_idx(1)))*(s_S - vel_R(dir_idx(1)))))
 
                                 rho_Star = xi_M*(rho_L*(xi_MP*xi_L + 1._wp - xi_MP)) + &
@@ -1460,7 +1455,7 @@ contains
 
                                 ! Geometrical source flux for cylindrical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord .or. sph_coord) then
+                                    if (cyl_coord) then
                                         !Substituting the advective flux into the inviscid geometrical source flux
                                         !$acc loop seq
                                         do i = 1, E_idx
@@ -1576,7 +1571,7 @@ contains
 
                                 call s_compute_speed_of_sound(pres_R, rho_avg, gamma_avg, pi_inf_R, H_avg, alpha_R, &
                                                               vel_avg_rms, 0._wp, c_avg, qv_avg)
-                                    
+
                                 if (wave_speeds == 1) then
                                     s_L = min(vel_L(dir_idx(1)) - c_L, vel_R(dir_idx(1)) - c_R)
                                     s_R = max(vel_R(dir_idx(1)) + c_R, vel_L(dir_idx(1)) + c_L)
@@ -1698,7 +1693,7 @@ contains
                                 ! Geometrical source flux for cylindrical coordinates
 
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord .or. sph_coord) then
+                                    if (cyl_coord) then
                                         ! Substituting the advective flux into the inviscid geometrical source flux
                                         !$acc loop seq
                                         do i = 1, E_idx
@@ -2162,7 +2157,7 @@ contains
 
                                 ! Geometrical source flux for cylindrical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord .or. sph_coord) then
+                                    if (cyl_coord) then
                                         ! Substituting the advective flux into the inviscid geometrical source flux
                                         !$acc loop seq
                                         do i = 1, E_idx
@@ -4620,12 +4615,4 @@ contains
 
     end subroutine s_finalize_riemann_solvers_module
 
-    ! subroutine s_calculate_hllc_riemann_fluxes
-    !     ! this subroutine serve to calculate the general structure of the HLLC Riemann Solver. 
-    !     ! In general, one can write for the HLLC Riemann Solver
-    !     ! f^HLLC = (1 + sign(s*))/2 * [fL + s-(q*L - qL)] + (1 - sign(s*))/2 * [fR + s-(q*R - qR)]
-
-    !     ! fHLLC = 0
-
-    ! end subroutine s_calculate_hllc_riemann_fluxes
 end module m_riemann_solvers
