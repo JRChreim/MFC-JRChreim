@@ -154,7 +154,7 @@ contains
                     if (TR) then
                         ! (old) p-equilibrium
                         if (relax_model == 1) then
-                            call s_old_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, q_cons_vf, rhoe, Tk)                            
+                            call s_old_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, rhoe, Tk)                            
                         ! p-equilibrium
                         elseif (relax_model == 4) then
                             call s_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, rho, rhoe, rhoeT, Tk)
@@ -199,7 +199,6 @@ contains
                                 m0k(vp) = (1.0_wp - mixM)*rM
 
                                 ! calling pT-equilibrium for overheated vapor, which is MFL = 0
-                                ! call s_infinite_pt_relaxation_k(j, k, l, 0, pSOV, p_infOV, q_cons_vf, rhoe, rM, TSOV)
                                 call s_infinite_pt_relaxation_k(j, k, l, m0k, 0, pSOV, p_infOV, rhoe, rM, TSOV)
 
                                 ! calculating Saturation temperature
@@ -211,7 +210,6 @@ contains
                                 m0k(vp) = mixM*rM
 
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1                       
-                                ! call s_infinite_pt_relaxation_k(j, k, l, 1, pSSL, p_infSL, q_cons_vf, rhoe, rM, TSSL)
                                 call s_infinite_pt_relaxation_k(j, k, l, m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
 
                                 ! calculating Saturation temperature
@@ -289,117 +287,163 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
-    subroutine s_infinite_p_relaxation_k(j, k, l, alpha0k, alpharhoeik, m0k, pS, rho, rhoe, rhoeT, Tk)
+    subroutine s_infinite_p_relaxation_k(j, k, l, alphaik, alpharhoeik, mik, pS, rho, rhoe, rhoeT, Tk)
         !$acc routine seq
 
         ! initializing variables
         real(wp), intent(IN) :: rho, rhoe, rhoeT
         real(wp), intent(OUT) :: pS
         real(wp), dimension(num_fluids), intent(OUT) :: Tk
-        real(wp), dimension(num_fluids), intent(in)  :: alpha0k, alpharhoeik, m0k
+        real(wp), dimension(num_fluids), intent(in)  :: alphaik, alpharhoeik, mik
         integer, intent(IN) :: j, k, l
 
         real(wp) :: fp, fpp, pO !< variables for the Newton Solver
-        real(wp) :: Econst !< auxiliary variables
-        real(wp), dimension(num_fluids) :: alphaik, alphak, alpharhoek, alpharhoe0k, rhok
+        real(wp) :: Econst, gamma, pi_inf, mQ, mcv, pip, TS !< auxiliary variables
+        real(wp), dimension(num_fluids) :: alpha0k, alpharhoe0k, e0k, m0k, pk, p_infpT
+        real(wp), dimension(num_fluids) :: alphak, alpharhoek, rhok
         character(20) :: nss, pSs, Econsts
 
-        integer :: i, ns !< generic loop iterators
+        integer :: i, na, ns, nsL !< generic loop iterators
+
+        ! think how to solve pK, alphak, alpharhoek, given the energy mismatechs at the discontinuities 
+        alpha0k = alphaik
+
+        m0k = mik
 
         ! Re-distributing the initial internal energy values such that rhoe = rhoeT, eventually.
         ! alpharhoe0k does the paper of alpharhoeik, but it is its value adjusted to match rhoe = rhoeT
-        if (model_eqns .eq. 3) then
-            alpharhoe0k = alpharhoeik * rhoe / rhoeT
-        else 
-            alpharhoe0k = m0k * rhoe / rho
+        alpharhoe0k = alpharhoeik * rhoe / rhoeT
+
+        ! mQ     = sum( m0k * qvs )
+        ! mCV    = sum( m0k * cvs )
+
+        if ( mpp_lim .and. ( any(alpha0k < 0.0_wp ) .or. any(alpharhoe0k < 0.0_wp ) ) ) then
+
+            call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, m0k(lp) + m0k(vp), TS)
+            
+            ! distributing the common temperature for all fluids
+            Tk = spread(TS, 1, num_fluids)
+            
+            ! densities
+            rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
+
+            ! internal energy
+            e0k = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
+
+            ! volume fractions
+            alpha0k = m0k / rhok
+
+            ! alpha*rho*e
+            alpharhoe0k = m0k * e0k
+
         end if
-
-        alphak = alpha0k
-
-        ! final value for internal energy, that will be updated with the iterative procedure
-        alpharhoek = alpharhoe0k
 
         ! Maybe improve this condition afterwards. As long as the initial guess is in between -min(gs_min*ps_inf)
         ! and infinity, a solution should be able to be found.
-        pS = 1.0d3
+        pS = 1.0e4_wp
 
-        ! starting counter for the Newton solver
-        ns = 0
+        ! internal energies - first estimate
+        alpharhoek = alpharhoe0k
 
-        fp = 2.0_wp
-        ! Newton solver for p-equilibrium. 1d6 is arbitrary, and ns <= 1, is to ensure the internal energy correction
-        ! happens at least once. This is different than the pT-equilibrium case, in which no energy correction is needed.
-        ! Note that a solution is found when f(p) = 1
-        ! keep an eye on this
-        ! do while (((abs(fp - 1.0_wp) > ptgalpha_eps) .and. (abs((fp - 1.0_wp)/fp) > ptgalpha_eps/1.0d6)) .or. (ns <= 1))
-        do while (((abs(fp - 1.0_wp) > ptgalpha_eps)) .or. (ns <= 1))
+        ! counter for the outer loop
+        nsL = 0
+
+        do while  (( ( abs(   sum( alpharhoek ) - rhoe ) > ptgalpha_eps ) &
+               .and. ( abs( ( sum( alpharhoek ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
+               .or.  ( nSL == 0 ) )
             ! increasing counter
-            ns = ns + 1
+            nsL = nsL + 1
 
-            ! updating old pressure
-            pO = pS
-
-            ! updating functions used in the Newton's solver
-            fp =  0.0_wp; fpp =  0.0_wp; 
-            !$acc loop seq
-            do i = 1, num_fluids
-
-                fp = fp + (gs_min(i) - 1.0_wp)*(alpharhoek(i) - m0k(i)*qvs(i)) &
-                     /(pO + gs_min(i)*ps_inf(i))
-
-                fpp = fpp - (gs_min(i) - 1.0_wp)*(alpharhoek(i) - m0k(i)*qvs(i)) &
-                      /((pO + gs_min(i)*ps_inf(i))**2)
-
-            end do
-
-            ! updating the relaxed pressure (solution)
-            pS = pO + ((1.0_wp - fp)/fpp)/(1.0_wp - (1.0_wp - fp + abs(1.0_wp - fp))/(2.0_wp*fpp*(pO + minval(gs_min*ps_inf))))
-
-            ! Variable to check energy constraint
-            Econst =  0.0_wp
-            !$acc loop seq
-            ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
-            do i = 1, num_fluids
-
-                ! volume fractions
-                alphaik(i) = alphak(i)
-
-                alphak(i) = (gs_min(i) - 1.0_wp)*(alpharhoek(i) - m0k(i)*qvs(i)) &
-                            /(pS + gs_min(i)*ps_inf(i))
-
-                ! internal energies
-                ! alpharhoek(i) = alpharhoek(i) + 1 / (gs_min(i) - 1) &
-                ! * (alphak(i)*(pS + gs_min(i)*ps_inf(i)) - alphaik(i)*(pO + gs_min(i)*ps_inf(i)))
-
-                alpharhoek(i) = alpharhoe0k(i) - pS*(alphak(i) - alpha0k(i))
-
-                ! densities
-                rhok(i) = m0k(i) / alphak(i)
-
-                ! Variable to check energy constraint
-                Econst = Econst + (gs_min(i) - 1.0_wp)*(alpharhoek(i) - m0k(i)*qvs(i)) &
-                         /(gs_min(i)*ps_inf(i) - minval(ps_inf))
-
-            end do
+            ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
+            ! global convergence will be estabilished
+            Econst = sum( (gs_min - 1.0_wp)*(alpharhoek - m0k*qvs) / (gs_min*ps_inf - minval(ps_inf)) )
 
 #ifndef MFC_OpenACC
-                ! energy constraint for the p-equilibrium
-                if ((minval(ps_inf) > 0) .and. (Econst <= 1.0_wp)) then
+            ! energy constraint for the p-equilibrium
+            if ((minval(ps_inf) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
-                    call s_real_to_str(Econst, Econsts)
-                    call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
-    &                   . Please, check energy constraint. Econst ~'//Econsts//'. Aborting!')
+                print *, 'nsL', nsL
 
-                ! checking if pressure is within expected bounds
-                elseif ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
+                print *, 'nsL, ns', nsL, ns
+
+                print *, 'energies', alpharhoek
+                
+                print *, 'energies0', alpharhoe0k
+
+                print *, 'DE', abs( sum(alpharhoek) - rhoe )
+
+                print *, 'fp, fpp', fp, fpp
+
+                print *, 'pS', pS
+
+                print *, 'alphak', alphak
+
+                print *, 'alpha0k', alpha0k
+
+                print *, 'TvF', sum(alphak)
+                
+                print *, 'Dalpha', sum(alphak) - sum(alpha0k)
+
+                call s_real_to_str(Econst, Econsts)
+                call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
+&                   . Please, check energy constraint. Econst ~'//Econsts//'. Aborting!')
+
+            end if           
+#endif
+
+            ! if the energy constraint is satisfied, we start the newton solver
+            ! counter
+            ns = 0
+
+            ! Newton solver for p-equilibrium. ns <= 1, is to ensure the internal energy correction happens at least once.
+            ! in the loosely coupled algorithm. This is different than the pT-equilibrium case, in which no energy correction is needed.
+            ! A solution is found when f(p) = 1
+            ! do while (((abs(fp - 1.0_wp) > ptgalpha_eps) .and. (abs((fp - 1.0_wp)/fp) > ptgalpha_eps/1.0d6)) .or. (ns <= 1))
+            fp = 0.0_wp
+            do while (((abs(fp - 1.0_wp) > ptgalpha_eps)) .or. (ns <= 1))
+                ! increasing counter
+                ns = ns + 1
+
+                ! updating old pressure
+                pO = pS
+
+                ! updating functions used in the Newton's solver. f(p)
+                fp = sum( (gs_min - 1.0_wp)*(alpharhoek - m0k*qvs) / (pO + gs_min*ps_inf) )
+
+                ! updating functions used in the Newton's solver. f'(p)
+                fpp = sum( - 1.0_wp * (gs_min - 1.0_wp)*(alpharhoek - m0k*qvs) / ((pO + gs_min*ps_inf)**2) )
+
+                ! updating the relaxed pressure
+                pS = pO + ((1.0_wp - fp)/fpp)/(1.0_wp - (1.0_wp - fp + abs(1.0_wp - fp))/(2.0_wp*fpp*(pO + minval(gs_min*ps_inf))))
+
+                ! checking if pS is within expected bounds
+                if ( ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) ) then
 
                     if (proc_rank == 0) then
 
-                        print *, 'ns', ns
+                        print *, 'nsL, ns', nsL, ns
 
-                        print *, 'energies (N,O)', rhoe, rhoeT, 'DE', rhoe - rhoeT
+                        print *, 'energies', alpharhoek
+                        
+                        print *, 'energies0', alpharhoe0k
 
-                        print *, 'fp', 'fpp', fp, fpp
+                        print *, 'DE', abs( sum(alpharhoek) - sum( alpharhoe0k ) )
+
+                        print *, 'fp, fpp', fp, fpp
+
+                        print *, 'pS', pS
+
+                        print *, 'alphak', alphak
+
+                        print *, 'alpha0k', alpha0k
+
+                        print *, 'TvF', sum(alphak)
+                        
+                        print *, 'Dalpha', sum(alphak) - sum(alpha0k)
+
+                        print *, alphaik
+                        print *, mik
+                        print *, alpharhoeik
 
                         ! call s_tattletale((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
                         !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, rhoeT, ps_inf, pS, (/pS - pO, pS + pO/) &
@@ -412,8 +456,18 @@ contains
                     &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
 
                 end if
-#endif
+            end do
+
+            ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
+            ! volume fractions
+            alphak = (gs_min - 1.0_wp)*(alpharhoek - m0k*qvs) / (pS + gs_min*ps_inf)
+
+            ! internal energies               
+            alpharhoek = alpharhoe0k - ( pS + pS ) * (alphak - alpha0k) / 2
         end do
+
+        ! densities
+        rhok = m0k / alphak
 
         ! (NOT common) temperature
         Tk = (pS + ps_inf)/((gs_min - 1)*cvs*rhok)
@@ -422,7 +476,7 @@ contains
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
     end subroutine s_infinite_p_relaxation_k ! -----------------------
 
-    subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, alpharhoe0k, m0k, pS, q_cons_vf, rhoe, Tk)
+    subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, alpharhoe0k, m0k, pS, rhoe, Tk)
         ! Description: The purpose of this procedure is to infinitely relax
         !              the pressures from the internal-energy equations to a
         !              unique pressure, from which the corresponding volume
@@ -437,7 +491,6 @@ contains
         ! mixture density, dynamic pressure, surface energy, specific heat ratio
         ! function, liquid stiffness function (two variations of the last two
         ! initializing variables
-        type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
         real(wp), intent(IN) :: rhoe
         real(wp), intent(OUT) :: pS
         real(wp), dimension(num_fluids), intent(OUT) :: Tk
@@ -446,14 +499,13 @@ contains
         integer, intent(IN) :: j, k, l
 
         real(wp) :: fp, fpp, mQ, drhodp, den, num, pO !< variables for the Newton Solver
-        real(wp) :: sum_alpha, gamma, pi_inf !< auxiliary variables
+        real(wp) :: gamma, pi_inf !< auxiliary variables
         real(wp), dimension(num_fluids) :: alphak, alpharhoek, mk, pk, rhok 
         character(20) :: nss, pSs
 
         integer :: i, ns !< generic loop iterators
 
         ! initializing the partial energies
-
         alphak       = alpha0k
         alpharhoek   = alpharhoe0k
         mk           = m0k
@@ -464,20 +516,17 @@ contains
                 IF ((mk(i) < 0.0_wp) .OR. (alphak(i) < 0.0_wp)) THEN
                     alphak(i)       = 0.0_wp
                     alpharhoek(i)   = 0.0_wp
-                    mk(i)          = 0.0_wp
+                    mk(i)           = 0.0_wp
                 END IF
                 IF (alphak(i) > 1.0_wp) alphak(i) = 1.0_wp
             END DO
-            sum_alpha = sum(alphak)
-            DO i = 1, num_fluids
-                alphak(i) = alphak(i) / sum_alpha
-            END DO
+            alphak = alphak / sum(alphak)
         END IF
 
         ! Initial state
         DO i = 1, num_fluids
             IF (alphak(i) > sgm_eps) THEN
-                pk(i) = (alpharhoek(i) / alphak(i) - fluid_pp(i)%pi_inf) / fluid_pp(i)%gamma
+                pk(i) = ( ( alpharhoek(i) - mk(i) * qvs(i) )/ alphak(i) - fluid_pp(i)%pi_inf) / fluid_pp(i)%gamma               
                 ! Physical pressure?
                 IF (pk(i) <= -(1.0_wp - ptgalpha_eps)*ps_inf(i) + ptgalpha_eps) pk(i) = -(1.0_wp - ptgalpha_eps)*ps_inf(i) + ptgalpha_eps
             ELSE
@@ -555,8 +604,8 @@ contains
         ! variables (see s_convert_conservative_to_primitive_variables called in s_compute_rhs).
         ! However, the internal-energy equations should be reset with the corresponding mixture
         ! pressure from the correction. This step is carried out below.
-        gamma  = sum( alphak * fluid_pp(:)%gamma )
-        pi_inf = sum( alphak * fluid_pp(:)%pi_inf )
+        gamma  = sum( alphak * 1.0_wp * 1.0_wp / ( gs_min - 1.0_wp ) )
+        pi_inf = sum( alphak * gs_min * ps_inf / ( gs_min - 1.0_wp ) )
         mQ     = sum( mk * qvs )    
 
         pS = (rhoe - pi_inf - mQ) / gamma
@@ -840,11 +889,9 @@ contains
                     ! vary at every iteration.
                     if ((i /= lp) .and. (i /= vp)) then
 
-                        mCVGP = mCVGP + m0k(i) &
-                                *cvs(i)*(gs_min(i) - 1)/(pS + ps_inf(i))
+                        mCVGP  = mCVGP + m0k(i)*cvs(i)*(gs_min(i) - 1)/(pS + ps_inf(i))
 
-                        mCVGP2 = mCVGP2 + m0k(i) &
-                                *cvs(i)*(gs_min(i) - 1)/((pS + ps_inf(i))**2)
+                        mCVGP2 = mCVGP2 + m0k(i)*cvs(i)*(gs_min(i) - 1)/((pS + ps_inf(i))**2)
 
                         mQD = mQD + m0k(i)*qvs(i)
 
