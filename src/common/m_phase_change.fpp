@@ -591,7 +591,7 @@ contains
         !!  @param TS equilibrium temperature at the interface
     subroutine s_infinite_pt_relaxation_k(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS)
 
-#ifdgithuef _CRAYFTN
+#ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_infinite_pt_relaxation_k
 #else
         !$acc routine seq
