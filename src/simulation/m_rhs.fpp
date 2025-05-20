@@ -1127,14 +1127,14 @@ contains
                     end do
                 end do
 
-                if (cyl_coord) then
+                if (cyl_coord .or. sph_coord) then
                     !$acc parallel loop collapse(4) gang vector default(present)
                     do l = 0, p
                         do k = 0, n
                             do j = 0, m
                                 do i = 1, num_fluids
                                     rhs_vf(i + intxb - 1)%sf(j, k, l) = &
-                                        rhs_vf(i + intxb - 1)%sf(j, k, l) - 5e-1_wp/y_cc(k)* &
+                                        rhs_vf(i + intxb - 1)%sf(j, k, l) - multip/y_cc(k)* &
                                         q_cons_vf%vf(i + advxb - 1)%sf(j, k, l)* &
                                         q_prim_vf%vf(E_idx)%sf(j, k, l)* &
                                         (flux_src_n(2)%vf(advxb)%sf(j, k, l) + &
@@ -1194,14 +1194,14 @@ contains
                                     end do
                                 end do
                             end do
-                            if (cyl_coord) then
+                            if (cyl_coord .or. sph_coord) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
                                                 rhs_vf(j)%sf(q, k, l) - &
-                                                (Kterm(q, k, l)/2._wp/y_cc(k))* &
+                                                (Kterm(q, k, l) * multip/y_cc(k))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                  + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
@@ -1221,14 +1221,14 @@ contains
                                     end do
                                 end do
                             end do
-                            if (cyl_coord) then
+                            if (cyl_coord .or. sph_coord) then
                                 !$acc parallel loop collapse(3) gang vector default(present)
                                 do l = 0, p
                                     do k = 0, n
                                         do q = 0, m
                                             rhs_vf(j)%sf(q, k, l) = &
                                                 rhs_vf(j)%sf(q, k, l) + &
-                                                (Kterm(q, k, l)/2._wp/y_cc(k))* &
+                                                (Kterm(q, k, l) * multip/y_cc(k))* &
                                                 (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                  + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                         end do
@@ -1367,14 +1367,14 @@ contains
                                         end do
                                     end do
                                 end do
-                                if (cyl_coord) then
+                                if (cyl_coord .or. sph_coord) then
                                     !$acc parallel loop collapse(3) gang vector default(present)
                                     do l = 0, p
                                         do k = 0, n
                                             do q = 0, m
                                                 rhs_vf(j)%sf(q, k, l) = &
                                                     rhs_vf(j)%sf(q, k, l) - &
-                                                    (Kterm(q, k, l)/2._wp/y_cc(k))* &
+                                                    (Kterm(q, k, l) * multip/y_cc(k))* &
                                                     (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                      + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                             end do
@@ -1394,14 +1394,14 @@ contains
                                         end do
                                     end do
                                 end do
-                                if (cyl_coord) then
+                                if (cyl_coord .or. sph_coord) then
                                     !$acc parallel loop collapse(3) gang vector default(present)
                                     do l = 0, p
                                         do k = 0, n
                                             do q = 0, m
                                                 rhs_vf(j)%sf(q, k, l) = &
                                                     rhs_vf(j)%sf(q, k, l) + &
-                                                    (Kterm(q, k, l)/2._wp/y_cc(k))* &
+                                                    (Kterm(q, k, l) * multip/y_cc(k))* &
                                                     (flux_src_n(2)%vf(j)%sf(q, k, l) &
                                                      + flux_src_n(2)%vf(j)%sf(q, k - 1, l))
                                             end do
