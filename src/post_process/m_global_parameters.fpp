@@ -113,6 +113,7 @@ module m_global_parameters
     logical :: elasticity      !< elasticity modeling, true for hyper or hypo
     integer :: b_size          !< Number of components in the b tensor
     integer :: tensor_size     !< Number of components in the nonsymmetric tensor
+    logical :: cont_damage     !< Continuum damage modeling
     logical, parameter :: chemistry = .${chemistry}$. !< Chemistry modeling
     !> @}
 
@@ -135,6 +136,7 @@ module m_global_parameters
     type(int_bounds_info) :: xi_idx                !< Indexes of first and last reference map eqns.
     integer :: c_idx                               !< Index of color function
     type(int_bounds_info) :: species_idx           !< Indexes of first & last concentration eqns.
+    integer :: damage_idx                          !< Index of damage state variable (D) for continuum damage model
     !> @}
 
     ! Cell Indices for the (local) interior points (O-m, O-n, 0-p).
@@ -150,6 +152,15 @@ module m_global_parameters
     !> @{
     type(int_bounds_info) :: bc_x, bc_y, bc_z
     !> @}
+
+    integer :: shear_num !! Number of shear stress components
+    integer, dimension(3) :: shear_indices !<
+    !! Indices of the stress components that represent shear stress
+    integer :: shear_BC_flip_num !<
+    !! Number of shear stress components to reflect for boundary conditions
+    integer, dimension(3, 2) :: shear_BC_flip_indices !<
+    !! Indices of shear stress components to reflect for boundary conditions.
+    !! Size: (1:3, 1:shear_BC_flip_num) for (x/y/z, [indices])
 
     logical :: parallel_io    !< Format of the data files
     logical :: sim_data
@@ -304,7 +315,7 @@ module m_global_parameters
 
     !> @name Lagrangian bubbles
     !> @{
-    logical :: bubbles_lagrange, rkck_adap_dt
+    logical :: bubbles_lagrange
     !> @}
 
     real(wp) :: Bx0 !< Constant magnetic field in the x-direction (1D)
@@ -356,6 +367,7 @@ contains
         elasticity = .false.
         b_size = dflt_int
         tensor_size = dflt_int
+        cont_damage = .false.
 
         bc_x%beg = dflt_int; bc_x%end = dflt_int
         bc_y%beg = dflt_int; bc_y%end = dflt_int
@@ -433,7 +445,6 @@ contains
 
         ! Lagrangian bubbles modeling
         bubbles_lagrange = .false.
-        rkck_adap_dt = .false.
 
         ! IBM
         num_ibs = dflt_int
@@ -587,29 +598,6 @@ contains
                 sys_size = B_idx%end
             end if
 
-            if (hypoelasticity .or. hyperelasticity) then
-                elasticity = .true.
-                stress_idx%beg = sys_size + 1
-                stress_idx%end = sys_size + (num_dims*(num_dims + 1))/2
-                ! number of distinct stresses is 1 in 1D, 3 in 2D, 6 in 3D
-                sys_size = stress_idx%end
-            end if
-
-            if (hyperelasticity) then
-                xi_idx%beg = sys_size + 1
-                xi_idx%end = sys_size + num_dims
-                ! adding three more equations for the \xi field and the elastic energy
-                sys_size = xi_idx%end + 1
-                ! number of entries in the symmetric btensor plus the jacobian
-                b_size = (num_dims*(num_dims + 1))/2 + 1
-                tensor_size = num_dims**2 + 1
-            end if
-
-            if (surface_tension) then
-                c_idx = sys_size + 1
-                sys_size = c_idx
-            end if
-
             ! Volume Fraction Model (6-equation model)
         else if (model_eqns == 3) then
 
@@ -627,29 +615,6 @@ contains
             internalEnergies_idx%end = adv_idx%end + num_fluids
             sys_size = internalEnergies_idx%end
             alf_idx = 1 ! dummy, cannot actually have a void fraction
-
-            if (hypoelasticity .or. hyperelasticity) then
-                elasticity = .true.
-                stress_idx%beg = sys_size + 1
-                stress_idx%end = sys_size + (num_dims*(num_dims + 1))/2
-                ! number of stresses is 1 in 1D, 3 in 2D, 6 in 3D
-                sys_size = stress_idx%end
-            end if
-
-            if (hyperelasticity) then
-                xi_idx%beg = sys_size + 1
-                xi_idx%end = sys_size + num_dims
-                ! adding three more equations for the \xi field and the elastic energy
-                sys_size = xi_idx%end + 1
-                ! number of entries in the symmetric btensor plus the jacobian
-                b_size = (num_dims*(num_dims + 1))/2 + 1
-                tensor_size = num_dims**2 + 1
-            end if
-
-            if (surface_tension) then
-                c_idx = sys_size + 1
-                sys_size = c_idx
-            end if
 
         else if (model_eqns == 4) then
             cont_idx%beg = 1 ! one continuity equation
@@ -705,6 +670,62 @@ contains
                     pref = 1._wp
                 end if
             end if
+        end if
+
+        if (model_eqns == 2 .or. model_eqns == 3) then
+
+            if (hypoelasticity .or. hyperelasticity) then
+                elasticity = .true.
+                stress_idx%beg = sys_size + 1
+                stress_idx%end = sys_size + (num_dims*(num_dims + 1))/2
+                if (cyl_coord) stress_idx%end = stress_idx%end + 1
+                ! number of stresses is 1 in 1D, 3 in 2D, 4 in 2D-Axisym, 6 in 3D
+                sys_size = stress_idx%end
+
+                ! shear stress index is 2 for 2D and 2,4,5 for 3D
+                if (num_dims == 1) then
+                    shear_num = 0
+                else if (num_dims == 2) then
+                    shear_num = 1
+                    shear_indices(1) = stress_idx%beg - 1 + 2
+                    shear_BC_flip_num = 1
+                    shear_BC_flip_indices(1:2, 1) = shear_indices(1)
+                    ! Both x-dir and y-dir: flip tau_xy only
+                else if (num_dims == 3) then
+                    shear_num = 3
+                    shear_indices(1:3) = stress_idx%beg - 1 + (/2, 4, 5/)
+                    shear_BC_flip_num = 2
+                    shear_BC_flip_indices(1, 1:2) = shear_indices((/1, 2/))
+                    shear_BC_flip_indices(2, 1:2) = shear_indices((/1, 3/))
+                    shear_BC_flip_indices(3, 1:2) = shear_indices((/2, 3/))
+                    ! x-dir: flip tau_xy and tau_xz
+                    ! y-dir: flip tau_xy and tau_yz
+                    ! z-dir: flip tau_xz and tau_yz
+                end if
+            end if
+
+            if (hyperelasticity) then
+                xi_idx%beg = sys_size + 1
+                xi_idx%end = sys_size + num_dims
+                ! adding three more equations for the \xi field and the elastic energy
+                sys_size = xi_idx%end + 1
+                ! number of entries in the symmetric btensor plus the jacobian
+                b_size = (num_dims*(num_dims + 1))/2 + 1
+                tensor_size = num_dims**2 + 1
+            end if
+
+            if (surface_tension) then
+                c_idx = sys_size + 1
+                sys_size = c_idx
+            end if
+
+            if (cont_damage) then
+                damage_idx = sys_size + 1
+                sys_size = damage_idx
+            else
+                damage_idx = dflt_int
+            end if
+
         end if
 
         if (chemistry) then

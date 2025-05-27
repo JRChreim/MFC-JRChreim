@@ -157,6 +157,7 @@ module m_global_parameters
     logical :: viscous       !< Viscous effects
     logical :: shear_stress  !< Shear stresses
     logical :: bulk_stress   !< Bulk stresses
+    logical :: cont_damage   !< Continuum damage modeling
 
     !$acc declare create(chemistry)
 
@@ -177,7 +178,7 @@ module m_global_parameters
         !$acc declare create(num_dims, num_vels, weno_polyn, weno_order, weno_num_stencils, num_fluids, wenojs, mapped_weno, wenoz, teno, wenoz_q, mhd, relativity)
     #:endif
 
-    !$acc declare create(mpp_lim, model_eqns, mixture_err, alt_soundspeed, avg_state, mp_weno, weno_eps, teno_CT, hypoelasticity, hyperelasticity, hyper_model, elasticity, low_Mach, viscous, shear_stress, bulk_stress)
+    !$acc declare create(mpp_lim, model_eqns, mixture_err, alt_soundspeed, avg_state, mp_weno, weno_eps, teno_CT, hypoelasticity, hyperelasticity, hyper_model, elasticity, low_Mach, viscous, shear_stress, bulk_stress, cont_damage)
 
     logical :: relax          !< activate phase change
     integer :: relax_model    !< Relaxation model
@@ -188,6 +189,10 @@ module m_global_parameters
 !$acc declare create(relax, relax_model, palpha_eps,ptgalpha_eps)
 !#endif
 
+    integer :: num_bc_patches
+    logical :: bc_io
+    integer :: BC_RIEMANN_EXTRAPOLATION
+    integer :: BC_GHOST_EXTRAPOLATION
     !> @name Boundary conditions (BC) in the x-, y- and z-directions, respectively
     !> @{
     type(int_bounds_info) :: bc_x, bc_y, bc_z
@@ -242,6 +247,7 @@ module m_global_parameters
     integer :: tensor_size                             !< Number of elements in the full tensor plus one
     type(int_bounds_info) :: species_idx               !< Indexes of first & last concentration eqns.
     integer :: c_idx                                   !< Index of color function
+    integer :: damage_idx                              !< Index of damage state variable (D) for continuum damage model
     !> @}
 
     !$acc declare create(bub_idx)
@@ -295,7 +301,18 @@ module m_global_parameters
     !! conditions data to march the solution in the physical computational domain
     !! to the next time-step.
 
-    !$acc declare create(sys_size, buff_size, E_idx, gamma_idx, pi_inf_idx, alf_idx, n_idx, stress_idx, b_size, tensor_size, xi_idx, species_idx, B_idx)
+    !$acc declare create(sys_size, buff_size, E_idx, gamma_idx, pi_inf_idx, alf_idx, n_idx, stress_idx, b_size, tensor_size, xi_idx, species_idx, B_idx, c_idx)
+
+    integer :: shear_num !! Number of shear stress components
+    integer, dimension(3) :: shear_indices !<
+    !! Indices of the stress components that represent shear stress
+    integer :: shear_BC_flip_num !<
+    !! Number of shear stress components to reflect for boundary conditions
+    integer, dimension(3, 2) :: shear_BC_flip_indices !<
+    !! Indices of shear stress components to reflect for boundary conditions.
+    !! Size: (1:3, 1:shear_BC_flip_num) for (x/y/z, [indices])
+
+    !$acc declare create(shear_num, shear_indices, shear_BC_flip_num, shear_BC_flip_indices)
 
     ! END: Simulation Algorithm Parameters
 
@@ -373,6 +390,7 @@ module m_global_parameters
     logical :: polydisperse !< Polydisperse bubbles
     logical :: adv_n        !< Solve the number density equation and compute alpha from number density
     logical :: adap_dt      !< Adaptive step size control
+    real(wp) :: adap_dt_tol !< Tolerance to control adaptive step size
 
     integer :: bubble_model !< Gilmore or Keller--Miksis bubble model
     integer :: thermal      !< Thermal behavior. 1 = adiabatic, 2 = isotherm, 3 = transfer
@@ -394,7 +412,7 @@ module m_global_parameters
         !$acc declare create(nb)
     #:endif
 
-    !$acc declare create(R0ref, Ca, Web, Re_inv, bubbles_euler, polytropic, polydisperse, qbmm, nmomsp, nmomtot, R0_type, bubble_model, thermal, poly_sigma, adv_n, adap_dt, pi_fac)
+    !$acc declare create(R0ref, Ca, Web, Re_inv, bubbles_euler, polytropic, polydisperse, qbmm, nmomsp, nmomtot, R0_type, bubble_model, thermal, poly_sigma, adv_n, adap_dt, adap_dt_tol, pi_fac)
 
     type(scalar_field), allocatable, dimension(:) :: mom_sp
     type(scalar_field), allocatable, dimension(:, :, :) :: mom_3d
@@ -470,15 +488,20 @@ module m_global_parameters
     !> @{!
     logical :: bubbles_lagrange                         !< Lagrangian subgrid bubble model switch
     type(bubbles_lagrange_parameters) :: lag_params     !< Lagrange bubbles' parameters
-    logical :: rkck_adap_dt                             !< Activates the adaptive rkck time stepping algorithm
-    real(wp) :: rkck_time_tmp, rkck_tolerance    !Temp time (in rkck stepper) and tolerance error
-    real(wp) :: dt_max                           !< Maximum time step size
-    !$acc declare create(bubbles_lagrange, lag_params, rkck_adap_dt, dt_max, rkck_time_tmp, rkck_tolerance)
+    !$acc declare create(bubbles_lagrange, lag_params)
     !> @}
 
     real(wp) :: Bx0 !< Constant magnetic field in the x-direction (1D)
     logical :: powell !< Powell‐correction for div B = 0
     !$acc declare create(Bx0, powell)
+
+    !> @name Continuum damage model parameters
+    !> @{!
+    real(wp) :: tau_star        !< Stress threshold for continuum damage modeling
+    real(wp) :: cont_damage_s   !< Exponent s for continuum damage modeling
+    real(wp) :: alpha_bar       !< Damage rate factor for continuum damage modeling
+    !$acc declare create(tau_star, cont_damage_s, alpha_bar)
+    !> @}
 
 contains
 
@@ -551,6 +574,7 @@ contains
         viscous = .false.
         shear_stress = .false.
         bulk_stress = .false.
+        cont_damage = .false.
 
         #:if not MFC_CASE_OPTIMIZATION
             mapped_weno = .false.
@@ -562,6 +586,11 @@ contains
         chem_params%diffusion = .false.
         chem_params%reactions = .false.
         chem_params%gamma_method = 1
+
+        num_bc_patches = 0
+        bc_io = .false.
+        BC_RIEMANN_EXTRAPOLATION = -4
+        BC_GHOST_EXTRAPOLATION = -3
 
         bc_x%beg = dflt_int; bc_x%end = dflt_int
         bc_y%beg = dflt_int; bc_y%end = dflt_int
@@ -623,6 +652,7 @@ contains
 
         adv_n = .false.
         adap_dt = .false.
+        adap_dt_tol = dflt_real
 
         pi_fac = 1._wp
 
@@ -731,11 +761,13 @@ contains
         lag_params%Thost = dflt_real
         lag_params%x0 = dflt_real
         lag_params%diffcoefvap = dflt_real
-        rkck_adap_dt = .false.
-        rkck_time_tmp = dflt_real
-        rkck_tolerance = dflt_real
-        dt_max = dflt_real
 
+        ! Continuum damage model
+        tau_star = dflt_real
+        cont_damage_s = dflt_real
+        alpha_bar = dflt_real
+
+        ! MHD
         Bx0 = dflt_real
         powell = .false.
 
@@ -923,31 +955,6 @@ contains
                     sys_size = B_idx%end
                 end if
 
-                if (hypoelasticity .or. hyperelasticity) then
-                    elasticity = .true.
-                    stress_idx%beg = sys_size + 1
-                    stress_idx%end = sys_size + (num_dims*(num_dims + 1))/2
-                    ! number of distinct stresses is 1 in 1D, 3 in 2D, 6 in 3D
-                    sys_size = stress_idx%end
-                end if
-
-                if (hyperelasticity) then
-                    ! number of entries in the symmetric btensor plus the jacobian
-                    b_size = (num_dims*(num_dims + 1))/2 + 1
-                    ! storing the jacobian in the last entry
-                    tensor_size = num_dims**2 + 1
-                    xi_idx%beg = sys_size + 1
-                    xi_idx%end = sys_size + num_dims
-                    ! adding three more equations for the \xi field and the elastic energy
-                    sys_size = xi_idx%end + 1
-                    hyper_model = 1
-                end if
-
-                if (surface_tension) then
-                    c_idx = sys_size + 1
-                    sys_size = c_idx
-                end if
-
             else if (model_eqns == 3) then
                 cont_idx%beg = 1
                 cont_idx%end = num_fluids
@@ -960,30 +967,6 @@ contains
                 internalEnergies_idx%beg = adv_idx%end + 1
                 internalEnergies_idx%end = adv_idx%end + num_fluids
                 sys_size = internalEnergies_idx%end
-
-                if (hypoelasticity .or. hyperelasticity) then
-                    elasticity = .true.
-                    stress_idx%beg = sys_size + 1
-                    stress_idx%end = sys_size + (num_dims*(num_dims + 1))/2
-                    ! number of stresses is 1 in 1D, 3 in 2D, 6 in 3D
-                    sys_size = stress_idx%end
-                end if
-
-                if (hyperelasticity) then
-                    ! number of entries in the symmetric btensor plus the jacobian
-                    b_size = (num_dims*(num_dims + 1))/2 + 1
-                    ! storing the jacobian in the last entry
-                    tensor_size = num_dims**2 + 1
-                    xi_idx%beg = sys_size + 1
-                    xi_idx%end = sys_size + num_dims
-                    ! adding three more equations for the \xi field and the elastic energy
-                    sys_size = xi_idx%end + 1
-                end if
-
-                if (surface_tension) then
-                    c_idx = sys_size + 1
-                    sys_size = c_idx
-                end if
 
             else if (model_eqns == 4) then
                 cont_idx%beg = 1 ! one continuity equation
@@ -1075,6 +1058,63 @@ contains
             end if
 
         end if
+
+        if (model_eqns == 2 .or. model_eqns == 3) then
+
+            if (hypoelasticity .or. hyperelasticity) then
+                elasticity = .true.
+                stress_idx%beg = sys_size + 1
+                stress_idx%end = sys_size + (num_dims*(num_dims + 1))/2
+                if (cyl_coord) stress_idx%end = stress_idx%end + 1
+                ! number of stresses is 1 in 1D, 3 in 2D, 4 in 2D-Axisym, 6 in 3D
+                sys_size = stress_idx%end
+
+                ! shear stress index is 2 for 2D and 2,4,5 for 3D
+                if (num_dims == 1) then
+                    shear_num = 0
+                else if (num_dims == 2) then
+                    shear_num = 1
+                    shear_indices(1) = stress_idx%beg - 1 + 2
+                    shear_BC_flip_num = 1
+                    shear_BC_flip_indices(1:2, 1) = shear_indices(1)
+                    ! Both x-dir and y-dir: flip tau_xy only
+                else if (num_dims == 3) then
+                    shear_num = 3
+                    shear_indices(1:3) = stress_idx%beg - 1 + (/2, 4, 5/)
+                    shear_BC_flip_num = 2
+                    shear_BC_flip_indices(1, 1:2) = shear_indices((/1, 2/))
+                    shear_BC_flip_indices(2, 1:2) = shear_indices((/1, 3/))
+                    shear_BC_flip_indices(3, 1:2) = shear_indices((/2, 3/))
+                    ! x-dir: flip tau_xy and tau_xz
+                    ! y-dir: flip tau_xy and tau_yz
+                    ! z-dir: flip tau_xz and tau_yz
+                end if
+                !$acc update device(shear_num, shear_indices, shear_BC_flip_num, shear_BC_flip_indices)
+            end if
+
+            if (hyperelasticity) then
+                ! number of entries in the symmetric btensor plus the jacobian
+                b_size = (num_dims*(num_dims + 1))/2 + 1
+                ! storing the jacobian in the last entry
+                tensor_size = num_dims**2 + 1
+                xi_idx%beg = sys_size + 1
+                xi_idx%end = sys_size + num_dims
+                ! adding three more equations for the \xi field and the elastic energy
+                sys_size = xi_idx%end + 1
+            end if
+
+            if (surface_tension) then
+                c_idx = sys_size + 1
+                sys_size = c_idx
+            end if
+
+            if (cont_damage) then
+                damage_idx = sys_size + 1
+                sys_size = damage_idx
+            end if
+
+        end if
+
         ! END: Volume Fraction Model
 
         if (chemistry) then
@@ -1181,7 +1221,7 @@ contains
         chemxb = species_idx%beg
         chemxe = species_idx%end
 
-        !$acc update device(momxb, momxe, advxb, advxe, contxb, contxe, bubxb, bubxe, intxb, intxe, sys_size, buff_size, E_idx, alf_idx, n_idx, adv_n, adap_dt, pi_fac, strxb, strxe, chemxb, chemxe)
+        !$acc update device(momxb, momxe, advxb, advxe, contxb, contxe, bubxb, bubxe, intxb, intxe, sys_size, buff_size, E_idx, alf_idx, n_idx, adv_n, adap_dt, pi_fac, strxb, strxe, chemxb, chemxe, c_idx)
         !$acc update device(b_size, xibeg, xiend, tensor_size)
 
         !$acc update device(species_idx)
@@ -1191,6 +1231,8 @@ contains
         !$acc update device(dt, sys_size, buff_size, pref, rhoref, gamma_idx, pi_inf_idx, E_idx, alf_idx, stress_idx, mpp_lim, bubbles_euler, hypoelasticity, alt_soundspeed, avg_state, num_fluids, model_eqns, num_dims, num_vels, mixture_err, grid_geometry, cyl_coord, mp_weno, weno_eps, teno_CT, hyperelasticity, hyper_model, elasticity, xi_idx, B_idx, low_Mach, sph_coord)
 
         !$acc update device(Bx0, powell)
+
+        !$acc update device(cont_damage, tau_star, cont_damage_s, alpha_bar)
 
         #:if not MFC_CASE_OPTIMIZATION
             !$acc update device(wenojs, mapped_weno, wenoz, teno)

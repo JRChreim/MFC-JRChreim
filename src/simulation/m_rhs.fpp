@@ -35,6 +35,8 @@ module m_rhs
 
     use m_bubbles_EE           !< Ensemble-averaged bubble dynamics routines
 
+    use m_bubbles_EL           !< Volume-averaged bubble dynamics routines
+
     use m_qbmm                 !< Moment inversion
 
     use m_hypoelastic
@@ -49,7 +51,7 @@ module m_rhs
 
     use m_nvtx
 
-    use m_boundary_conditions
+    use m_boundary_common
 
     use m_helper
 
@@ -174,6 +176,8 @@ contains
 
         integer :: i, j, k, l, id !< Generic loop iterators
 
+        integer :: num_eqns_after_adv
+
         !$acc enter data copyin(idwbuff, idwbuff)
         !$acc update device(idwbuff, idwbuff)
 
@@ -188,19 +192,11 @@ contains
             @:ALLOCATE(q_prim_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
         end do
 
-        if (surface_tension) then
-            ! This assumes that the color function advection equation is
-            ! the last equation. If this changes then this logic will
-            ! need updated
-            do l = adv_idx%end + 1, sys_size - 1
-                @:ALLOCATE(q_prim_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
-            end do
-        else
-            do l = adv_idx%end + 1, sys_size
-                @:ALLOCATE(q_prim_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
-            end do
+        num_eqns_after_adv = count((/surface_tension, cont_damage/))
 
-        end if
+        do l = adv_idx%end + 1, sys_size - num_eqns_after_adv
+            @:ALLOCATE(q_prim_qp%vf(l)%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
+        end do
 
         @:ACC_SETUP_VFs(q_cons_qp, q_prim_qp)
 
@@ -226,6 +222,13 @@ contains
                 q_cons_qp%vf(c_idx)%sf
             !$acc enter data copyin(q_prim_qp%vf(c_idx)%sf)
             !$acc enter data attach(q_prim_qp%vf(c_idx)%sf)
+        end if
+
+        if (cont_damage) then
+            q_prim_qp%vf(damage_idx)%sf => &
+                q_cons_qp%vf(damage_idx)%sf
+            !$acc enter data copyin(q_prim_qp%vf(damage_idx)%sf)
+            !$acc enter data attach(q_prim_qp%vf(damage_idx)%sf)
         end if
 
         if (viscous) then
@@ -608,16 +611,18 @@ contains
 
     end subroutine s_initialize_rhs_module
 
-    subroutine s_compute_rhs(q_cons_vf, q_T_sf, q_prim_vf, rhs_vf, pb, rhs_pb, mv, rhs_mv, t_step, time_avg)
+    subroutine s_compute_rhs(q_cons_vf, q_T_sf, q_prim_vf, bc_type, rhs_vf, pb, rhs_pb, mv, rhs_mv, t_step, time_avg, stage)
 
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         type(scalar_field), intent(inout) :: q_T_sf
         type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
+        type(integer_field), dimension(1:num_dims, -1:1), intent(in) :: bc_type
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
         real(wp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: pb, rhs_pb
         real(wp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: mv, rhs_mv
         integer, intent(in) :: t_step
         real(wp), intent(inout) :: time_avg
+        integer, intent(in) :: stage
 
         real(wp), dimension(0:m, 0:n, 0:p) :: nbub
         real(wp) :: t_start, t_finish
@@ -669,7 +674,7 @@ contains
         call nvtxEndRange
 
         call nvtxStartRange("RHS-COMMUNICATION")
-        call s_populate_variables_buffers(q_prim_qp%vf, pb, mv)
+        call s_populate_variables_buffers(q_prim_qp%vf, pb, mv, bc_type)
         call nvtxEndRange
 
         call nvtxStartRange("RHS-ELASTIC")
@@ -700,7 +705,7 @@ contains
 
         if (surface_tension) then
             call nvtxStartRange("RHS-SURFACE-TENSION")
-            call s_get_capilary(q_prim_qp%vf)
+            call s_get_capilary(q_prim_qp%vf, bc_type)
             call nvtxEndRange
         end if
         ! Dimensional Splitting Loop
@@ -876,7 +881,7 @@ contains
             end do
         end if
 
-        ! Additional Physics and Source Temrs
+        ! Additional Physics and Source Terms
         ! Additions for acoustic_source
         if (acoustic_source) then
             call nvtxStartRange("RHS-ACOUSTIC-SRC")
@@ -887,7 +892,7 @@ contains
             call nvtxEndRange
         end if
 
-        ! Add bubles source term
+        ! Add bubbles source term
         if (bubbles_euler .and. (.not. adap_dt) .and. (.not. qbmm)) then
             call nvtxStartRange("RHS-BUBBLES-SRC")
             call s_compute_bubble_EE_source( &
@@ -898,13 +903,36 @@ contains
             call nvtxEndRange
         end if
 
+        if (bubbles_lagrange) then
+            ! RHS additions for sub-grid bubbles_lagrange
+            call nvtxStartRange("RHS-EL-BUBBLES-SRC")
+            call s_compute_bubbles_EL_source( &
+                q_cons_qp%vf(1:sys_size), &
+                q_prim_qp%vf(1:sys_size), &
+                rhs_vf)
+            call nvtxEndRange
+            ! Compute bubble dynamics
+            if (.not. adap_dt) then
+                call nvtxStartRange("RHS-EL-BUBBLES-DYN")
+                call s_compute_bubble_EL_dynamics( &
+                    q_cons_qp%vf(1:sys_size), &
+                    q_prim_qp%vf(1:sys_size), &
+                    t_step, &
+                    rhs_vf, &
+                    stage)
+                call nvtxEndRange
+            end if
+        end if
+
         if (chemistry .and. chem_params%reactions) then
             call nvtxStartRange("RHS-CHEM-REACTIONS")
             call s_compute_chemistry_reaction_flux(rhs_vf, q_cons_qp%vf, q_T_sf, q_prim_qp%vf, idwint)
             call nvtxEndRange
         end if
 
-        ! END: Additional pphysics and source terms
+        if (cont_damage) call s_compute_damage_state(q_cons_qp%vf, rhs_vf)
+
+        ! END: Additional physics and source terms
 
         if (run_time_info .or. probe_wrt .or. ib .or. bubbles_lagrange) then
             !$acc parallel loop collapse(4) gang vector default(present)
@@ -977,12 +1005,12 @@ contains
 
         if (idir == 1) then
 
-            if (bc_x%beg <= -5 .and. bc_x%beg >= -13) then
+            if (bc_x%beg <= BC_CHAR_SLIP_WALL .and. bc_x%beg >= BC_CHAR_SUP_OUTFLOW) then
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, &
                            flux_src_n(idir)%vf, idir, -1, irx, iry, irz)
             end if
 
-            if (bc_x%end <= -5 .and. bc_x%end >= -13) then
+            if (bc_x%end <= BC_CHAR_SLIP_WALL .and. bc_x%end >= BC_CHAR_SUP_OUTFLOW) then
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, &
                            flux_src_n(idir)%vf, idir, 1, irx, iry, irz)
             end if
@@ -1086,12 +1114,12 @@ contains
             ! RHS Contribution in y-direction
             ! Applying the Riemann fluxes
 
-            if (bc_y%beg <= -5 .and. bc_y%beg >= -13) then
+            if (bc_y%beg <= BC_CHAR_SLIP_WALL .and. bc_y%beg >= BC_CHAR_SUP_OUTFLOW) then
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, &
                            flux_src_n(idir)%vf, idir, -1, irx, iry, irz)
             end if
 
-            if (bc_y%end <= -5 .and. bc_y%end >= -13) then
+            if (bc_y%end <= BC_CHAR_SLIP_WALL .and. bc_y%end >= BC_CHAR_SUP_OUTFLOW) then
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, &
                            flux_src_n(idir)%vf, idir, 1, irx, iry, irz)
             end if
@@ -1260,12 +1288,12 @@ contains
 
             ! Applying the Riemann fluxes
 
-            if (bc_z%beg <= -5 .and. bc_z%beg >= -13) then
+            if (bc_z%beg <= BC_CHAR_SLIP_WALL .and. bc_z%beg >= BC_CHAR_SUP_OUTFLOW) then
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, &
                            flux_src_n(idir)%vf, idir, -1, irx, iry, irz)
             end if
 
-            if (bc_z%end <= -5 .and. bc_z%end >= -13) then
+            if (bc_z%end <= BC_CHAR_SLIP_WALL .and. bc_z%end >= BC_CHAR_SUP_OUTFLOW) then
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, &
                            flux_src_n(idir)%vf, idir, 1, irx, iry, irz)
             end if
@@ -1556,7 +1584,7 @@ contains
                 end do
             end if
 
-            if (cyl_coord .and. ((bc_y%beg == -2) .or. (bc_y%beg == -14))) then
+            if (cyl_coord .and. ((bc_y%beg == BC_REFLECTIVE) .or. (bc_y%beg == BC_AXIS))) then
                 if (viscous) then
                     if (p > 0) then
                         call s_compute_viscous_stress_tensor(q_prim_vf, &
@@ -1624,7 +1652,7 @@ contains
             ! Applying the geometrical viscous Riemann source fluxes calculated as average
             ! of values at cell boundaries
             if (cyl_coord) then
-                if ((bc_y%beg == -2) .or. (bc_y%beg == -14)) then
+                if ((bc_y%beg == BC_REFLECTIVE) .or. (bc_y%beg == BC_AXIS)) then
 
                     !$acc parallel loop collapse(3) gang vector default(present)
                     do l = 0, p

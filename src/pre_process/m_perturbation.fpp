@@ -14,8 +14,7 @@ module m_perturbation
 
     use m_eigen_solver          ! Subroutines to solve eigenvalue problem for
 
-    use m_boundary_conditions   ! Boundary conditions module
-    ! complex general matrix
+    use m_boundary_common   ! Boundary conditions module
 
     use ieee_arithmetic
 
@@ -28,8 +27,6 @@ module m_perturbation
     integer :: n_bc_skip ! Number of points skipped in the linear stability analysis due to the boundary condition
 
     real(wp), allocatable, dimension(:, :, :, :) :: q_prim_temp
-
-    real(wp) :: bcxb, bcxe, bcyb, bcye, bczb, bcze
 
 contains
 
@@ -64,7 +61,7 @@ contains
         integer :: i, j, k, l !< generic loop operators
 
         real(wp) :: perturb_alpha
-        real(wp) :: alpha_unadv
+
         real(wp) :: rand_real
         call random_seed()
 
@@ -93,7 +90,7 @@ contains
 
     subroutine s_perturb_surrounding_flow(q_prim_vf)
         type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
-        integer :: i, j, k, l !<  generic loop iterators
+        integer :: i, j, k !<  generic loop iterators
 
         real(wp) :: perturb_alpha
         real(wp) :: rand_real
@@ -191,7 +188,7 @@ contains
         real(wp), intent(inout) :: fR
         real(wp) :: f0, f1
         real(wp) :: gam_b
-        integer :: ii, jj
+        integer :: ii
 
         gam_b = 1._wp + 1._wp/fluid_pp(num_fluids + 1)%gamma
 
@@ -241,7 +238,7 @@ contains
         real(wp), dimension(0:nbp - 1, 0:nbp - 1) :: d !< differential operator in y dir
         real(wp) :: gam, pi_inf, mach, c1, adv
         real(wp) :: xratio, uratio
-        integer :: i, j !<  generic loop iterators
+        integer :: j !<  generic loop iterators
 
         xratio = mixlayer_vel_coef
         uratio = 1._wp/patch_icpp(1)%vel(1)
@@ -302,7 +299,7 @@ contains
         real(wp), dimension(0:mixlayer_nvar*n - n_bc_skip - 1) :: fv1, fv2, fv3 !< temporary memory
 
         integer :: ierr
-        integer :: i, j, k, l !<  generic loop iterators
+        integer :: j, k !<  generic loop iterators
         integer :: ii, jj !< block matrix indices
 
         ! Compute y-derivatives of rho and u
@@ -346,7 +343,7 @@ contains
         ai = bi + ci
 
         ! Apply BC to ar and ai matrices
-        if (bc_y%beg == -6 .and. bc_y%end == -6) then
+        if (bc_y%beg == BC_CHAR_NR_SUB_BUFFER .and. bc_y%end == BC_CHAR_NR_SUB_BUFFER) then
             ! Nonreflecting subsonic buffer BC
             call s_instability_nonreflecting_subsonic_buffer_bc(ar, ai, hr, hi, rho_mean, mach)
         end if
@@ -618,15 +615,16 @@ contains
 
     end subroutine s_generate_wave
 
-    subroutine s_elliptic_smoothing(q_prim_vf)
+    subroutine s_elliptic_smoothing(q_prim_vf, bc_type)
 
-        type(scalar_field), dimension(sys_size), intent(INOUT) :: q_prim_vf
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
+        type(integer_field), dimension(1:num_dims, -1:1), intent(in) :: bc_type
         integer :: i, j, k, l, q
 
         do q = 1, elliptic_smoothing_iters
 
             ! Communication of buffer regions and apply boundary conditions
-            call s_populate_variables_buffers(q_prim_vf)
+            call s_populate_variables_buffers(q_prim_vf, pb%sf, mv%sf, bc_type)
 
             ! Perform smoothing and store in temp array
             if (n == 0) then

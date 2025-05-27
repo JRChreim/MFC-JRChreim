@@ -42,6 +42,7 @@ contains
         call s_check_inputs_grcbc
         call s_check_inputs_geometry_precision
         call s_check_inputs_mhd
+        call s_check_inputs_continuum_damage
 
     end subroutine s_check_inputs
 
@@ -97,8 +98,8 @@ contains
         @:PROHIBIT(riemann_solver /= 3 .and. wave_speeds == dflt_int, "wave_speeds must be set if riemann_solver != 3")
         @:PROHIBIT(riemann_solver /= 3 .and. avg_state == dflt_int, "avg_state must be set if riemann_solver != 3")
         @:PROHIBIT(all(low_Mach /= (/0, 1, 2/)), "low_Mach must be 0, 1 or 2")
-        @:PROHIBIT(riemann_solver /= 2 .and. low_Mach /= 0, "low_Mach = 1 or 2 requires riemann_solver = 2")
-        @:PROHIBIT(low_Mach /= 0 .and. model_eqns /= 2, "low_Mach = 1 or 2 requires model_eqns = 2")
+        @:PROHIBIT(riemann_solver /= 2 .and. low_Mach == 2, "low_Mach = 2 requires riemann_solver = 2")
+        @:PROHIBIT(low_Mach /= 0 .and. all(model_eqns /= (/2, 3/)), "low_Mach = 1 or 2 requires model_eqns = 2 or 3")
     end subroutine s_check_inputs_riemann_solver
 
     !> Checks constraints on geometry and precision
@@ -114,7 +115,7 @@ contains
         if (.not. cfl_dt) then
             @:PROHIBIT(dt <= 0)
         end if
-        @:PROHIBIT(time_stepper < 1 .or. time_stepper > 5)
+        @:PROHIBIT(time_stepper < 1 .or. time_stepper > 3)
     end subroutine s_check_inputs_time_stepping
 
     !> Checks constraints on parameters related to 6-equation model
@@ -164,9 +165,9 @@ contains
                 "Only acoustic("//trim(jStr)//")%support = 1 is allowed for 1D simulations")
             @:PROHIBIT(dim == 1 .and. acoustic(j)%support == 1 .and. f_is_default(acoustic(j)%loc(1)), &
                 "acoustic("//trim(jStr)//")%loc(1) must be specified for acoustic("//trim(jStr)//")%support = 1")
-            @:PROHIBIT(dim == 2 .and. (.not. any(acoustic(j)%support == (/2, 5, 6, 9, 10/))), &
+            @:PROHIBIT((dim == 2  .and. .not. cyl_coord) .and. (.not. any(acoustic(j)%support == (/2, 5, 9/))), &
                 "Only acoustic("//trim(jStr)//")%support = 2, 5, 6, 9, or 10 is allowed for 2D simulations")
-            @:PROHIBIT(dim == 2 .and. (.not. any(acoustic(j)%support == (/6, 10/))) .and. cyl_coord, &
+            @:PROHIBIT((dim == 2  .and. cyl_coord) .and. (.not. any(acoustic(j)%support == (/2, 6, 10/))), &
                 "Only acoustic("//trim(jStr)//")%support = 6 or 10 is allowed for 2D axisymmetric simulations")
             @:PROHIBIT(dim == 2 .and. any(acoustic(j)%support == (/2, 5, 6, 9, 10/)) .and. &
                 (f_is_default(acoustic(j)%loc(1)) .or. f_is_default(acoustic(j)%loc(2))), &
@@ -277,8 +278,8 @@ contains
     subroutine s_check_inputs_adapt_dt
         @:PROHIBIT(adap_dt .and. time_stepper /= 3, "adapt_dt requires Runge-Kutta 3 (time_stepper = 3)")
         @:PROHIBIT(adap_dt .and. qbmm)
-        @:PROHIBIT(adap_dt .and. (.not. polytropic))
-        @:PROHIBIT(adap_dt .and. (.not. adv_n))
+        @:PROHIBIT(adap_dt .and. (.not. polytropic) .and. (.not. bubbles_lagrange))
+        @:PROHIBIT(adap_dt .and. (.not. adv_n) .and. (.not. bubbles_lagrange))
     end subroutine s_check_inputs_adapt_dt
 
     !> Checks constraints on alternative sound speed parameters (alt_soundspeed)
@@ -331,7 +332,15 @@ contains
         @:PROHIBIT(bubbles_lagrange .and. file_per_process, "file_per_process must be false for bubbles_lagrange")
         @:PROHIBIT(bubbles_lagrange .and. n==0, "bubbles_lagrange accepts 2D and 3D simulations only")
         @:PROHIBIT(bubbles_lagrange .and. model_eqns==3, "The 6-equation flow model does not support bubbles_lagrange")
+        @:PROHIBIT(bubbles_lagrange .and. lag_params%cluster_type>=2 .and. lag_params%smooth_type/=1, "cluster_type=2 requires smooth_type=1")
     end subroutine s_check_inputs_bubbles_lagrange
+
+    !> Checks constraints on continuum damage model parameters
+    subroutine s_check_inputs_continuum_damage
+        @:PROHIBIT(cont_damage .and. f_is_default(tau_star))
+        @:PROHIBIT(cont_damage .and. f_is_default(cont_damage_s))
+        @:PROHIBIT(cont_damage .and. f_is_default(alpha_bar))
+    end subroutine s_check_inputs_continuum_damage
 
     !> Checks miscellaneous constraints,
         !! including constraints on probe_wrt and integral_wrt
