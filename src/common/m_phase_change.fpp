@@ -1292,7 +1292,7 @@ contains
 
         ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
         ! phisically sustained (p = 0, T = 0)
-        if ((pSat == 0.0_wp) .and. (TSIn == 0.0_wp)) then
+        if ((pSat <= 0.0_wp) .and. (TSIn >= 0.0_wp)) then
 
             ! assigning Saturation temperature
             TSat = 0.0_wp
