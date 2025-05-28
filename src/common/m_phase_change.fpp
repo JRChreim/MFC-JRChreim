@@ -997,7 +997,7 @@ contains
             do i = 1, num_fluids
                 ! analysis in terms of mass fraction because this is what is needed for the relaxation process. Volume
                 ! fraction does not matter
-                if (m0k(i)/rho < 0) then
+                if (m0k(i)/rho < mixM) then
                     ! do not continue relaxation
                     TR = .false.
                 end if
@@ -1005,34 +1005,34 @@ contains
         elseif (CT == 1) then
             if (rM < 0.0_wp) then
                 ! reacting masses are very negative so as to affect the physics of the problem, so phase change will not be activated
-                if ((m0k(lp)/rM < 0_wp*mixM) .or. &
-                    (m0k(vp)/rM < 0_wp*mixM)) then
+                if ((m0k(lp)/rM < mixM) .or. &
+                    (m0k(vp)/rM < mixM)) then
                     
                     ! do not continue relaxation
                     TR = .false.
                 ! reacting masses are not as negative so I can disregard them,
                 ! expecting no significant changes in the physics of the simulation
                 else
-                    m0k(lp) = 0.0_wp*mixM*rM
-                    m0k(vp) = 0.0_wp*mixM*rM
+                    m0k(lp) = mixM*rM
+                    m0k(vp) = mixM*rM
 
                     ! continue relaxation
                     TR = .true.
                 end if
             ! correcting the partial densities of the reacting fluids. In case liquid is negative
-            elseif (m0k(lp)/rM < 0.0_wp*mixM) then
+            elseif (m0k(lp)/rM < mixM) then
 
-                m0k(lp) = 0.0_wp*mixM*rM
-                m0k(vp) = (1.0_wp - 0.0_wp*mixM)*rM
+                m0k(lp) = mixM*rM
+                m0k(vp) = (1.0_wp - mixM)*rM
                 
                 ! continue relaxation
                 TR = .true.
 
             ! correcting the partial densities of the reacting fluids. In case vapor is negative
-            elseif (m0k(vp)/rM < 0.0_wp*mixM) then
+            elseif (m0k(vp)/rM < mixM) then
 
-                m0k(lp) = (1.0_wp - 0.0_wp*mixM)*rM
-                m0k(vp) = 0.0_wp*mixM*rM
+                m0k(lp) = (1.0_wp - mixM)*rM
+                m0k(vp) = mixM*rM
 
                 ! continue relaxation
                 TR = .true.
