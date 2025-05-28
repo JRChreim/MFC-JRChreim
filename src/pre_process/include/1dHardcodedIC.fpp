@@ -8,7 +8,7 @@
     select case (patch_icpp(patch_id)%hcid)
     case (100) ! 1D Pressure Pulse - Solution to Wave Equation, 1D cartesian
 
-        q_prim_vf(momxb)%sf(i, j, 0) =  patch_icpp(1)%vel(1) &
+        q_prim_vf(momxb)%sf(i, 0, 0) =  patch_icpp(1)%vel(1) &
                                         * ( exp( - ( x_cc(i) - 1 ) ** 2 / 2 ) &
                                         -   exp( - ( x_cc(i) + 1 ) ** 2 / 2 ) )
 

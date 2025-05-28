@@ -259,7 +259,7 @@ contains
         @: PROHIBIT(cyl_coord .and. (bc_y%end > BC_PERIODIC .or. bc_y%end < BC_DIRICHLET), "bc_y%end must be between -1 and -17")
         @: PROHIBIT(sph_coord .and. (bc_y%end > BC_PERIODIC .or. bc_y%end < BC_DIRICHLET), "bc_y%end must be between -1 and -17")
         @: PROHIBIT(cyl_coord .and. bc_y%end == BC_AXIS, "bc_y%end must not be -14")
-        @: PROHIBIT(sph_coord .and. (bc_y%end == BC_REFLECTIVE .or. BC_AXIS), "bc_y%end must not be -2 or -14")        
+        @: PROHIBIT(sph_coord .and. (bc_y%end == BC_REFLECTIVE .or. bc_y%end == BC_AXIS), "bc_y%end must not be -2 or -14")        
 
         ! Check for y and z directions for 3D cylindrical coordinates
         @: PROHIBIT(cyl_coord .and. p > 0 .and. (bc_z%beg /= BC_PERIODIC .and. bc_z%beg /= BC_REFLECTIVE), &
