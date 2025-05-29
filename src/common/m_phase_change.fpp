@@ -50,8 +50,8 @@ contains
     subroutine s_initialize_phasechange_module()
 
         ! variables used in the calculation of the saturation curves for fluids 1 and 2
-        A = (gs_min(lp)*cvs(lp) - gs_min(vp)*cvs(vp) &
-             + qvps(vp) - qvps(lp))/((gs_min(vp) - 1.0_wp)*cvs(vp))
+        A = (gs_min(lp)*cvs(lp) - gs_min(vp)*cvs(vp) + qvps(vp) - qvps(lp)) &
+            /((gs_min(vp) - 1.0_wp)*cvs(vp))
 
         B = (qvs(lp) - qvs(vp))/((gs_min(vp) - 1.0_wp)*cvs(vp))
 
@@ -109,7 +109,7 @@ contains
                     do i = 1, num_fluids
                         ! initial volume fraction
                         alphak(i) = q_cons_vf(i + advxb - 1)%sf(j, k, l)
-                        
+
                         ! initial partial density
                         m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
 
@@ -122,12 +122,12 @@ contains
                         if (model_eqns == 3) then
                             ! initial volume fraction
                             alpharhoe0k(i) = q_cons_vf(i + intxb - 1)%sf(j, k, l)
-                            
+
                             ! total mixture energy by the summation of the internal energy equations
                             rhoeT = rhoeT + alpharhoe0k(i)
                         end if
                     end do
-                    
+
                     ! Mixture density
                     rho = sum(m0k)
 
@@ -260,7 +260,8 @@ contains
                                 !$acc loop seq
                                 do i = 1, num_fluids
                                     ! returning partial densities to what they were previous to any relaxation scheme.
-                                    m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l) 
+                                    m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                                    print *, 'returning crap'
                                 end do
                                 ! cycles the innermost loop to the next iteration
                                 cycle 
@@ -636,7 +637,7 @@ contains
 #endif
 
             if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
-                ! sum of the total alpha*rho*cp of the system                
+                ! sum of the total alpha*rho*cp of the system
                 mCP = mCP + m0k(i)*cvs(i)*gs_min(i)
 
                 ! sum of the total alpha*rho*q of the system
@@ -1005,9 +1006,7 @@ contains
         elseif (CT == 1) then
             if (rM < 0.0_wp) then
                 ! reacting masses are very negative so as to affect the physics of the problem, so phase change will not be activated
-                if ((m0k(lp)/rM < mixM) .or. &
-                    (m0k(vp)/rM < mixM)) then
-                    
+                if ((m0k(lp)/rM < mixM) .or. (m0k(vp)/rM < mixM)) then
                     ! do not continue relaxation
                     TR = .false.
                 ! reacting masses are not as negative so I can disregard them,
@@ -1040,12 +1039,12 @@ contains
             end if
         elseif (CT == 2) then
             do i = 1, num_fluids
-                if (alpha0k(i) < 0 .or. m0k(i)  < 0 ) then
+                if (alpha0k(i) < 0 .or. m0k(i) < 0) then
                     alpha0k(i) = 0.0_wp
                     m0k(i) = 0.0_wp
                     if (model_eqns .eq. 3) then
                         alpharhoe0k(i) = 0.0_wp
-                    end if 
+                    end if
                 end if
             end do
             ! continue relaxation
