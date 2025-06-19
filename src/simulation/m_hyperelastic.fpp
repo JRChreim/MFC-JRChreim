@@ -45,7 +45,7 @@ contains
         !! calculate the inverse of grad_xi to obtain F, F is a nxn tensor
         !! calculate the FFtranspose to obtain the btensor, btensor is nxn tensor
         !! btensor is symmetric, save the data space
-    subroutine s_initialize_hyperelastic_module
+    impure subroutine s_initialize_hyperelastic_module
         integer :: i !< generic iterator
 
         @:ALLOCATE(btensor%vf(1:b_size))
@@ -118,7 +118,7 @@ contains
                     end do
                     ! If in simulation, use acc mixture subroutines
                     call s_convert_species_to_mixture_variables_acc(rho, gamma, pi_inf, qv, alpha_k, &
-                                                                    alpha_rho_k, Re, j, k, l, G, Gs)
+                                                                    alpha_rho_k, Re, G, Gs)
                     rho = max(rho, sgm_eps)
                     G = max(G, sgm_eps)
                     !if ( G <= verysmall ) G_K = 0_wp
@@ -126,7 +126,7 @@ contains
                     if (G > verysmall) then
                         !$acc loop seq
                         do i = 1, tensor_size
-                            tensora(i) = 0_wp
+                            tensora(i) = 0._wp
                         end do
                         ! STEP 1: computing the grad_xi tensor using finite differences
                         ! grad_xi definition / organization
@@ -173,7 +173,7 @@ contains
                             end do
 
                             ! STEP 2d: computing the J = det(F) = 1/det(\grad{\xi})
-                            tensorb(tensor_size) = 1_wp/tensorb(tensor_size)
+                            tensorb(tensor_size) = 1._wp/tensorb(tensor_size)
 
                             ! STEP 3: computing F transpose F
                             tensorb(1) = tensora(1)**2 + tensora(2)**2 + tensora(3)**2
@@ -219,7 +219,7 @@ contains
         !! calculate the inverse of grad_xi to obtain F, F is a nxn tensor
         !! calculate the FFtranspose to obtain the btensor, btensor is nxn tensor
         !! btensor is symmetric, save the data space
-    subroutine s_neoHookean_cauchy_solver(btensor, q_prim_vf, G, j, k, l)
+    pure subroutine s_neoHookean_cauchy_solver(btensor, q_prim_vf, G, j, k, l)
         !$acc routine seq
         type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
         type(scalar_field), dimension(b_size), intent(inout) :: btensor
@@ -258,7 +258,7 @@ contains
         !! calculate the inverse of grad_xi to obtain F, F is a nxn tensor
         !! calculate the FFtranspose to obtain the btensor, btensor is nxn tensor
         !! btensor is symmetric, save the data space
-    subroutine s_Mooney_Rivlin_cauchy_solver(btensor, q_prim_vf, G, j, k, l)
+    pure subroutine s_Mooney_Rivlin_cauchy_solver(btensor, q_prim_vf, G, j, k, l)
         !$acc routine seq
         type(scalar_field), dimension(sys_size), intent(inout) :: q_prim_vf
         type(scalar_field), dimension(b_size), intent(inout) :: btensor
@@ -291,7 +291,7 @@ contains
 
     end subroutine s_Mooney_Rivlin_cauchy_solver
 
-    subroutine s_finalize_hyperelastic_module()
+    impure subroutine s_finalize_hyperelastic_module()
 
         integer :: i !< iterator
 

@@ -19,6 +19,8 @@ module m_phase_change
 
     use ieee_arithmetic
 
+    use m_helper_basic         !< Functions to compare floating point numbers
+
     implicit none
 
     private; public :: s_initialize_phasechange_module, &
@@ -47,8 +49,7 @@ contains
         !!      by setting the parameters needed for phase change and
         !!      selecting the phase change module that will be used
         !!      (pT- or pTg-equilibrium)
-    subroutine s_initialize_phasechange_module()
-
+    impure subroutine s_initialize_phasechange_module
         ! variables used in the calculation of the saturation curves for fluids 1 and 2
         A = (gs_min(lp)*cvs(lp) - gs_min(vp)*cvs(vp) + qvps(vp) - qvps(lp)) &
             /((gs_min(vp) - 1.0_wp)*cvs(vp))
@@ -74,8 +75,9 @@ contains
         !!      model, also considering mass depletion, depending on the incoming
         !!      state conditions.
         !!  @param q_cons_vf Cell-average conservative variables
-    subroutine s_infinite_relaxation_k(q_cons_vf) ! ----------------
-        type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
+    pure subroutine s_infinite_relaxation_k(q_cons_vf)
+
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(wp) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
@@ -590,7 +592,7 @@ contains
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_pt_relaxation_k(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS)
+    pure subroutine s_infinite_pt_relaxation_k(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS)
 
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_infinite_pt_relaxation_k
@@ -762,7 +764,7 @@ contains
         !!  @param rhoe mixture energy
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_ptg_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
+    impure subroutine s_infinite_ptg_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
 
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_infinite_ptg_relaxation_k
@@ -973,7 +975,7 @@ contains
         !!  @param j generic loop iterator for x direction
         !!  @param k generic loop iterator for y direction
         !!  @param l generic loop iterator for z direction
-    subroutine s_correct_partial_densities(CT, alpha0k, alpharhoe0k, m0k, rM, rho, TR, i, j, k, l)
+    impure subroutine s_correct_partial_densities(CT, alpha0k, alpharhoe0k, m0k, rM, rho, TR, i, j, k, l)
 
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_correct_partial_densities
@@ -1077,7 +1079,7 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TJac Transpose of the Jacobian Matrix
-    subroutine s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
+    impure subroutine s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
 
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_jacobian_matrix
@@ -1173,7 +1175,7 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param rhoe mixture energy
         !!  @param R2D (2D) residue array
-    subroutine s_compute_pTg_residue(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+    impure subroutine s_compute_pTg_residue(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_pTg_residue
@@ -1209,7 +1211,7 @@ contains
     end subroutine s_compute_pTg_residue
 
     ! SUBROUTINE CREATED TO TELL ME WHERE THE ERROR IN THE PT- AND PTG-EQUILIBRIUM SOLVERS IS
-    subroutine s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, p_infA, pS, R2D, rhoe, q_cons_vf, TS) ! ----------------
+    pure subroutine s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, p_infA, pS, R2D, rhoe, q_cons_vf, TS) ! ----------------
 
         type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
         real(wp), dimension(2, 2), intent(IN) :: Jac, InvJac
@@ -1272,8 +1274,12 @@ contains
 
     end subroutine s_tattletale
 
-    ! Newton Solver for the finding the Saturation temperature TSat for a given saturation pressure
-    subroutine s_TSat(pSat, TSat, TSIn)
+        !>  This auxiliary subroutine finds the Saturation temperature for a given
+        !!      saturation pressure through a newton solver
+        !!  @param pSat Saturation Pressure
+        !!  @param TSat Saturation Temperature
+        !!  @param TSIn equilibrium Temperature
+    pure elemental subroutine s_TSat(pSat, TSat, TSIn)
 
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_TSat
@@ -1361,7 +1367,7 @@ contains
         ! PRINT *, 'TSat, pSat', TSat, pSat
     end subroutine s_TSat
 
-    subroutine update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+    pure subroutine update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
         
         !$acc routine seq
         type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
@@ -1413,7 +1419,7 @@ contains
         
     end subroutine update_conservative_vars
 
-    subroutine s_real_to_str(rl, res)
+    impure subroutine s_real_to_str(rl, res)
         character(len=*) :: res
         real(wp), intent(IN) :: rl
         write (res, '(F10.4)') rl

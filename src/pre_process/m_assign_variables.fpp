@@ -66,7 +66,7 @@ module m_assign_variables
 
 contains
 
-    subroutine s_initialize_assign_variables_module
+    impure subroutine s_initialize_assign_variables_module
 
         allocate (alf_sum%sf(0:m, 0:n, 0:p))
 
@@ -101,8 +101,8 @@ contains
         !! @param eta pseudo volume fraction
         !! @param q_prim_vf Primitive variables
         !! @param patch_id_fp Array to track patch ids
-    subroutine s_assign_patch_mixture_primitive_variables(patch_id, j, k, l, &
-                                                          eta, q_prim_vf, patch_id_fp)
+    pure subroutine s_assign_patch_mixture_primitive_variables(patch_id, j, k, l, &
+                                                               eta, q_prim_vf, patch_id_fp)
         !$acc routine seq
 
         integer, intent(in) :: patch_id
@@ -190,7 +190,7 @@ contains
     !! @param k the y-dir node index
     !! @param l the z-dir node index
     !! @param q_prim_vf Primitive variables
-    subroutine s_perturb_primitive(j, k, l, q_prim_vf)
+    pure subroutine s_perturb_primitive(j, k, l, q_prim_vf)
 
         integer, intent(in) :: j, k, l
         type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
@@ -244,7 +244,7 @@ contains
         rhoH = (1._wp - vfH)/ratio
         deno = 1._wp - (1._wp - q_prim_vf(alf_idx)%sf(j, k, l))/rhoH
 
-        if (deno == 0._wp) then
+        if (f_approx_equal(deno, 0._wp)) then
             velH = 0._wp
         else
             velH = (q_prim_vf(E_idx)%sf(j, k, l) - 1._wp)/(1._wp - q_prim_vf(alf_idx)%sf(j, k, l))/deno
@@ -274,8 +274,8 @@ contains
         !! @param eta pseudo volume fraction
         !! @param q_prim_vf Primitive variables
         !! @param patch_id_fp Array to track patch ids
-    subroutine s_assign_patch_species_primitive_variables(patch_id, j, k, l, &
-                                                          eta, q_prim_vf, patch_id_fp)
+    impure subroutine s_assign_patch_species_primitive_variables(patch_id, j, k, l, &
+                                                                 eta, q_prim_vf, patch_id_fp)
         !$acc routine seq
 
         integer, intent(in) :: patch_id
@@ -502,7 +502,7 @@ contains
                 theta = atan2(y_cc(k), x_cc(j))
                 phi = atan2(sqrt(x_cc(j)**2 + y_cc(k)**2), z_cc(l))
                 !spherical coord, assuming Rmax=1
-                xi_sph = (rcoord**3 - R0ref**3 + 1_wp)**(1_wp/3_wp)
+                xi_sph = (rcoord**3 - R0ref**3 + 1._wp)**(1._wp/3._wp)
                 xi_cart(1) = xi_sph*sin(phi)*cos(theta)
                 xi_cart(2) = xi_sph*sin(phi)*sin(theta)
                 xi_cart(3) = xi_sph*cos(phi)
@@ -515,7 +515,7 @@ contains
             ! assigning the reference map to the q_prim vector field
             do i = 1, num_dims
                 q_prim_vf(i + xibeg - 1)%sf(j, k, l) = eta*xi_cart(i) + &
-                                                       (1_wp - eta)*orig_prim_vf(i + xibeg - 1)
+                                                       (1._wp - eta)*orig_prim_vf(i + xibeg - 1)
             end do
         end if
 
@@ -691,7 +691,7 @@ contains
 
     end subroutine s_assign_patch_species_primitive_variables
 
-    subroutine s_finalize_assign_variables_module
+    impure subroutine s_finalize_assign_variables_module
 
         ! Nullifying procedure pointer to the subroutine assigning either
         ! the patch mixture or species primitive variables to a cell in the

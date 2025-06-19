@@ -191,8 +191,6 @@ module m_global_parameters
 
     integer :: num_bc_patches
     logical :: bc_io
-    integer :: BC_RIEMANN_EXTRAPOLATION
-    integer :: BC_GHOST_EXTRAPOLATION
     !> @name Boundary conditions (BC) in the x-, y- and z-directions, respectively
     !> @{
     type(int_bounds_info) :: bc_x, bc_y, bc_z
@@ -508,7 +506,7 @@ contains
     !> Assigns default values to the user inputs before reading
         !!  them in. This enables for an easier consistency check of
         !!  these parameters once they are read from the input file.
-    subroutine s_assign_default_values_to_user_inputs
+    impure subroutine s_assign_default_values_to_user_inputs
 
         integer :: i, j !< Generic loop iterator
 
@@ -589,8 +587,6 @@ contains
 
         num_bc_patches = 0
         bc_io = .false.
-        BC_RIEMANN_EXTRAPOLATION = -4
-        BC_GHOST_EXTRAPOLATION = -3
 
         bc_x%beg = dflt_int; bc_x%end = dflt_int
         bc_y%beg = dflt_int; bc_y%end = dflt_int
@@ -781,7 +777,7 @@ contains
     !>  The computation of parameters, the allocation of memory,
         !!      the association of pointers and/or the execution of any
         !!      other procedures that are necessary to setup the module.
-    subroutine s_initialize_global_parameters_module
+    impure subroutine s_initialize_global_parameters_module
 
         integer :: i, j, k
         integer :: fac
@@ -1264,7 +1260,7 @@ contains
     end subroutine s_initialize_global_parameters_module
 
     !> Initializes parallel infrastructure
-    subroutine s_initialize_parallel_io
+    impure subroutine s_initialize_parallel_io
 
         #:if not MFC_CASE_OPTIMIZATION
             num_dims = 1 + min(1, n) + min(1, p)
@@ -1301,7 +1297,7 @@ contains
     end subroutine s_initialize_parallel_io
 
     !> Module deallocation and/or disassociation procedures
-    subroutine s_finalize_global_parameters_module
+    impure subroutine s_finalize_global_parameters_module
 
         integer :: i
 

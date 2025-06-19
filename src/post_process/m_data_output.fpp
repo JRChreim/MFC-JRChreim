@@ -109,7 +109,7 @@ module m_data_output
 
 contains
 
-    subroutine s_initialize_data_output_module()
+    impure subroutine s_initialize_data_output_module()
         ! Description: Computation of parameters, allocation procedures, and/or
         !              any other tasks needed to properly setup the module
 
@@ -183,28 +183,28 @@ contains
         if (format == 1 .and. n > 0) then
             if (p > 0) then
                 if (grid_geometry == 3) then
-                    lo_offset = (/offset_y%beg, offset_z%beg, offset_x%beg/)
-                    hi_offset = (/offset_y%end, offset_z%end, offset_x%end/)
+                    lo_offset(:) = (/offset_y%beg, offset_z%beg, offset_x%beg/)
+                    hi_offset(:) = (/offset_y%end, offset_z%end, offset_x%end/)
                 else
-                    lo_offset = (/offset_x%beg, offset_y%beg, offset_z%beg/)
-                    hi_offset = (/offset_x%end, offset_y%end, offset_z%end/)
+                    lo_offset(:) = (/offset_x%beg, offset_y%beg, offset_z%beg/)
+                    hi_offset(:) = (/offset_x%end, offset_y%end, offset_z%end/)
                 end if
 
                 if (grid_geometry == 3) then
-                    dims = (/n + offset_y%beg + offset_y%end + 2, &
-                             p + offset_z%beg + offset_z%end + 2, &
-                             m + offset_x%beg + offset_x%end + 2/)
+                    dims(:) = (/n + offset_y%beg + offset_y%end + 2, &
+                                p + offset_z%beg + offset_z%end + 2, &
+                                m + offset_x%beg + offset_x%end + 2/)
                 else
-                    dims = (/m + offset_x%beg + offset_x%end + 2, &
-                             n + offset_y%beg + offset_y%end + 2, &
-                             p + offset_z%beg + offset_z%end + 2/)
+                    dims(:) = (/m + offset_x%beg + offset_x%end + 2, &
+                                n + offset_y%beg + offset_y%end + 2, &
+                                p + offset_z%beg + offset_z%end + 2/)
                 end if
             else
-                lo_offset = (/offset_x%beg, offset_y%beg/)
-                hi_offset = (/offset_x%end, offset_y%end/)
+                lo_offset(:) = (/offset_x%beg, offset_y%beg/)
+                hi_offset(:) = (/offset_x%end, offset_y%end/)
 
-                dims = (/m + offset_x%beg + offset_x%end + 2, &
-                         n + offset_y%beg + offset_y%end + 2/)
+                dims(:) = (/m + offset_x%beg + offset_x%end + 2, &
+                            n + offset_y%beg + offset_y%end + 2/)
             end if
         end if
 
@@ -423,7 +423,7 @@ contains
 
     end subroutine s_initialize_data_output_module
 
-    subroutine s_define_output_region
+    impure subroutine s_define_output_region
 
         integer :: i
         integer :: lower_bound, upper_bound
@@ -459,7 +459,7 @@ contains
 
     end subroutine s_define_output_region
 
-    subroutine s_open_formatted_database_file(t_step)
+    impure subroutine s_open_formatted_database_file(t_step)
         ! Description: This subroutine opens a new formatted database file, or
         !              replaces an old one, and readies it for the data storage
         !              of the grid and the flow variable(s) associated with the
@@ -585,7 +585,7 @@ contains
 
     end subroutine s_open_formatted_database_file
 
-    subroutine s_open_intf_data_file()
+    impure subroutine s_open_intf_data_file()
 
         character(LEN=path_len + 3*name_len) :: file_path !<
               !! Relative path to a file in the case directory
@@ -601,7 +601,7 @@ contains
 
     end subroutine s_open_intf_data_file
 
-    subroutine s_open_energy_data_file()
+    impure subroutine s_open_energy_data_file()
 
         character(LEN=path_len + 3*name_len) :: file_path !<
               !! Relative path to a file in the case directory
@@ -617,7 +617,7 @@ contains
 
     end subroutine s_open_energy_data_file
 
-    subroutine s_write_grid_to_formatted_database_file(t_step)
+    impure subroutine s_write_grid_to_formatted_database_file(t_step)
         ! Description: The general objective of this subroutine is to write the
         !              necessary grid data to the formatted database file, for
         !              the current time-step, t_step. The local processor will
@@ -710,10 +710,10 @@ contains
 
             if (precision == 1) then
                 if (p > 0) then
-                    z_cb_s = real(z_cb, sp)
+                    z_cb_s(:) = real(z_cb(:), sp)
                 end if
-                x_cb_s = real(x_cb, sp)
-                y_cb_s = real(y_cb, sp)
+                x_cb_s(:) = real(x_cb(:), sp)
+                y_cb_s(:) = real(y_cb(:), sp)
             end if
 
             #:for PRECISION, SFX, DBT in [(1,'_s','DB_FLOAT'),(2,'',"DB_DOUBLE")]
@@ -805,7 +805,7 @@ contains
                 if (num_procs > 1) then
                     call s_mpi_defragment_1d_grid_variable()
                 else
-                    x_root_cb = x_cb
+                    x_root_cb(:) = x_cb(:)
                 end if
 
                 if (proc_rank == 0) then
@@ -826,7 +826,7 @@ contains
 
     end subroutine s_write_grid_to_formatted_database_file
 
-    subroutine s_write_variable_to_formatted_database_file(varname, t_step)
+    impure subroutine s_write_variable_to_formatted_database_file(varname, t_step)
         ! Description: The goal of this subroutine is to write to the formatted
         !              database file the flow variable at the current time-step,
         !              t_step. The local process(es) write the part of the flow
@@ -872,11 +872,11 @@ contains
             if (n == 0) then
 
                 if (precision == 1 .and. wp == dp) then
-                    x_cc_s = real(x_cc, sp)
-                    q_sf_s = real(q_sf, sp)
+                    x_cc_s(:) = real(x_cc(:), sp)
+                    q_sf_s(:, :, :) = real(q_sf(:, :, :), sp)
                 elseif (precision == 1 .and. wp == sp) then
-                    x_cc_s = x_cc
-                    q_sf_s = q_sf
+                    x_cc_s(:) = x_cc(:)
+                    q_sf_s(:, :, :) = q_sf(:, :, :)
                 end if
 
                 ! Writing the curve object associated with the local process
@@ -897,16 +897,16 @@ contains
                     call s_mpi_defragment_1d_flow_variable(q_sf, q_root_sf)
 
                     if (precision == 1) then
-                        x_root_cc_s = real(x_root_cc, sp)
-                        q_root_sf_s = real(q_root_sf, sp)
+                        x_root_cc_s(:) = real(x_root_cc(:), sp)
+                        q_root_sf_s(:, :, :) = real(q_root_sf(:, :, :), sp)
                     end if
                 else
                     if (precision == 1) then
-                        x_root_cc_s = real(x_cc, sp)
-                        q_root_sf_s = real(q_sf, sp)
+                        x_root_cc_s(:) = real(x_cc(:), sp)
+                        q_root_sf_s(:, :, :) = real(q_sf(:, :, :), sp)
                     else
-                        x_root_cc = x_cc
-                        q_root_sf = q_sf
+                        x_root_cc(:) = x_cc(:)
+                        q_root_sf(:, :, :) = q_sf(:, :, :)
                     end if
                 end if
 
@@ -997,7 +997,7 @@ contains
                             end do
                         end if
                     end if
-                elseif (wp == dp) then
+                elseif (wp == sp) then
                     do i = -offset_x%beg, m + offset_x%end
                         do j = -offset_y%beg, n + offset_y%end
                             do k = -offset_z%beg, p + offset_z%end
@@ -1069,7 +1069,7 @@ contains
                 if (num_procs > 1) then
                     call s_mpi_defragment_1d_flow_variable(q_sf, q_root_sf)
                 else
-                    q_root_sf = q_sf
+                    q_root_sf(:, :, :) = q_sf(:, :, :)
                 end if
 
                 if (proc_rank == 0) then
@@ -1088,7 +1088,7 @@ contains
 
     !>  Subroutine that writes the post processed results in the folder 'lag_bubbles_data'
             !!  @param t_step Current time step
-    subroutine s_write_lag_bubbles_results(t_step)
+    impure subroutine s_write_lag_bubbles_results(t_step)
 
         integer, intent(in) :: t_step
 
@@ -1191,19 +1191,18 @@ contains
 #endif
 
     end subroutine s_write_lag_bubbles_results
-    subroutine s_write_intf_data_file(q_prim_vf)
+    impure subroutine s_write_intf_data_file(q_prim_vf)
 
         type(scalar_field), dimension(sys_size), intent(IN) :: q_prim_vf
         integer :: i, j, k, l, cent !< Generic loop iterators
         integer :: counter, root !< number of data points extracted to fit shape to SH perturbations
-        real(wp), parameter :: pi = 4._wp*tan(1._wp)
         real(wp), allocatable :: x_td(:), y_td(:), x_d1(:), y_d1(:), y_d(:), x_d(:)
         real(wp) :: axp, axm, ayp, aym, tgp, euc_d, thres, maxalph_loc, maxalph_glb
 
         allocate (x_d1(m*n))
         allocate (y_d1(m*n))
         counter = 0
-        maxalph_loc = 0_wp
+        maxalph_loc = 0._wp
         do k = 0, p
             do j = 0, n
                 do i = 0, m
@@ -1275,14 +1274,14 @@ contains
                         x_td(i), y_td(i), size(x_td)
                 else
                     write (211, '(F12.9,1X,F12.9,1X,F3.1)') &
-                        x_td(i), y_td(i), 0_wp
+                        x_td(i), y_td(i), 0._wp
                 end if
             end do
         end if
 
     end subroutine s_write_intf_data_file
 
-    subroutine s_write_energy_data_file(q_prim_vf, q_cons_vf)
+    impure subroutine s_write_energy_data_file(q_prim_vf, q_cons_vf)
         type(scalar_field), dimension(sys_size), intent(IN) :: q_prim_vf, q_cons_vf
         real(wp) :: Elk, Egk, Elp, Egint, Vb, Vl, pres_av, Et
         real(wp) :: rho, pres, dV, tmp, gamma, pi_inf, MaxMa, MaxMa_glb, maxvel, c, Ma, H, qv
@@ -1290,30 +1289,30 @@ contains
         real(wp), dimension(num_fluids) :: adv
         integer :: i, j, k, l, s !looping indices
 
-        Egk = 0_wp
-        Elp = 0_wp
-        Egint = 0_wp
-        Vb = 0_wp
-        maxvel = 0_wp
-        MaxMa = 0_wp
-        Vl = 0_wp
-        Elk = 0_wp
-        Et = 0_wp
-        Vb = 0_wp
-        dV = 0_wp
-        pres_av = 0_wp
-        pres = 0_wp
+        Egk = 0._wp
+        Elp = 0._wp
+        Egint = 0._wp
+        Vb = 0._wp
+        maxvel = 0._wp
+        MaxMa = 0._wp
+        Vl = 0._wp
+        Elk = 0._wp
+        Et = 0._wp
+        Vb = 0._wp
+        dV = 0._wp
+        pres_av = 0._wp
+        pres = 0._wp
         c = 0._wp
         qv = 0._wp
 
         do k = 0, p
             do j = 0, n
                 do i = 0, m
-                    pres = 0_wp
+                    pres = 0._wp
                     dV = dx(i)*dy(j)*dz(k)
-                    rho = 0_wp
-                    gamma = 0_wp
-                    pi_inf = 0_wp
+                    rho = 0._wp
+                    gamma = 0._wp
+                    pi_inf = 0._wp
                     pres = q_prim_vf(E_idx)%sf(i, j, k)
                     Egint = Egint + q_prim_vf(E_idx + 2)%sf(i, j, k)*(fluid_pp(2)%gamma*pres)*dV
                     do s = 1, num_vels
@@ -1382,7 +1381,7 @@ contains
 
     end subroutine s_write_energy_data_file
 
-    subroutine s_close_formatted_database_file()
+    impure subroutine s_close_formatted_database_file()
         ! Description: The purpose of this subroutine is to close any formatted
         !              database file(s) that may be opened at the time-step that
         !              is currently being post-processed. The root process must
@@ -1409,19 +1408,19 @@ contains
 
     end subroutine s_close_formatted_database_file
 
-    subroutine s_close_intf_data_file()
+    impure subroutine s_close_intf_data_file()
 
         close (211)
 
     end subroutine s_close_intf_data_file
 
-    subroutine s_close_energy_data_file()
+    impure subroutine s_close_energy_data_file()
 
         close (251)
 
     end subroutine s_close_energy_data_file
 
-    subroutine s_finalize_data_output_module()
+    impure subroutine s_finalize_data_output_module()
         ! Description: Deallocation procedures for the module
 
         ! Deallocating the generic storage employed for the flow variable(s)

@@ -10,8 +10,7 @@ module m_sim_helpers
 
     private; public :: s_compute_enthalpy, &
  s_compute_stability_from_dt, &
- s_compute_dt_from_cfl, &
- s_assign_default_bc_type
+ s_compute_dt_from_cfl
 
 contains
 
@@ -29,7 +28,7 @@ contains
         !! @param j x index
         !! @param k y index
         !! @param l z index
-    subroutine s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, qv, j, k, l)
+    pure subroutine s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, qv, j, k, l)
 #ifdef _CRAYFTN
         !DIR$ INLINEALWAYS s_compute_enthalpy
 #else
@@ -56,11 +55,11 @@ contains
 
         if (elasticity) then
             call s_convert_species_to_mixture_variables_acc(rho, gamma, pi_inf, qv, alpha, &
-                                                            alpha_rho, Re, j, k, l, G, Gs)
+                                                            alpha_rho, Re, G, Gs)
         elseif (bubbles_euler) then
-            call s_convert_species_to_mixture_variables_bubbles_acc(rho, gamma, pi_inf, qv, alpha, alpha_rho, Re, j, k, l)
+            call s_convert_species_to_mixture_variables_bubbles_acc(rho, gamma, pi_inf, qv, alpha, alpha_rho, Re)
         else
-            call s_convert_species_to_mixture_variables_acc(rho, gamma, pi_inf, qv, alpha, alpha_rho, Re, j, k, l)
+            call s_convert_species_to_mixture_variables_acc(rho, gamma, pi_inf, qv, alpha, alpha_rho, Re)
         end if
 
         !$acc loop seq
@@ -97,7 +96,7 @@ contains
         !! @param icfl_sf cell centered inviscid cfl number
         !! @param vcfl_sf (optional) cell centered viscous cfl number
         !! @param Rc_sf (optional) cell centered Rc
-    subroutine s_compute_stability_from_dt(vel, c, rho, Re_l, j, k, l, icfl_sf, vcfl_sf, Rc_sf)
+    pure subroutine s_compute_stability_from_dt(vel, c, rho, Re_l, j, k, l, icfl_sf, vcfl_sf, Rc_sf)
         !$acc routine seq
         real(wp), intent(in), dimension(num_vels) :: vel
         real(wp), intent(in) :: c, rho
@@ -194,7 +193,7 @@ contains
         !! @param j x coordinate
         !! @param k y coordinate
         !! @param l z coordinate
-    subroutine s_compute_dt_from_cfl(vel, c, max_dt, rho, Re_l, j, k, l)
+    pure subroutine s_compute_dt_from_cfl(vel, c, max_dt, rho, Re_l, j, k, l)
         !$acc routine seq
         real(wp), dimension(num_vels), intent(in) :: vel
         real(wp), intent(in) :: c, rho
@@ -267,27 +266,5 @@ contains
         end if
 
     end subroutine s_compute_dt_from_cfl
-
-    subroutine s_assign_default_bc_type(bc_type)
-
-        type(integer_field), dimension(1:num_dims, -1:1), intent(in) :: bc_type
-
-        bc_type(1, -1)%sf(:, :, :) = bc_x%beg
-        bc_type(1, 1)%sf(:, :, :) = bc_x%end
-        !$acc update device(bc_type(1,-1)%sf, bc_type(1,1)%sf)
-
-        if (n > 0) then
-            bc_type(2, -1)%sf(:, :, :) = bc_y%beg
-            bc_type(2, 1)%sf(:, :, :) = bc_y%end
-            !$acc update device(bc_type(2,-1)%sf, bc_type(2,1)%sf)
-
-            if (p > 0) then
-                bc_type(3, -1)%sf(:, :, :) = bc_z%beg
-                bc_type(3, 1)%sf(:, :, :) = bc_z%end
-                !$acc update device(bc_type(3,-1)%sf, bc_type(3,1)%sf)
-            end if
-        end if
-
-    end subroutine s_assign_default_bc_type
 
 end module m_sim_helpers

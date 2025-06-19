@@ -23,7 +23,7 @@ contains
 
     !> Checks compatibility of parameters in the input file.
         !! Used by the pre_process stage
-    subroutine s_check_inputs
+    impure subroutine s_check_inputs
 
         call s_check_parallel_io
         call s_check_inputs_restart
@@ -37,7 +37,7 @@ contains
     end subroutine s_check_inputs
 
     !> Checks if mpi is enabled with parallel_io
-    subroutine s_check_parallel_io
+    impure subroutine s_check_parallel_io
 #ifndef MFC_MPI
         @:PROHIBIT(parallel_io, "MFC built with --no-mpi requires parallel_io=F")
 #endif
@@ -45,7 +45,7 @@ contains
 
     !> Checks constraints on the restart parameters
         !! (old_grid, old_ic, etc.)
-    subroutine s_check_inputs_restart
+    impure subroutine s_check_inputs_restart
         logical :: skip_check !< Flag to skip the check when iterating over
         !! x, y, and z directions, for special treatment of cylindrical coordinates
 
@@ -88,11 +88,11 @@ contains
             "n must be positive (2D or 3D) for cylindrical coordinates")
         @:PROHIBIT(cyl_coord .and. (f_is_default(y_domain%beg) .or. f_is_default(y_domain%end)), &
             "y_domain%beg and y_domain%end must be set for n = 0 (2D cylindrical coordinates)")
-        @:PROHIBIT(cyl_coord .and. (y_domain%beg /= 0._wp .or. y_domain%end <= 0._wp), &
+        @:PROHIBIT(cyl_coord .and. ((.not. f_approx_equal(y_domain%beg , 0._wp)) .or. y_domain%end <= 0._wp), &
             "y_domain%beg must be 0 and y_domain%end must be positive for cylindrical coordinates")
         @:PROHIBIT(cyl_coord .and. p == 0 .and. ((.not. f_is_default(z_domain%beg)) .or. (.not. f_is_default(z_domain%end))), &
             "z_domain%beg and z_domain%end are not supported for p = 0 (2D cylindrical coordinates)")
-        @:PROHIBIT(cyl_coord .and. p > 0 .and. (z_domain%beg /= 0._wp .or. z_domain%end /= 2._wp*pi), &
+        @:PROHIBIT(cyl_coord .and. p > 0 .and. (.not. (f_approx_equal(z_domain%beg, 0._wp) .and. f_approx_equal(z_domain%end, 2._wp*pi))), &
             "z_domain%beg must be 0 and z_domain%end must be 2*pi for 3D cylindrical coordinates")
 
         @:PROHIBIT(sph_coord .and. n == 0, &
@@ -114,7 +114,7 @@ contains
 
     !> Checks constraints on grid stretching parameters
         !! (loops_x[y,z], stretch_x[y,z], etc.)
-    subroutine s_check_inputs_grid_stretching
+    impure subroutine s_check_inputs_grid_stretching
         ! Constraints on loops for grid stretching
         @:PROHIBIT(loops_x < 1)
         @:PROHIBIT(loops_y < 1)
@@ -148,7 +148,7 @@ contains
 
     !> Checks constraints on the QBMM and polydisperse bubble parameters
         !! (qbmm, polydisperse, dist_type, rhoRV, and R0_type)
-    subroutine s_check_inputs_qbmm_and_polydisperse
+    impure subroutine s_check_inputs_qbmm_and_polydisperse
         @:PROHIBIT(qbmm .and. dist_type == dflt_int, "dist_type must be set if using QBMM")
         @:PROHIBIT(qbmm .and. dist_type /= 1 .and. rhoRV > 0._wp, "rhoRV cannot be used with dist_type != 1")
         @:PROHIBIT(polydisperse .and. R0_type == dflt_int, "R0 type must be set if using Polydisperse")
@@ -157,7 +157,7 @@ contains
     !> Checks constraints on initial partial density perturbation
         !! (perturb_flow, perturb_flow_fluid, perturb_flow_mag, perturb_sph,
         !! perturb_sph_fluid, and fluid_rho)
-    subroutine s_check_inputs_perturb_density
+    impure subroutine s_check_inputs_perturb_density
         character(len=5) :: iStr !< for int to string conversion
         integer :: i
 
@@ -183,7 +183,7 @@ contains
         end do
     end subroutine s_check_inputs_perturb_density
 
-    subroutine s_check_inputs_chemistry
+    impure subroutine s_check_inputs_chemistry
 
         if (chemistry) then
             @:ASSERT(num_species > 0)
@@ -193,7 +193,7 @@ contains
 
     !> Checks miscellaneous constraints
         !! (mixlayer_vel_profile and mixlayer_perturb)
-    subroutine s_check_inputs_misc
+    impure subroutine s_check_inputs_misc
         ! Hypertangent velocity profile
         @:PROHIBIT(mixlayer_vel_profile .and. (n == 0), &
             "mixlayer_vel_profile requires n > 0")
@@ -209,7 +209,7 @@ contains
 
     end subroutine s_check_inputs_misc
 
-    subroutine s_check_bc
+    impure subroutine s_check_bc
 
         integer :: i
         character(len=5) :: iStr !< for int to string conversion
