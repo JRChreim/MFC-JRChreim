@@ -1331,7 +1331,7 @@ contains
                         qv = qv + adv(l)*q_prim_vf(l)%sf(i, j, k)*fluid_pp(l)%qv
                     end do
 
-                    H = ((gamma + 1_wp)*pres + pi_inf + qv)/rho
+                    H = ((gamma + 1._wp)*pres + pi_inf + qv)/rho
 
                     call s_compute_speed_of_sound(pres, rho, &
                                                   gamma, pi_inf, &
