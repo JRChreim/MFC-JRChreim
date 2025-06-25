@@ -39,11 +39,12 @@ contains
         real(wp), intent(inout), dimension(num_fluids) :: alpha
         real(wp), intent(inout), dimension(num_vels) :: vel
         real(wp), intent(inout) :: rho, gamma, pi_inf, vel_sum, H, pres
+        real(wp), intent(out) :: qv
         integer, intent(in) :: j, k, l
         real(wp), dimension(2), intent(inout) :: Re
 
         real(wp), dimension(num_fluids) :: alpha_rho, Gs
-        real(wp) :: qv, E, G
+        real(wp) :: E, G
 
         integer :: i
 

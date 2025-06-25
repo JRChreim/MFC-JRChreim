@@ -72,6 +72,17 @@ contains
             ! Rayleigh-Plesset bubbles
             fCpbw = f_cpbw_KM(fR0, fR, fV, fpb)
             f_rddot = f_rddot_RP(fP, fRho, fR, fV, fCpbw)
+        else if (bubble_model == 4) then
+            ! dimensional Keller-Miksis bubble model
+            fCpinf = fP
+            fCpbw = f_cpbw_KM(fR0, fR, fV, fpb)
+            if (bubbles_euler) then
+                c_liquid = sqrt(fntait*(fP + fBtait)/(fRho*(1._wp - alf)))
+            else
+                c_liquid = fCson
+            end if
+            f_rddot = f_rddot_KM(fpbdot, fCpinf, fCpbw, fRho, fR, fV, fR0, c_liquid)
+
         end if
 
     end function f_rddot
@@ -272,6 +283,30 @@ contains
         if (.not. f_is_default(Re_inv)) f_cpbw_KM = f_cpbw_KM - 4._wp*Re_inv*fV/fR
 
     end function f_cpbw_KM
+
+    !>  Function that computes the dimensional bubble wall pressure for Keller--Miksis bubbles
+        !!  @param R0 Equilibrium bubble radius
+        !!  @param R Current bubble radius
+        !!  @param V Current bubble velocity
+        !!  @param pb Internal bubble pressure
+    pure elemental function Dpbw_KM(R0, R, V, pb)
+        !$acc routine seq
+        real(wp), intent(in) :: R0, R, V, pb
+        real(wp) :: Dpbw_KM
+
+        if (polytropic) then
+            Dpbw_KM = pv + (p0 - pv) * ( R0 / R ) ** ( 3._wp * gam )
+            if ( .not. f_is_default(Web) ) then
+                Dpbw_KM = Dpbw_KM + ( 2._wp / R0 ) * ( R0 / R ) ** ( 3._wp * gam )
+            end if
+        else
+            Dpbw_KM = fpb
+        end if
+
+        if (.not. f_is_default(Web)) Dpbw_KM = Dpbw_KM - 2._wp / R
+        if (.not. f_is_default(Re_inv)) Dpbw_KM = Dpbw_KM - 4._wp * V / R
+
+    end function Dpbw_KM
 
     !>  Function that computes the bubble radial acceleration for Keller--Miksis bubbles
         !!  @param fpbdot Time-derivative of internal bubble pressure
