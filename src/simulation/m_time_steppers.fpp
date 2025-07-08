@@ -75,7 +75,7 @@ module m_time_steppers
     integer, private :: num_ts !<
     !! Number of time stages in the time-stepping scheme
 
-    !$acc declare create(q_cons_ts, q_prim_vf, q_T_sf, rhs_vf, q_prim_ts, rhs_mv, rhs_pb, max_dt)
+    $:GPU_DECLARE(create='[q_cons_ts,q_prim_vf,q_T_sf,rhs_vf,q_prim_ts,rhs_mv,rhs_pb,max_dt]')
 
 contains
 
@@ -377,7 +377,7 @@ contains
 
         if (bubbles_lagrange .and. .not. adap_dt) call s_update_lagrange_tdv_rk(stage=1)
 
-        !$acc parallel loop collapse(4) gang vector default(present)
+        $:GPU_PARALLEL_LOOP(collapse=4)
         do i = 1, sys_size
             do l = 0, p
                 do k = 0, n
@@ -392,7 +392,7 @@ contains
 
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -409,7 +409,7 @@ contains
         end if
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -481,7 +481,7 @@ contains
 
         if (bubbles_lagrange .and. .not. adap_dt) call s_update_lagrange_tdv_rk(stage=1)
 
-        !$acc parallel loop collapse(4) gang vector default(present)
+        $:GPU_PARALLEL_LOOP(collapse=4)
         do i = 1, sys_size
             do l = 0, p
                 do k = 0, n
@@ -496,7 +496,7 @@ contains
 
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -513,7 +513,7 @@ contains
         end if
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -553,7 +553,7 @@ contains
 
         if (bubbles_lagrange .and. .not. adap_dt) call s_update_lagrange_tdv_rk(stage=2)
 
-        !$acc parallel loop collapse(4) gang vector default(present)
+        $:GPU_PARALLEL_LOOP(collapse=4)
         do i = 1, sys_size
             do l = 0, p
                 do k = 0, n
@@ -568,7 +568,7 @@ contains
         end do
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -586,7 +586,7 @@ contains
         end if
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -663,7 +663,7 @@ contains
 
         if (bubbles_lagrange .and. .not. adap_dt) call s_update_lagrange_tdv_rk(stage=1)
 
-        !$acc parallel loop collapse(4) gang vector default(present)
+        $:GPU_PARALLEL_LOOP(collapse=4)
         do i = 1, sys_size
             do l = 0, p
                 do k = 0, n
@@ -678,7 +678,7 @@ contains
 
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -695,7 +695,7 @@ contains
         end if
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -735,7 +735,7 @@ contains
 
         if (bubbles_lagrange .and. .not. adap_dt) call s_update_lagrange_tdv_rk(stage=2)
 
-        !$acc parallel loop collapse(4) gang vector default(present)
+        $:GPU_PARALLEL_LOOP(collapse=4)
         do i = 1, sys_size
             do l = 0, p
                 do k = 0, n
@@ -750,7 +750,7 @@ contains
         end do
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -768,7 +768,7 @@ contains
         end if
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -808,7 +808,7 @@ contains
 
         if (bubbles_lagrange .and. .not. adap_dt) call s_update_lagrange_tdv_rk(stage=3)
 
-        !$acc parallel loop collapse(4) gang vector default(present)
+        $:GPU_PARALLEL_LOOP(collapse=4)
         do i = 1, sys_size
             do l = 0, p
                 do k = 0, n
@@ -823,7 +823,7 @@ contains
         end do
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -841,7 +841,7 @@ contains
         end if
 
         if (qbmm .and. (.not. polytropic)) then
-            !$acc parallel loop collapse(5) gang vector default(present)
+            $:GPU_PARALLEL_LOOP(collapse=5)
             do i = 1, nb
                 do l = 0, p
                     do k = 0, n
@@ -948,7 +948,7 @@ contains
             if (stage == 3) then
                 if (lag_params%write_bubbles_stats) call s_calculate_lag_bubble_stats()
                 if (lag_params%write_bubbles) then
-                    !$acc update host(gas_p, gas_mv, intfc_rad, intfc_vel)
+                    $:GPU_UPDATE(host='[gas_p,gas_mv,intfc_rad,intfc_vel]')
                     call s_write_lag_particles(mytime)
                 end if
                 call s_write_void_evol(mytime)
@@ -982,7 +982,7 @@ contains
             q_prim_vf, &
             idwint)
 
-        !$acc parallel loop collapse(3) gang vector default(present) private(vel, alpha, Re)
+        $:GPU_PARALLEL_LOOP(collapse=3, private='[vel, alpha, Re]')
         do l = 0, p
             do k = 0, n
                 do j = 0, m
@@ -996,9 +996,9 @@ contains
             end do
         end do
 
-        !$acc kernels
-        dt_local = minval(max_dt)
-        !$acc end kernels
+        #:call GPU_PARALLEL()
+            dt_local = minval(max_dt)
+        #:endcall GPU_PARALLEL
 
         if (num_procs == 1) then
             dt = dt_local
@@ -1006,7 +1006,7 @@ contains
             call s_mpi_allreduce_min(dt_local, dt)
         end if
 
-        !$acc update device(dt)
+        $:GPU_UPDATE(device='[dt]')
 
     end subroutine s_compute_dt
 
@@ -1025,7 +1025,7 @@ contains
         call nvtxStartRange("RHS-BODYFORCES")
         call s_compute_body_forces_rhs(q_prim_vf, q_cons_vf, rhs_vf)
 
-        !$acc parallel loop collapse(4) gang vector default(present)
+        $:GPU_PARALLEL_LOOP(collapse=4)
         do i = momxb, E_idx
             do l = 0, p
                 do k = 0, n
@@ -1051,7 +1051,7 @@ contains
         integer :: i !< Generic loop iterator
 
         do i = 1, sys_size
-            !$acc update host(q_prim_vf(i)%sf)
+            $:GPU_UPDATE(host='[q_prim_vf(i)%sf]')
         end do
 
         if (t_step == t_step_start) then
