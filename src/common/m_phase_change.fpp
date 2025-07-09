@@ -246,7 +246,7 @@ contains
                                     call s_infinite_ptg_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
                                     if ( TR .eqv. .false. ) then
-                                        !$acc loop seq
+                                        $:GPU_LOOP(parallelism='[seq]')
                                         do i = 1, num_fluids
                                             ! returning partial densities to what they were previous to any relaxation scheme.
                                             m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
@@ -258,7 +258,7 @@ contains
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
                             else
-                                !$acc loop seq
+                                $:GPU_LOOP(parallelism='[seq]')
                                 do i = 1, num_fluids
                                     ! returning partial densities to what they were previous to any relaxation scheme.
                                     m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
@@ -269,7 +269,7 @@ contains
                             end if
                         end select
                     else
-                        !$acc loop seq
+                        $:GPU_LOOP(parallelism='[seq]')
                         do i = 1, num_fluids
                             ! returning partial densities to what they were previous to any relaxation scheme.
                             m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
@@ -985,7 +985,7 @@ contains
         ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction;
         ! CT = 2: crude correction; else: Total Mass correction
         if (CT == 0) then
-            !$acc loop seq
+            $:GPU_LOOP(parallelism='[seq]')
             do i = 1, num_fluids
                 ! analysis in terms of mass fraction because this is what is needed for the relaxation process. Volume
                 ! fraction does not matter
@@ -1041,7 +1041,7 @@ contains
             ! continue relaxation
             TR = .true.
         else
-            !$acc loop seq
+            $:GPU_LOOP(parallelism='[seq]')
             do i = 1, num_fluids
                 if ((m0k(i)/rho) < mixM) then
                     m0k(i) = mixM*rho
@@ -1364,7 +1364,7 @@ contains
 
         ! calculating volume fractions, internal energies, and total entropy
         ! rhos =  0.0_wp
-        !$acc loop seq
+        $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
 
             if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
