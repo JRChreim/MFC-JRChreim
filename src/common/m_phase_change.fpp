@@ -75,17 +75,17 @@ contains
         !!      model, also considering mass depletion, depending on the incoming
         !!      state conditions.
         !!  @param q_cons_vf Cell-average conservative variables
-    pure subroutine s_infinite_relaxation_k(q_cons_vf)
+    impure subroutine s_infinite_relaxation_k(q_cons_vf)
 
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
-        real(wp) :: rhoe, rhoeT, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
+        real(wp) :: rhoe, rhoe6E, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
         real(wp) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
         logical :: TR
 
         $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
-        $:GPU_DECLARE(create='[rhoe,rhoeT,dynE,rhos,rho,rM,m1,m2,TR]')
+        $:GPU_DECLARE(create='[rhoe,rhoe6E,dynE,rhos,rho,rM,m1,m2,TR]')
 
         real(wp), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alphak, alpharhoe0k, m0k, rhok, Tk
         $:GPU_DECLARE(create='[p_infOV,p_infpT,p_infSL,alphak,alpharhoe0k,m0k,rhok,Tk]')
@@ -106,9 +106,8 @@ contains
                     ! trigger for phase change. This will be used for checking many conditions through the code
                     TR = .true.
 
-                    ! computing mixture density, volume fraction, and internal energy, so as saving original variables
-                    ! in case phase change is cancelled.
-                    rhoeT = 0.0_wp
+                    ! mixture internal energy for the 6-equation model. Note that, in sharp interfacesm rhoe \neq rhoe6E
+                    rhoe6E = 0.0_wp
                     $:GPU_LOOP(parallelism='[seq]')
                     do i = 1, num_fluids
                         ! initial volume fraction
@@ -117,23 +116,33 @@ contains
                         ! initial partial density
                         m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
 
-                        ! calculating the total internal energy such that the energy-fraction for each of the
-                        ! fluids can be proportionally distributed when the sum of the internal energies differs from the
+
                         if ( ieee_is_nan( m0k(i) ) ) then
-                            print *, 'partial densities', m0k(i)
+                            ! print *, 'partial density i = ', i, 'is NaN'
                         end if
 
+                        ! calculating the total internal energy such that the energy-fraction for each of the
+                        ! fluids can be proportionally distributed when the sum of the internal energies differs from
+                        ! either approach
                         if (model_eqns == 3) then
                             ! initial volume fraction
                             alpharhoe0k(i) = q_cons_vf(i + intxb - 1)%sf(j, k, l)
 
                             ! total mixture energy by the summation of the internal energy equations
-                            rhoeT = rhoeT + alpharhoe0k(i)
+                            rhoe6E = rhoe6E + alpharhoe0k(i)
                         end if
                     end do
 
                     ! Mixture density
                     rho = sum(m0k)
+
+                    ! calculating the total reacting mass for the phase change process. By hypothesis, this should not change
+                    ! throughout the phase-change process. In ANY HYPOTHESIS, UNLESS correcting them artifically
+                    rM = m0k(lp) + m0k(vp)
+
+                    ! correcting possible negative mass fraction values
+                    ! at this time, TR is updated if phase change needs to be stopped
+                    call s_correct_partial_densities(2, alphak, alpharhoe0k, m0k, rM, rho, TR, i, j, k, l)
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
                     dynE = 0.0_wp
@@ -146,30 +155,18 @@ contains
                     ! This calulation is performed as the total energy minus the kinetic one as energy it is preserved at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
 
-                    ! calculating the total reacting mass for the phase change process. By hypothesis, this should not change
-                    ! throughout the phase-change process. In ANY HYPOTHESIS, UNLESS correcting them artifically
-                    rM = m0k(lp) + m0k(vp)
-
-                    ! correcting possible negative mass fraction values
-                    ! at this time, TR is updated if phase change needs to be stopped
-                    call s_correct_partial_densities(2, alphak, alpharhoe0k, m0k, rM, rho, TR, i, j, k, l)
-
                     ! if phase change is still necessary
                     if (TR) then
-                        ! (old) p-equilibrium
-                        if (relax_model == 1) then
+                        select case (relax_model)
+                        case (1) ! (old) p-equilibrium
                             call s_old_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, rhoe, Tk)                            
-                        ! p-equilibrium
-                        elseif (relax_model == 4) then
-                            call s_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, rho, rhoe, rhoeT, Tk)
-                        ! pT-equilibrium
-                        elseif (relax_model == 5) then
+                        case (4) ! p-equilibrium
+                            call s_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, rho, rhoe, rhoe6E, Tk)
+                        case (5) ! pT-equilibrium
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
                             call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
-                        ! pT-pTg equilibrium
-                        elseif (relax_model == 6) then
-
+                        case (6) then ! pT-pTg equilibrium
                             ! pT-equilibrium as rhe initial condition
                             call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
@@ -206,7 +203,7 @@ contains
                                 call s_infinite_pt_relaxation_k(j, k, l, m0k, 0, pSOV, p_infOV, rhoe, rM, TSOV)
 
                                 ! calculating Saturation temperature
-                                call s_TSat(pSOV, TSatOV, TSOV)
+                                ! call s_TSat(pSOV, TSatOV, TSOV)
 
                                 ! subcooled liquid 
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
@@ -217,7 +214,7 @@ contains
                                 call s_infinite_pt_relaxation_k(j, k, l, m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
 
                                 ! calculating Saturation temperature
-                                call s_TSat(pSSL, TSatSL, TSSL)
+                                ! call s_TSat(pSSL, TSatSL, TSSL)
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -265,12 +262,12 @@ contains
                                 do i = 1, num_fluids
                                     ! returning partial densities to what they were previous to any relaxation scheme.
                                     m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
-                                    print *, 'returning crap'
+                                    ! print *, 'returning crap'
                                 end do
                                 ! cycles the innermost loop to the next iteration
                                 cycle 
                             end if
-                        end if
+                        end select
                     else
                         !$acc loop seq
                         do i = 1, num_fluids
@@ -292,15 +289,15 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
-    subroutine s_infinite_p_relaxation_k(j, k, l, alphaik, alpharhoeik, mik, pS, rho, rhoe, rhoeT, Tk)
+    impure subroutine s_infinite_p_relaxation_k(j, k, l, alphaik, alpharhoeik, mik, pS, rho, rhoe, rhoe6E, Tk)
         !$acc routine seq
 
         ! initializing variables
-        real(wp), intent(IN) :: rho, rhoe, rhoeT
-        real(wp), intent(OUT) :: pS
-        real(wp), dimension(num_fluids), intent(OUT) :: Tk
+        real(wp), intent(in) :: rho, rhoe, rhoe6E
+        real(wp), intent(out) :: pS
+        real(wp), dimension(num_fluids), intent(out) :: Tk
         real(wp), dimension(num_fluids), intent(in)  :: alphaik, alpharhoeik, mik
-        integer, intent(IN) :: j, k, l
+        integer, intent(in) :: j, k, l
 
         real(wp) :: fp, fpp, pO !< variables for the Newton Solver
         real(wp) :: Econst, gamma, pi_inf, mQ, TS !< auxiliary variables
@@ -313,9 +310,9 @@ contains
         ! think how to solve pK, alphak, alpharhoek, given the energy mismatechs at the discontinuities 
         alpha0k = alphaik
 
-        ! Re-distributing the initial internal energy values such that rhoe = rhoeT, eventually.
-        ! alpharhoe0k does the paper of alpharhoeik, but it is its value adjusted to match rhoe = rhoeT
-        alpharhoe0k = alpharhoeik ! * rhoe / rhoeT
+        ! Re-distributing the initial internal energy values such that rhoe = rhoe6E, eventually.
+        ! alpharhoe0k does the paper of alpharhoeik, but it is its value adjusted to match rhoe = rhoe6E
+        alpharhoe0k = alpharhoeik ! * rhoe / rhoe6E
 
         ! distributing the partial density
         m0k = mik
@@ -396,8 +393,8 @@ contains
 
                     if (proc_rank == 0) then
 
-                        ! call s_tattletale((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
-                        !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, rhoeT, ps_inf, pS, (/pS - pO, pS + pO/) &
+                        ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                        !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, rhoe6E, ps_inf, pS, (/pS - pO, pS + pO/) &
                         !                 , rhoe, q_cons_vf, 0.0_wp)
                     end if
 
@@ -438,10 +435,10 @@ contains
         Tk = (pS + ps_inf)/((gs_min - 1)*cvs*rhok)
 
         ! updating maximum number of iterations
-        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        ! max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
     end subroutine s_infinite_p_relaxation_k ! -----------------------
 
-    subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, alpharhoe0k, m0k, pS, rhoe, Tk)
+    impure subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, alpharhoe0k, m0k, pS, rhoe, Tk)
         ! Description: The purpose of this procedure is to infinitely relax
         !              the pressures from the internal-energy equations to a
         !              unique pressure, from which the corresponding volume
@@ -456,12 +453,12 @@ contains
         ! mixture density, dynamic pressure, surface energy, specific heat ratio
         ! function, liquid stiffness function (two variations of the last two
         ! initializing variables
-        real(wp), intent(IN) :: rhoe
-        real(wp), intent(OUT) :: pS
-        real(wp), dimension(num_fluids), intent(OUT) :: Tk
+        real(wp), intent(in) :: rhoe
+        real(wp), intent(out) :: pS
+        real(wp), dimension(num_fluids), intent(out) :: Tk
         real(wp), dimension(num_fluids), intent(in) :: alpha0k, alpharhoe0k, m0k
 
-        integer, intent(IN) :: j, k, l
+        integer, intent(in) :: j, k, l
 
         real(wp) :: fp, fpp, mQ, drhodp, den, num, pO !< variables for the Newton Solver
         real(wp) :: gamma, pi_inf !< auxiliary variables
@@ -543,7 +540,7 @@ contains
 
                     if (proc_rank == 0) then
 
-                        ! call s_tattletale((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                        ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
                         !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, 0.0_wp, ps_inf, pS, (/pS - pO, pS + pO/) &
                         !                 , rhoe, q_cons_vf, 0.0_wp)
                     end if
@@ -579,7 +576,7 @@ contains
         Tk = (pS + ps_inf)/((gs_min - 1)*cvs*rhok)
 
         ! updating maximum number of iterations
-        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        ! max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
     end subroutine s_old_infinite_p_relaxation_k ! -----------------------
 
@@ -594,7 +591,7 @@ contains
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
         !!  @param TS equilibrium temperature at the interface
-    pure subroutine s_infinite_pt_relaxation_k(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS)
+    impure subroutine s_infinite_pt_relaxation_k(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS)
 
         $:GPU_ROUTINE(function_name='s_infinite_pt_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
@@ -666,7 +663,7 @@ contains
             else
                 if (proc_rank == 0) then
 
-                    ! call s_tattletale((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                    ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
                     !                   , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, mQ, p_infpT, pS, (/abs(pS - pO), abs(pS - pO)/) &
                     !                   , rhoe, q_cons_vf, TS)
 
@@ -731,7 +728,7 @@ contains
 #ifndef MFC_OpenACC
             if ((pS <= -1.0_wp*minval(p_infpT)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
                 if (proc_rank == 0) then
-                    ! call s_tattletale((/0.0_wp, 0.0_wp/), reshape((/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), (/2, 2/)) &
+                    ! call s_whistleblower((/0.0_wp, 0.0_wp/), reshape((/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), (/2, 2/)) &
                     !                   , j, (/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
                     !                   , rhoe, q_cons_vf, TS)
                 end if
@@ -749,7 +746,7 @@ contains
         TS = (rhoe + pS - mQ)/mCP
 
         ! updating maximum number of iterations
-        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        ! max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
@@ -768,12 +765,12 @@ contains
         $:GPU_ROUTINE(function_name='s_infinite_ptg_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
 
-        real(wp), dimension(num_fluids), intent(INOUT) :: alphak, alpharhoe0k, m0k
-        real(wp), dimension(num_fluids), intent(IN) :: p_infpT
-        real(wp), intent(INOUT) :: pS, TS, rM
-        real(wp), intent(IN) :: rho, rhoe
-        integer, intent(IN) :: j, k, l
-        logical, intent(INOUT) :: TR
+        real(wp), dimension(num_fluids), intent(inout) :: alphak, alpharhoe0k, m0k
+        real(wp), dimension(num_fluids), intent(in) :: p_infpT
+        real(wp), intent(inout) :: pS, TS, rM
+        real(wp), intent(in) :: rho, rhoe
+        integer, intent(in) :: j, k, l
+        logical, intent(inout) :: TR
         real(wp), dimension(num_fluids) :: p_infpTg
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
@@ -865,7 +862,7 @@ contains
 #ifndef MFC_OpenACC
             if ((pS <= -1.0_wp*minval(ps_inf)) .or. ((rhoe - mQ - minval(ps_inf)) < 0.0_wp)) then
                 if (proc_rank == 0) then
-                    ! call s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, ps_inf, pS &
+                    ! call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, ps_inf, pS &
                     !                   , R2D, rhoe, q_cons_vf, TS)
                 end if
 
@@ -945,7 +942,7 @@ contains
 
                 print *, 'jkl', j,k,l
 
-                call s_TSat(pS, TSat, (rhoe + pS - mQ)/mCP)
+                ! call s_TSat(pS, TSat, (rhoe + pS - mQ)/mCP)
 
                 print *, 'TSat', TSat 
 
@@ -961,7 +958,7 @@ contains
         TS = (rhoe + pS - mQ)/mCP
 
         ! updating maximum number of iterations
-        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        ! max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
     end subroutine s_infinite_ptg_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine corrects the partial densities of the REACTING fluids in case one of them is negative
@@ -977,11 +974,11 @@ contains
 
         !> @name variables for the correction of the reacting partial densities
         !> @{
-        real(wp), dimension(num_fluids), intent(INOUT) :: alpha0k, alpharhoe0k, m0k
-        real(wp), intent(INOUT) :: rM
-        real(wp), intent(IN) :: rho
-        logical, intent(INOUT) :: TR
-        integer, intent(IN) :: CT, j, k, l
+        real(wp), dimension(num_fluids), intent(inout) :: alpha0k, alpharhoe0k, m0k
+        real(wp), intent(inout) :: rM
+        real(wp), intent(in) :: rho
+        logical, intent(inout) :: TR
+        integer, intent(in) :: CT, j, k, l
         integer :: i
         !> @}
 
@@ -1075,10 +1072,10 @@ contains
         $:GPU_ROUTINE(function_name='s_compute_jacobian_matrix', &
             & parallelism='[seq]', cray_inline=True)
 
-        real(wp), dimension(num_fluids), intent(IN) :: m0k
-        real(wp), intent(IN) :: pS, mCPD, mCVGP, mCVGP2, rM
-        integer, intent(IN) :: j, k, l
-        real(wp), dimension(2, 2), intent(OUT) :: Jac, InvJac, TJac
+        real(wp), dimension(num_fluids), intent(in) :: m0k
+        real(wp), intent(in) :: pS, mCPD, mCVGP, mCVGP2, rM
+        integer, intent(in) :: j, k, l
+        real(wp), dimension(2, 2), intent(out) :: Jac, InvJac, TJac
         real(wp) :: TS, dFdT, dTdm, dTdp ! mass of the reacting fluid, total reacting mass, and auxiliary variables
 
         TS = 1/(rM*cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)) &
@@ -1093,11 +1090,11 @@ contains
             - cvs(vp)*(gs_min(vp) - 1)*log(pS + ps_inf(vp))
 
         dTdm = -(cvs(lp)*(gs_min(lp) - 1)/(pS + ps_inf(lp)) &
-                 - cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)))*TS**2
+               - cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)))*TS**2
 
         dTdp = (rM*cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp))**2 &
                 + m0k(lp)*(cvs(lp)*(gs_min(lp) - 1)/(pS + ps_inf(lp))**2 &
-                      - cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp))**2) &
+                         - cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp))**2) &
                 + mCVGP2)*TS**2
 
         ! F = (F1,F2) is the function whose roots we are looking for
@@ -1110,7 +1107,7 @@ contains
         ! dF1dp
         Jac(1, 2) = dFdT*dTdp + TS &
                     *(cvs(lp)*(gs_min(lp) - 1)/(pS + ps_inf(lp)) &
-                      - cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)))
+                    - cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)))
 
         ! dF2dm
         Jac(2, 1) = (qvs(vp) - qvs(lp) &
@@ -1167,10 +1164,10 @@ contains
         $:GPU_ROUTINE(function_name='s_compute_pTg_residue', &
             & parallelism='[seq]', cray_inline=True)
 
-        real(wp), dimension(num_fluids), intent(IN) :: m0k
-        real(wp), intent(IN) :: pS, rhoe, mCPD, mCVGP, mQD, rM
-        integer, intent(IN) :: j, k, l
-        real(wp), dimension(2), intent(OUT) :: R2D
+        real(wp), dimension(num_fluids), intent(in) :: m0k
+        real(wp), intent(in) :: pS, rhoe, mCPD, mCVGP, mQD, rM
+        integer, intent(in) :: j, k, l
+        real(wp), dimension(2), intent(out) :: R2D
         real(wp) :: TS !< mass of the reacting liquid, total reacting mass, equilibrium temperature
 
         ! relaxed temperature
@@ -1195,38 +1192,38 @@ contains
     end subroutine s_compute_pTg_residue
 
     ! SUBROUTINE CREATED TO TELL ME WHERE THE ERROR IN THE PT- AND PTG-EQUILIBRIUM SOLVERS IS
-    pure subroutine s_tattletale(DeltamP, InvJac, j, Jac, k, l, mQ, p_infA, pS, R2D, rhoe, q_cons_vf, TS) ! ----------------
+    impure subroutine s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, p_infA, pS, R2D, rhoe, q_cons_vf, TS) ! ----------------
 
-        type(scalar_field), dimension(sys_size), intent(IN) :: q_cons_vf
-        real(wp), dimension(2, 2), intent(IN) :: Jac, InvJac
-        real(wp), dimension(num_fluids), intent(IN) :: p_infA
-        real(wp), dimension(2), intent(IN) :: R2D, DeltamP
-        real(wp), intent(IN) :: pS, TS
-        real(wp), intent(IN) :: rhoe, mQ
-        integer, intent(IN) :: j, k, l
+        type(scalar_field), dimension(sys_size), intent(in) :: q_cons_vf
+        real(wp), dimension(2, 2), intent(in) :: Jac, InvJac
+        real(wp), dimension(num_fluids), intent(in) :: p_infA
+        real(wp), dimension(2), intent(in) :: R2D, DeltamP
+        real(wp), intent(in) :: pS, TS
+        real(wp), intent(in) :: rhoe, mQ
+        integer, intent(in) :: j, k, l
         real(wp) :: rho
         !< Generic loop iterator
         integer :: i
 
-        print *, 'j, k, l', j, k, l
+        ! print *, 'j, k, l', j, k, l
 
-        print *, 'rhoe', rhoe
+        ! print *, 'rhoe', rhoe
 
-        print *, 'mQ', mQ
+        ! print *, 'mQ', mQ
 
-        print *, 'Energy constrain', (rhoe - mQ - minval(p_infA))
+        ! print *, 'Energy constrain', (rhoe - mQ - minval(p_infA))
 
-        print *, 'R2D', R2D
+        ! print *, 'R2D', R2D
 
-        print *, 'l2(R2D)', sqrt(R2D(1)**2 + R2D(2)**2)
+        ! print *, 'l2(R2D)', sqrt(R2D(1)**2 + R2D(2)**2)
 
-        print *, 'DeltamP', DeltamP
+        ! print *, 'DeltamP', DeltamP
 
-        print *, 'pS', pS
+        ! print *, 'pS', pS
 
-        print *, '-min(ps_inf)', -minval(p_infA)
+        ! print *, '-min(ps_inf)', -minval(p_infA)
 
-        print *, 'TS', TS
+        ! print *, 'TS', TS
 
         do i = 1, num_fluids
 
@@ -1234,41 +1231,41 @@ contains
 
         end do
 
-        print *, 'rho', rho
+        ! print *, 'rho', rho
 
         do i = 1, num_fluids
 
-            print *, 'i', i
+            ! print *, 'i', i
 
-            print *, 'alpha_i', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+            ! print *, 'alpha_i', q_cons_vf(i + advxb - 1)%sf(j, k, l)
 
-            print *, 'alpha_rho_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)
+            ! print *, 'alpha_rho_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)
 
-            print *, 'mq_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
+            ! print *, 'mq_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
 
             if (model_eqns == 3) then
-                print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
+                ! print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
             end if
 
-            print *, 'Y_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)/rho
+            ! print *, 'Y_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)/rho
 
         end do
 
-        print *, 'J', Jac, 'J-1', InvJac
+        ! print *, 'J', Jac, 'J-1', InvJac
 
-    end subroutine s_tattletale
+    end subroutine s_whistleblower
 
         !>  This auxiliary subroutine finds the Saturation temperature for a given
         !!      saturation pressure through a newton solver
         !!  @param pSat Saturation Pressure
         !!  @param TSat Saturation Temperature
         !!  @param TSIn equilibrium Temperature
-    pure elemental subroutine s_TSat(pSat, TSat, TSIn)
+    impure subroutine s_TSat(pSat, TSat, TSIn)
         $:GPU_ROUTINE(function_name='s_TSat',parallelism='[seq]', &
             & cray_inline=True)
 
-        real(wp), intent(OUT) :: TSat
-        real(wp), intent(IN) :: pSat, TSIn
+        real(wp), intent(out) :: TSat
+        real(wp), intent(in) :: pSat, TSIn
         real(wp) :: dFdT, FT, Om !< auxiliary variables
         character(20) :: nss, pSatS, TSatS
 
@@ -1325,9 +1322,6 @@ contains
                 ! Checking if TSat returns a NaN
                 if ((ieee_is_nan(TSat)) .or. (ns > max_iter)) then
 
-                    ! PRINT *, 'FT', FT
-                    ! PRINT *, 'TSat, pSat', TSat, pSat
-
                     call s_int_to_str(ns, nss)
                     call s_real_to_str(TSat, TSatS)
                     call s_real_to_str(pSat, pSatS)
@@ -1340,20 +1334,15 @@ contains
 
         end if
 
-        ! PRINT *, 'ps_inf', ps_inf( lp ), ps_inf( vp )
-
-        ! PRINT *, 'ABCD', A, B, C, D
-        ! PRINT *, 'FT', FT
-        ! PRINT *, 'TSat, pSat', TSat, pSat
     end subroutine s_TSat
 
     pure subroutine update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
         
         !$acc routine seq
-        type(scalar_field), dimension(sys_size), intent(INOUT) :: q_cons_vf
-        real(wp), intent(IN) :: pS
-        real(wp), dimension(num_fluids), intent(IN) :: m0k, Tk
-        integer, intent(IN) :: j, k, l
+        type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+        real(wp), intent(in) :: pS
+        real(wp), dimension(num_fluids), intent(in) :: m0k, Tk
+        integer, intent(in) :: j, k, l
         real(wp), dimension(num_fluids) :: sk, hk, gk, ek, rhok
         integer :: i
 
@@ -1400,8 +1389,8 @@ contains
     end subroutine update_conservative_vars
 
     impure subroutine s_real_to_str(rl, res)
-        character(len=*) :: res
-        real(wp), intent(IN) :: rl
+        real(wp), intent(in) :: rl
+        character(len=*), intent(out) :: res
         write (res, '(F10.4)') rl
         res = trim(res)
     end subroutine s_real_to_str
