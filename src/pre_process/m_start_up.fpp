@@ -38,6 +38,8 @@ module m_start_up
 
     use m_helper
 
+    use m_normalize             !< Functions to (de)normalize state variables
+
 #ifdef MFC_MPI
     use mpi                     !< Message passing interface (MPI) module
 #endif
@@ -853,6 +855,8 @@ contains
 
             call s_infinite_relaxation_k(q_cons_vf)
         end if
+
+        ! call  s_norm_denorm('D', q_cons_vf, q_prim_vf, q_T_sf)
 
         call s_write_data_files(q_cons_vf, q_prim_vf, ib_markers, levelset, levelset_norm, bc_type)
 

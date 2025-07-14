@@ -28,12 +28,12 @@ module m_phase_change
 
     !> @name Parameters for the first order transition phase change
     !> @{
-    integer, parameter :: max_iter = 1e8_wp        !< max # of iterations
-    real(wp), parameter :: pCr = 4.94e7_wp   !< Critical water pressure
+    integer, parameter :: max_iter = 1e8_wp             !< max # of iterations
+    real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
     real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
-    real(wp), parameter :: mixM = 1.0e-8_wp !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
-    integer, parameter :: lp = 1    !< index for the liquid phase of the reacting fluid
-    integer, parameter :: vp = 2    !< index for the vapor phase of the reacting fluid
+    real(wp), parameter :: mixM = 1.0e-8_wp             !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    integer, parameter :: lp = 1                        !< index for the liquid phase of the reacting fluid
+    integer, parameter :: vp = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
 
     !> @name Gibbs free energy phase change parameters
@@ -82,7 +82,7 @@ contains
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(wp) :: rhoe, rhoe6E, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
         real(wp) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
-        logical :: TR
+        logical  :: TR
 
         $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
         $:GPU_DECLARE(create='[rhoe,rhoe6E,dynE,rhos,rho,rM,m1,m2,TR]')
@@ -166,7 +166,7 @@ contains
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
                             call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
-                        case (6) then ! pT-pTg equilibrium
+                        case (6) ! pT-pTg equilibrium
                             ! pT-equilibrium as rhe initial condition
                             call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)

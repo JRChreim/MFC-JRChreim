@@ -90,6 +90,8 @@ module m_start_up
 
     use m_mhd
 
+    use m_normalize             !< Functions to (de)normalize state variables
+
     implicit none
 
     private; public :: s_read_input_file, &
@@ -1032,6 +1034,8 @@ contains
 
         integer :: i
 
+        call s_norm_denorm('N', q_cons_ts(1)%vf, q_prim_vf, q_T_sf)
+
         if (cfl_dt) then
             if (cfl_const_dt .and. t_step == 0) call s_compute_dt()
 
@@ -1101,6 +1105,10 @@ contains
 
         mytime = mytime + dt
 
+        ! print *, q_cons_ts(1)
+
+        ! print *, q_cons_ts(1)
+
         ! Total-variation-diminishing (TVD) Runge-Kutta (RK) time-steppers
         if (time_stepper == 1) then
             call s_1st_order_tvd_rk(t_step, time_avg)
@@ -1111,6 +1119,8 @@ contains
         elseif (time_stepper == 3 .and. adap_dt) then
             call s_strang_splitting(t_step, time_avg)
         end if
+
+        call s_norm_denorm('D', q_cons_ts(1)%vf, q_prim_vf, q_T_sf)
 
         if (relax) call s_infinite_relaxation_k(q_cons_ts(1)%vf)
 

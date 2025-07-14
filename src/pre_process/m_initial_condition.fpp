@@ -37,6 +37,8 @@ module m_initial_condition
 
     use m_boundary_conditions
 
+    use m_normalize             !< Functions to (de)normalize state variables
+
     implicit none
 
     ! NOTE: The abstract interface allows for the declaration of a pointer to
@@ -196,6 +198,8 @@ contains
         call s_convert_primitive_to_conservative_variables(q_prim_vf, q_cons_vf)
 
         if (chemistry) call s_compute_T_from_primitives(q_T_sf, q_prim_vf, idwint)
+
+        call s_norm_denorm('N', q_cons_vf, q_prim_vf, q_T_sf)
 
         if (qbmm .and. .not. polytropic) then
             !Initialize pb and mv
