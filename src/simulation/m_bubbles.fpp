@@ -46,7 +46,7 @@ contains
         real(wp), intent(in) :: fntait, fBtait, f_bub_adv_src, f_divu
         real(wp), intent(in) :: fCson
 
-        real(wp) :: fCpbw, fCpinf, fCpinf_dot, fH, fHdot, c_gas, c_liquid
+        real(wp) :: Dpbw, fCpbw, fCpinf, fCpinf_dot, fH, fHdot, c_gas, c_liquid
         real(wp) :: f_rddot
 
         if (bubble_model == 1) then
@@ -72,19 +72,8 @@ contains
             ! Rayleigh-Plesset bubbles
             fCpbw = f_cpbw_KM(fR0, fR, fV, fpb)
             f_rddot = f_rddot_RP(fP, fRho, fR, fV, fCpbw)
-        ! else if (bubble_model == 4) then
-        !     ! dimensional Keller-Miksis bubble model
-        !     fCpinf = fP
-        !     Dpbw = Dpbw_KM(R0, R, V, Dpb)
-        !     if (bubbles_euler) then
-        !         c_liquid = sqrt(fntait*(fP + fBtait)/(fRho*(1._wp - alf)))
-        !     else
-        !         c_liquid = fCson
-        !     end if
-        !     f_rddot = f_rddot_KM(fpbdot, fCpinf, fCpbw, fRho, fR, fV, fR0, c_liquid)
-
         end if
-
+        
     end function f_rddot
 
     !>  Function that computes that bubble wall pressure for Gilmore bubbles
@@ -283,31 +272,6 @@ contains
         if (.not. f_is_default(Re_inv)) f_cpbw_KM = f_cpbw_KM - 4._wp*Re_inv*fV/fR
 
     end function f_cpbw_KM
-
-    !>  Function that computes the pressure difference Dpbw_KM = pb(t) - 2*sig/R - 4*mu*Rdot/R
-    !>  for Keller-Miksis model
-        !!  @param R0 Equilibrium bubble radius
-        !!  @param R Current bubble radius
-        !!  @param V Current bubble velocity
-        !!  @param pb Internal bubble pressure
-    ! pure elemental function Dpbw_KM(R0, R, V, Dpb)
-    !     !$acc routine seq
-    !     real(wp), intent(in) :: R0, R, V, pb
-    !     real(wp) :: Dpbw_KM
-
-    !     if (polytropic) then
-    !         Dpbw_KM = pv + ( p0 - pv ) * ( R0 / R ) ** ( 3._wp * gam )
-    !         if ( .not. f_is_default(Web) ) then
-    !             Dpbw_KM = Dpbw_KM + ( 2._wp * ss(1) / R0 ) * ( R0 / R ) ** ( 3._wp * gam )
-    !         end if
-    !     else
-    !         Dpbw_KM = Dpb
-    !     end if
-
-    !     if (.not. f_is_default(Web)) Dpbw_KM = Dpbw_KM - 2._wp * ss(1) / R
-    !     if (.not. f_is_default(Re_inv)) Dpbw_KM = Dpbw_KM - 4._wp * mul0(1) * V / R
-
-    ! end function Dpbw_KM
 
     !>  Function that computes the bubble radial acceleration for Keller--Miksis bubbles
         !!  @param fpbdot Time-derivative of internal bubble pressure
