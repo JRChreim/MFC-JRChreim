@@ -435,7 +435,8 @@ contains
         Tk = (pS + ps_inf)/((gs_min - 1)*cvs*rhok)
 
         ! updating maximum number of iterations
-        ! max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        
     end subroutine s_infinite_p_relaxation_k ! -----------------------
 
     impure subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, alpharhoe0k, m0k, pS, rhoe, Tk)
@@ -576,7 +577,7 @@ contains
         Tk = (pS + ps_inf)/((gs_min - 1)*cvs*rhok)
 
         ! updating maximum number of iterations
-        ! max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
     end subroutine s_old_infinite_p_relaxation_k ! -----------------------
 
@@ -746,7 +747,7 @@ contains
         TS = (rhoe + pS - mQ)/mCP
 
         ! updating maximum number of iterations
-        ! max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
@@ -958,7 +959,8 @@ contains
         TS = (rhoe + pS - mQ)/mCP
 
         ! updating maximum number of iterations
-        ! max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+
     end subroutine s_infinite_ptg_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine corrects the partial densities of the REACTING fluids in case one of them is negative
