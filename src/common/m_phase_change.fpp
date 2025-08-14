@@ -116,7 +116,6 @@ contains
                         ! initial partial density
                         m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
 
-
                         if ( ieee_is_nan( m0k(i) ) ) then
                             ! print *, 'partial density i = ', i, 'is NaN'
                         end if
@@ -477,11 +476,12 @@ contains
         IF (mpp_lim) THEN
             DO i = 1, num_fluids
                 IF ((mk(i) < 0.0_wp) .OR. (alphak(i) < 0.0_wp)) THEN
-                    alphak(i)       = 0.0_wp
-                    alpharhoek(i)   = 0.0_wp
-                    mk(i)           = 0.0_wp
+                  alphak(i)       = 0.0_wp
+                  alpharhoek(i)   = 0.0_wp
+                  mk(i)           = 0.0_wp
+                ELSE IF (alphak(i) > 1.0_wp) THEN
+                  alphak(i) = 1.0_wp
                 END IF
-                IF (alphak(i) > 1.0_wp) alphak(i) = 1.0_wp
             END DO
             alphak = alphak / sum(alphak)
         END IF
