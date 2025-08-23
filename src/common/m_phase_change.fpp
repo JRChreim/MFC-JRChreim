@@ -62,13 +62,7 @@ contains
         D = ((gs_min(lp) - 1.0_wp)*cvs(lp)) &
             /((gs_min(vp) - 1.0_wp)*cvs(vp))
 
-        ! Associating procedural pointer to the subroutine that will be
-        ! utilized to calculate the solution to the selected relaxation system
-        if ( .not. any((/1, 4, 5, 6/) == relax_model)) then
-            call s_mpi_abort('relaxation solver was not set!')
-        end if
-
-    end subroutine s_initialize_phasechange_module !-------------------------------
+    end subroutine s_initialize_phasechange_module
 
     !>  This subroutine is created to activate either the pT- (N fluids) or the
         !!      pTg-equilibrium (2 fluids for g-equilibrium)
@@ -489,7 +483,7 @@ contains
         ! Initial state
         DO i = 1, num_fluids
             IF (alphak(i) > sgm_eps) THEN
-                pk(i) = ( ( alpharhoek(i) - mk(i) * qvs(i) )/ alphak(i) - fluid_pp(i)%pi_inf) / fluid_pp(i)%gamma               
+                pk(i) = ( ( alpharhoek(i) - mk(i) * qvs(i) ) / alphak(i) - fluid_pp(i)%pi_inf) / fluid_pp(i)%gamma               
                 ! Physical pressure?
                 IF (pk(i) <= -(1.0_wp - ptgalpha_eps)*ps_inf(i) + ptgalpha_eps) pk(i) = -(1.0_wp - ptgalpha_eps)*ps_inf(i) + ptgalpha_eps
             ELSE
@@ -610,7 +604,7 @@ contains
         integer :: i, ns !< generic loop iterators
 
         ! auxiliary variables for the pT-equilibrium solver
-        mCP = 0.0_wp; mQ = 0.0_wp; p_infpT = ps_inf;
+        p_infpT = ps_inf
 
         ! these are slowing the computations significantly. Think about a workaround
         ig = 0
@@ -618,31 +612,28 @@ contains
         ! Performing tests before initializing the pT-equilibrium
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
-
-            ! check if all alpha(i)*rho(i) are negative. If so, abort
+          ! check if all alpha(i)*rho(i) are negative. If so, abort
 #ifndef MFC_OpenACC
             ! check which indices I will ignore (no need to abort the solver in this case). Adjust this sgm_eps value for mixture cells
-            if( ( m0k(i) .ge.  0.0_wp ) .and. ( m0k(i) - rM * mixM .le. sgm_eps ) ) then
+            if( ( m0k(i) >=  0.0_wp ) .and. ( m0k(i) - rM * mixM <= sgm_eps ) ) then
 
-                ig(i) = i
+              ig(i) = i
 
-                ! PRINT *, ig
-
-                ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
-                ! This way, I am ensuring this value will not be selected.
-                p_infpT(i) = 2 * MAXVAL( ps_inf )
+              ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
+              ! This way, I am ensuring this value will not be selected.
+              p_infpT(i) = 2 * MAXVAL( ps_inf )
 
             end if
 #endif
-
-            if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
-                ! sum of the total alpha*rho*cp of the system
-                mCP = mCP + m0k(i)*cvs(i)*gs_min(i)
-
-                ! sum of the total alpha*rho*q of the system
-                mQ = mQ + m0k(i)*qvs(i)
-            end if
         end do
+
+        ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
+          ! sum of the total alpha*rho*cp of the system
+          mCP = sum( m0k * cvs * gs_min )
+
+          ! sum of the total alpha*rho*q of the system
+          mQ = sum( m0k * qvs )
+        ! end if
 
         ! Checking energy constraint. In the case we are calculating the possibility of having subcooled liquid or
         ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
@@ -650,7 +641,7 @@ contains
         ! and discard the hypothesis. The solver can thus move forward.
         if ((rhoe - mQ - minval(p_infpT)) < 0.0_wp) then
 
-            if ((MFL == 0) .or. (MFL == 1)) then
+            if ( any((/ 0, 1 /) == model_eqns ) ) then
 
                 ! Assigning zero values for mass depletion cases
                 ! pressure
@@ -684,15 +675,13 @@ contains
 
         ! starting counter for the Newton solver
         ns = 0
-  
+
         ! arbitrary value for g(p), used for the newton solver
         gp = 2.0_wp
 
         ! Newton solver for pT-equilibrium. 1d1 is arbitrary, and ns == 0, to the loop is entered at least once.
         ! Note that a solution is found when gp(p) = 1
-        ! keep an eye on this
-        ! do while (((abs(gp - 1.0_wp) > ptgalpha_eps) .and. (abs((gp - 1.0_wp)/gp) > ptgalpha_eps/1.0e6_wp)) .or. (ns == 0))
-        do while (((abs(gp - 1.0_wp) > ptgalpha_eps)) .or. (ns == 0))
+        do while ( ( ( abs( gp - 1.0_wp ) > ptgalpha_eps ) ) .or. ( ns == 0 ) )
 
             ! increasing counter
             ns = ns + 1
@@ -701,23 +690,17 @@ contains
             pO = pS
 
             ! updating functions used in the Newton's solver
-            gpp = 0.0_wp; gp = 0.0_wp; hp = 0.0_wp
-            $:GPU_LOOP(parallelism='[seq]')
-            do i = 1, num_fluids
+            gp = sum( ( gs_min - 1.0_wp ) * m0k * cvs * ( rhoe + pO - mQ ) &
+              / ( mCP * ( pO + p_infpT ) ) ) &
+               - sum( ( gs_min( pack(ig, ig /= 0) ) - 1.0_wp ) * m0k( pack(ig, ig /= 0) ) &
+               * cvs( pack(ig, ig /= 0) ) * ( rhoe + pO - mQ ) &
+              / ( mCP * ( pO + p_infpT( pack(ig, ig /= 0) ) ) ) )
 
-                ! given pS always change, I need ig( i ) and gp to be in here, as it dynamically updates.
-                ! Note that I do not need to use p_infpT here, but I will do it for consistency
-                if (i /= ig(i)) then
-
-                    gp = gp + (gs_min(i) - 1.0_wp)*m0k(i)*cvs(i) &
-                        *(rhoe + pO - mQ)/(mCP*(pO + p_infpT(i)))
-
-                    gpp = gpp + (gs_min(i) - 1.0_wp)*m0k(i)*cvs(i) &
-                        *(p_infpT(i) - rhoe + mQ)/(mCP*(pO + p_infpT(i))**2)
-
-                end if
-
-            end do
+            gpp = sum( ( gs_min - 1.0_wp ) * m0k * cvs * ( p_infpT - rhoe + mQ ) &
+              / ( mCP * ( pO + p_infpT ) **2 ) ) &
+              - sum( ( gs_min( pack(ig, ig /= 0) ) - 1.0_wp ) * m0k( pack(ig, ig /= 0) ) &
+              * cvs( pack(ig, ig /= 0) ) * ( p_infpT( pack(ig, ig /= 0) ) - rhoe + mQ )  &
+              / ( mCP * ( pO + p_infpT( pack(ig, ig /= 0) ) ) **2 ) )
 
             hp = 1.0_wp/(rhoe + pO - mQ) + 1.0_wp/(pO + minval(p_infpT))
 
@@ -804,10 +787,9 @@ contains
 
         ! if not homogeneous, then heterogeneous. Thus, setting up an arbitrary initial condition in case the one from
         ! the p(T)-equilibrium solver could lead to numerical issues
-        elseif ((pS < 1.0d-1) .and. (pS >= 0.0_wp)) then
+        elseif ((pS < 1.e-1_wp) .and. (pS >= 0.0_wp)) then
             ! improve this initial condition
             pS = 1.0e4_wp
-
         end if
 
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
@@ -822,42 +804,42 @@ contains
 
         ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
         do while (((sqrt(R2D(1)**2 + R2D(2)**2) > ptgalpha_eps) &
-                   .and. ((sqrt(R2D(1)**2 + R2D(2)**2)/rhoe) > (ptgalpha_eps/1.e6_wp))) &
+                    .and. ((sqrt(R2D(1)**2 + R2D(2)**2)/rhoe) > (ptgalpha_eps/1.e6_wp))) &
                   .or. (ns == 0))
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
 
             ! Auxiliary variables to help in the calculation of the residue
-            mCP = 0.0_wp; mCPD = 0.0_wp; mCVGP = 0.0_wp; mCVGP2 = 0.0_wp; mQ = 0.0_wp; mQD = 0.0_wp
             ! Those must be updated through the iterations, as they either depend on
             ! the partial masses for all fluids, or on the equilibrium pressure
-            $:GPU_LOOP(parallelism='[seq]')
-            do i = 1, num_fluids
-                if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
 
-                    ! sum of the total alpha*rho*cp of the system
-                    mCP = mCP + m0k(i)*cvs(i)*gs_min(i)
+            ! sum of the total alpha*rho*cp of the system
+            mCP = sum( m0k * cvs * gs_min )
 
-                    ! sum of the total alpha*rho*q of the system
-                    mQ = mQ + m0k(i)*qvs(i)
+            ! mCP - the contribution from the reacting phases
+            mCPD = mCP - m0k(lp) * cvs(lp) * gs_min(lp) &
+                      - m0k(vp) * cvs(vp) * gs_min(vp)
 
-                    ! These auxiliary variables now need to be updated, as the partial densities now
-                    ! vary at every iteration.
-                    if ((i /= lp) .and. (i /= vp)) then
+            ! sum of the total alpha*rho*q of the system
+            mQ = sum( m0k * qvs )
 
-                        mCVGP  = mCVGP + m0k(i)*cvs(i)*(gs_min(i) - 1)/(pS + ps_inf(i))
+            ! mQ - the contribution from the reacting phases
+            mQD = mQ - m0k(lp) * qvs(lp) &
+                    - m0k(vp) * qvs(vp)
 
-                        mCVGP2 = mCVGP2 + m0k(i)*cvs(i)*(gs_min(i) - 1)/((pS + ps_inf(i))**2)
+            ! mCVG - the contribution from the reacting phases
+            mCVGP = sum( m0k * cvs * ( gs_min - 1 ) / ( pS + ps_inf ) ) &
+                  - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( pS + ps_inf(lp) ) &
+                  - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( pS + ps_inf(vp) )
+              
+            ! mCVG2 - the contribution from the reacting phases
+            mCVGP2 = sum( m0k * cvs * ( gs_min - 1 ) / ( ( pS + ps_inf ) ** 2 ) ) &
+                  - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( ( pS + ps_inf(lp) ) ** 2 ) &
+                  - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
-                        mQD = mQD + m0k(i)*qvs(i)
-
-                        ! sum of the total alpha*rho*cp of the system
-                        mCPD = mCPD + m0k(i)*cvs(i)*gs_min(i)
-
-                    end if
-                end if
-            end do
+                ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
+                ! end if
 
             ! Checking pressure and energy criteria for the (pT) solver to find a solution
 #ifndef MFC_OpenACC
@@ -923,33 +905,9 @@ contains
 #ifndef MFC_OpenACC
             if ((ieee_is_nan(R2D(1))) .or. (ieee_is_nan(R2D(2))) .or. (ns > max_iter)) then
 
-                print *, 'homogeneous cavitation criteria', pS + minval(p_infpT)
-
-                print *, 'Oc', Oc
-
-                print *, 'Om', Om
-
-                print *, 'pO', pS + Om*DeltamP(2)
-
-                print *, 'pOOmI', pS + OmI*DeltamP(2)
-
-                print *, 'pS', pS
-
-                print *, 'TS', (rhoe + pS - mQ)/mCP
-
-                print *, 'R2D', R2D
-
-                print *, 'DeltamP', DeltamP
-
-                print *, 'jkl', j,k,l
-
-                ! call s_TSat(pS, TSat, (rhoe + pS - mQ)/mCP)
-
-                print *, 'TSat', TSat 
-
                 call s_int_to_str(ns, nss)
                 call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
-                                 //nss//' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
+                                  //nss//' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
 
             end if
 #endif
