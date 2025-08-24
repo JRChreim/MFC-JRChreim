@@ -310,6 +310,8 @@ contains
         ! distributing the partial density
         m0k = mik
 
+
+
         ! Numerical correction of the volume fractions
         IF (mpp_lim) THEN
             DO i = 1, num_fluids
@@ -641,14 +643,11 @@ contains
         ! and discard the hypothesis. The solver can thus move forward.
         if ((rhoe - mQ - minval(p_infpT)) < 0.0_wp) then
 
-            if ( any((/ 0, 1 /) == model_eqns ) ) then
+            if ( any((/ 0, 1 /) == MFL ) ) then
 
                 ! Assigning zero values for mass depletion cases
-                ! pressure
-                pS = 0.0_wp
-
-                ! temperature
-                TS = 0.0_wp
+                ! pressure and temperature
+                pS = 0.0_wp ; TS = 0.0_wp
 
                 return
 #ifndef MFC_OpenACC
@@ -769,7 +768,6 @@ contains
         ! checking if homogeneous cavitation is expected. If yes, transfering an amount of mass to the depleted (liquid,
         ! for the moment) phase, and then let the algorithm run. 
         ! checking if homogeneous cavitation is possible
-
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
         if ((pS < 0.0_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp))) then
 
@@ -797,8 +795,7 @@ contains
         ! Critical relaxation factors, for variable sub-relaxation
         Oc(1) = OmI; Oc(2) = OmI; Oc(3) = OmI
 
-        R2D(1) = 0.0_wp; R2D(2) = 0.0_wp
-        DeltamP(1) = 0.0_wp; DeltamP(2) = 0.0_wp
+        R2D = 0.0_wp ; DeltamP = 0.0_wp;
         ! starting counter for the Newton solver
         ns = 0
 
@@ -945,23 +942,17 @@ contains
         ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction;
         ! CT = 2: crude correction; else: Total Mass correction
         if (CT == 0) then
-            $:GPU_LOOP(parallelism='[seq]')
-            do i = 1, num_fluids
-                ! analysis in terms of mass fraction because this is what is needed for the relaxation process. Volume
-                ! fraction does not matter
-                if (m0k(i)/rho < mixM) then
-                    ! do not continue relaxation
-                    TR = .false.
-                end if
-            end do
+          if ( sum( pack(m0k, m0k < rho * mixM ) ) /= 0 ) then
+            TR = .false.
+          end if
         elseif (CT == 1) then
             if (rM < 0.0_wp) then
                 ! reacting masses are very negative so as to affect the physics of the problem, so phase change will not be activated
-                if ((m0k(lp)/rM < mixM) .or. (m0k(vp)/rM < mixM)) then
+                if ( any( (/ m0k(lp), m0k(vp) /) < rM * mixM ) ) then
                     ! do not continue relaxation
                     TR = .false.
-                ! reacting masses are not as negative so I can disregard them,
-                ! expecting no significant changes in the physics of the simulation
+                    ! reacting masses are not as negative so I can disregard them,
+                    ! expecting no significant changes in the physics of the simulation
                 else
                     m0k(lp) = mixM*rM
                     m0k(vp) = mixM*rM
@@ -989,6 +980,13 @@ contains
 
             end if
         elseif (CT == 2) then
+
+          ! m0k = 0._wp
+          ! print *, pack( m0k, m0k < rho * mixM )
+          ! if ( m0k( pack( m0k, m0k < rho * mixM ) ) ) print *, 'test'
+          ! m0k( pack( m0k, m0k < rho * mixM ) ) = rho * mixM
+
+          ! print *, m0k
             do i = 1, num_fluids
                 if (alpha0k(i) < 0 .or. m0k(i) < 0) then
                     alpha0k(i) = 0.0_wp
@@ -1001,12 +999,13 @@ contains
             ! continue relaxation
             TR = .true.
         else
-            $:GPU_LOOP(parallelism='[seq]')
-            do i = 1, num_fluids
-                if ((m0k(i)/rho) < mixM) then
-                    m0k(i) = mixM*rho
-                end if
-            end do
+
+            ! $:GPU_LOOP(parallelism='[seq]')
+            ! do i = 1, num_fluids
+            !     if ((m0k(i)/rho) < mixM) then
+            !         m0k(i) = mixM*rho
+            !     end if
+            ! end do
             ! continue relaxation
             TR = .true.
         end if
