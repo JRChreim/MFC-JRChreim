@@ -310,8 +310,6 @@ contains
         ! distributing the partial density
         m0k = mik
 
-
-
         ! Numerical correction of the volume fractions
         IF (mpp_lim) THEN
             DO i = 1, num_fluids
@@ -552,9 +550,8 @@ contains
         end do
 
         ! Cell update of the volume fraction - this is not needed to be outputed, as it will be later fixed by a more general subroutine
-        DO i = 1, num_fluids
-            IF (alphak(i) .GT. sgm_eps) alphak(i) = mk(i) / rhok(i)
-        END DO                    
+        alphak( pack( (/ (i, i=1,num_fluids) /), alphak > sgm_eps ) ) = &
+                mk( pack( (/ (i, i=1,num_fluids) /), alphak > sgm_eps ) ) / rhok( pack( (/ (i, i=1,num_fluids) /), alphak > sgm_eps ) )
 
         ! Mixture-total-energy correction ==================================
 
@@ -793,7 +790,7 @@ contains
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
         OmI = 1.0e-1_wp
         ! Critical relaxation factors, for variable sub-relaxation
-        Oc(1) = OmI; Oc(2) = OmI; Oc(3) = OmI
+        Oc = OmI;
 
         R2D = 0.0_wp ; DeltamP = 0.0_wp;
         ! starting counter for the Newton solver
@@ -954,8 +951,7 @@ contains
                     ! reacting masses are not as negative so I can disregard them,
                     ! expecting no significant changes in the physics of the simulation
                 else
-                    m0k(lp) = mixM*rM
-                    m0k(vp) = mixM*rM
+                    m0k(lp) = mixM*rM ; m0k(vp) = mixM*rM
 
                     ! continue relaxation
                     TR = .true.
@@ -963,8 +959,7 @@ contains
             ! correcting the partial densities of the reacting fluids. In case liquid is negative
             elseif (m0k(lp)/rM < mixM) then
 
-                m0k(lp) = mixM*rM
-                m0k(vp) = (1.0_wp - mixM)*rM
+                m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
                 
                 ! continue relaxation
                 TR = .true.
@@ -972,8 +967,7 @@ contains
             ! correcting the partial densities of the reacting fluids. In case vapor is negative
             elseif (m0k(vp)/rM < mixM) then
 
-                m0k(lp) = (1.0_wp - mixM)*rM
-                m0k(vp) = mixM*rM
+                m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
 
                 ! continue relaxation
                 TR = .true.
@@ -981,31 +975,19 @@ contains
             end if
         elseif (CT == 2) then
 
-          ! m0k = 0._wp
-          ! print *, pack( m0k, m0k < rho * mixM )
-          ! if ( m0k( pack( m0k, m0k < rho * mixM ) ) ) print *, 'test'
-          ! m0k( pack( m0k, m0k < rho * mixM ) ) = rho * mixM
+            ! if either the volume fraction or the partial density is negative, make them positive
+            alpha0k( pack( (/ (i, i=1,num_fluids) /), ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+                m0k( pack( (/ (i, i=1,num_fluids) /), ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+            if (model_eqns .eq. 3) then
+                alpharhoe0k( pack( (/ (i, i=1,num_fluids) /), ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+            end if
 
-          ! print *, m0k
-            do i = 1, num_fluids
-                if (alpha0k(i) < 0 .or. m0k(i) < 0) then
-                    alpha0k(i) = 0.0_wp
-                    m0k(i) = 0.0_wp
-                    if (model_eqns .eq. 3) then
-                        alpharhoe0k(i) = 0.0_wp
-                    end if
-                end if
-            end do
             ! continue relaxation
             TR = .true.
         else
+            ! if there are any insignificant values, make them significant 
+            m0k( pack(  (/ (i, i=1,num_fluids) /), m0k < rho * mixM ) ) = rho * mixM
 
-            ! $:GPU_LOOP(parallelism='[seq]')
-            ! do i = 1, num_fluids
-            !     if ((m0k(i)/rho) < mixM) then
-            !         m0k(i) = mixM*rho
-            !     end if
-            ! end do
             ! continue relaxation
             TR = .true.
         end if
