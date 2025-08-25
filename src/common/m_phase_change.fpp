@@ -182,32 +182,29 @@ contains
                             ! then
                                 ! updating m1 and m2 AFTER correcting the partial densities. These values are 
                                 ! stored to be retrieved in case the final state is a mixture of fluids
-                                m1 = m0k(lp)
-                                m2 = m0k(vp)
+                                m1 = m0k(lp) ; m2 = m0k(vp)
 
                                 ! checking if fluid is either subcoooled liquid or overheated vapor (NOT metastability)
 
                                 ! overheated vapor
                                 ! depleting the mass of liquid and tranferring the total mass to vapor
-                                m0k(lp) = mixM*rM
-                                m0k(vp) = (1.0_wp - mixM)*rM
+                                m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
 
                                 ! calling pT-equilibrium for overheated vapor, which is MFL = 0
                                 call s_infinite_pt_relaxation_k(j, k, l, m0k, 0, pSOV, p_infOV, rhoe, rM, TSOV)
 
                                 ! calculating Saturation temperature
-                                ! call s_TSat(pSOV, TSatOV, TSOV)
+                                call s_TSat(pSOV, TSatOV, TSOV)
 
                                 ! subcooled liquid 
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
-                                m0k(lp) = (1.0_wp - mixM)*rM
-                                m0k(vp) = mixM*rM
+                                m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
 
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1                       
                                 call s_infinite_pt_relaxation_k(j, k, l, m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
 
                                 ! calculating Saturation temperature
-                                ! call s_TSat(pSSL, TSatSL, TSSL)
+                                call s_TSat(pSSL, TSatSL, TSSL)
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -216,8 +213,7 @@ contains
                                     pS = pSOV ; TS = TSOV
 
                                     ! correcting the liquid and vapor partial densities
-                                    m0k(lp) = mixM*rM
-                                    m0k(vp) = (1.0_wp - mixM)*rM
+                                    m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
 
                                 ! checking the conditions for subcooled liquid
                                 elseif (TSSL < TSatSL) then
@@ -226,14 +222,12 @@ contains
                                     pS = pSSL ; TS = TSSL
 
                                     ! correcting the liquid and vapor partial densities
-                                    m0k(lp) = (1.0_wp - mixM)*rM
-                                    m0k(vp) = mixM*rM
+                                    m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
 
                                 ! if not, mixture of fluids. Starting phase change (pTg)
                                 else
                                     ! returning partial pressures to what they were after the partial density correction 
-                                    m0k(lp) = m1
-                                    m0k(vp) = m2
+                                    m0k(lp) = m1 ; m0k(vp) = m2
 
                                     ! pTg-relaxation
                                     call s_infinite_ptg_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
@@ -297,8 +291,11 @@ contains
         real(wp), dimension(num_fluids) :: alpha0k, alpharhoe0k, m0k
         real(wp), dimension(num_fluids) :: alphak, alpharhoek, rhok
         character(20) :: nss, pSs, Econsts
+        integer, dimension(num_fluids) :: iAux !< auxiliary index for choosing appropiate values for conditional sums
 
         integer :: i, na, ns, nsL !< generic loop iterators
+
+        iAux = (/ (i, i=1,num_fluids) /) 
 
         ! think how to solve pK, alphak, alpharhoek, given the energy mismatechs at the discontinuities 
         alpha0k = alphaik
@@ -310,20 +307,13 @@ contains
         ! distributing the partial density
         m0k = mik
 
-        ! Numerical correction of the volume fractions
+        ! Numerical correction of the volume fractions, partial densities, and internal energies
         IF (mpp_lim) THEN
-            DO i = 1, num_fluids
-                IF ((m0k(i) < 0.0_wp) .OR. (alpha0k(i) < 0.0_wp)) THEN
-                    alpha0k(i)       = 0.0_wp
-                    alpharhoe0k(i)   = 0.0_wp
-                    m0k(i)           = 0.0_wp
-                END IF
-                IF (alpha0k(i) > 1.0_wp) alpha0k(i) = 1.0_wp
-                ! IF (m0k(i)/sum(m0k) > 1.0_wp) m0k(i) = sum(m0k)
-                ! IF (alpharhoe0k(i)/sum(alpharhoe0k) > 1.0_wp) alpharhoe0k(i) = sum(alpharhoe0k)
-            END DO
-            alpha0k = alpha0k / sum(alpha0k)
-            ! alpharhoe0k = alpharhoe0k / sum(alpharhoe0k)
+          m0k( pack( iAux, ( alphaik < 0.0_wp ) .or. ( mik < 0.0_wp ) ) ) = 0.0_wp
+          alpharhoe0k( pack( iAux, ( alphaik < 0 ) .or. ( mik < 0 ) ) ) = 0.0_wp
+          alpha0k( pack( iAux, ( alphaik < 0.0_wp ) .or. ( mik < 0.0_wp ) ) ) = 0.0_wp
+          alpha0k( pack( iAux, alphaik > 0.0_wp ) ) = 1.0_wp
+          alpha0k = alpha0k / sum(alpha0k)           
         END IF
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
@@ -457,40 +447,41 @@ contains
         real(wp) :: fp, fpp, mQ, drhodp, den, num, pO !< variables for the Newton Solver
         real(wp) :: gamma, pi_inf !< auxiliary variables
         real(wp), dimension(num_fluids) :: alphak, alpharhoek, mk, pk, rhok 
+        integer, dimension(num_fluids) :: iAux !< auxiliary index for choosing appropiate values for conditional sums
         character(20) :: nss, pSs
+        !> @}
 
         integer :: i, ns !< generic loop iterators
 
+        iAux = (/ (i, i=1,num_fluids) /) 
+        
         ! initializing the partial energies
         alphak       = alpha0k
         alpharhoek   = alpharhoe0k
         mk           = m0k
 
-        ! Numerical correction of the volume fractions
+        ! Numerical correction of the volume fractions, partial densities, and internal energies
         IF (mpp_lim) THEN
-            DO i = 1, num_fluids
-                IF ((mk(i) < 0.0_wp) .OR. (alphak(i) < 0.0_wp)) THEN
-                  alphak(i)       = 0.0_wp
-                  alpharhoek(i)   = 0.0_wp
-                  mk(i)           = 0.0_wp
-                ELSE IF (alphak(i) > 1.0_wp) THEN
-                  alphak(i) = 1.0_wp
-                END IF
-            END DO
-            alphak = alphak / sum(alphak)
+          mk( pack( iAux, ( alpha0k < 0.0_wp ) .or. ( m0k < 0.0_wp ) ) ) = 0.0_wp
+          alpharhoek( pack( iAux, ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+          alphak( pack( iAux, ( alpha0k < 0.0_wp ) .or. ( m0k < 0.0_wp ) ) ) = 0.0_wp
+          alphak( pack( iAux, alpha0k > 0.0_wp ) ) = 1.0_wp
+          alphak = alphak / sum(alphak)           
         END IF
 
         ! Initial state
-        DO i = 1, num_fluids
-            IF (alphak(i) > sgm_eps) THEN
-                pk(i) = ( ( alpharhoek(i) - mk(i) * qvs(i) ) / alphak(i) - fluid_pp(i)%pi_inf) / fluid_pp(i)%gamma               
-                ! Physical pressure?
-                IF (pk(i) <= -(1.0_wp - ptgalpha_eps)*ps_inf(i) + ptgalpha_eps) pk(i) = -(1.0_wp - ptgalpha_eps)*ps_inf(i) + ptgalpha_eps
-            ELSE
-                pk(i) = 0.0_wp
-            END IF
-        END DO
+        pk = 0.0_wp
+        
+        pk( pack( iAux, alphak > sgm_eps ) ) = ( ( alpharhoek( pack( iAux, alphak > sgm_eps ) ) &
+        - mk( pack( iAux, alphak > sgm_eps ) ) * qvs( pack( iAux, alphak > sgm_eps ) ) ) /      &
+        alphak( pack( iAux, alphak > sgm_eps ) ) - fluid_pp( pack( iAux, alphak > sgm_eps ) )%pi_inf) &
+        / fluid_pp( pack( iAux, alphak > sgm_eps ) )%gamma               
 
+        pk( pack( iAux, pk <= -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) = &
+        -(1.0_wp - ptgalpha_eps)*ps_inf( pack( iAux, pk <= -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) &
+        + ptgalpha_eps
+
+        ! initial guess for the relaxed pressure
         pS = sum( alphak * pk )
 
         ! Iterative process for relaxed pressure determination
@@ -526,6 +517,7 @@ contains
                 END IF
             END DO
 
+            
             ! Convergence?
             ns = ns + 1
 #ifndef MFC_OpenACC
@@ -550,8 +542,8 @@ contains
         end do
 
         ! Cell update of the volume fraction - this is not needed to be outputed, as it will be later fixed by a more general subroutine
-        alphak( pack( (/ (i, i=1,num_fluids) /), alphak > sgm_eps ) ) = &
-                mk( pack( (/ (i, i=1,num_fluids) /), alphak > sgm_eps ) ) / rhok( pack( (/ (i, i=1,num_fluids) /), alphak > sgm_eps ) )
+        alphak( pack( iAux, alphak > sgm_eps ) ) = &
+                mk( pack( iAux, alphak > sgm_eps ) ) / rhok( pack( iAux, alphak > sgm_eps ) )
 
         ! Mixture-total-energy correction ==================================
 
@@ -933,8 +925,11 @@ contains
         real(wp), intent(in) :: rho
         logical, intent(inout) :: TR
         integer, intent(in) :: CT, j, k, l
+        integer, dimension(num_fluids) :: iAux !< auxiliary index for choosing appropiate values for conditional sums
         integer :: i
         !> @}
+
+        iAux = (/ (i, i=1,num_fluids) /) 
 
         ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction;
         ! CT = 2: crude correction; else: Total Mass correction
@@ -976,17 +971,17 @@ contains
         elseif (CT == 2) then
 
             ! if either the volume fraction or the partial density is negative, make them positive
-            alpha0k( pack( (/ (i, i=1,num_fluids) /), ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
-                m0k( pack( (/ (i, i=1,num_fluids) /), ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+            alpha0k( pack( iAux, ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+                m0k( pack( iAux, ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
             if (model_eqns .eq. 3) then
-                alpharhoe0k( pack( (/ (i, i=1,num_fluids) /), ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+                alpharhoe0k( pack( iAux, ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
             end if
 
             ! continue relaxation
             TR = .true.
         else
             ! if there are any insignificant values, make them significant 
-            m0k( pack(  (/ (i, i=1,num_fluids) /), m0k < rho * mixM ) ) = rho * mixM
+            m0k( pack( iAux, m0k < rho * mixM ) ) = rho * mixM
 
             ! continue relaxation
             TR = .true.
