@@ -260,6 +260,7 @@ contains
                         do i = 1, num_fluids
                             ! returning partial densities to what they were previous to any relaxation scheme.
                             m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
+                            print *, 'crap'
                         end do
                     end if
                     ! updating conservative variables after the any relaxation procedures
@@ -291,11 +292,11 @@ contains
         real(wp), dimension(num_fluids) :: alpha0k, alpharhoe0k, m0k
         real(wp), dimension(num_fluids) :: alphak, alpharhoek, rhok
         character(20) :: nss, pSs, Econsts
-        integer, dimension(num_fluids) :: iAux !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
 
         integer :: i, na, ns, nsL !< generic loop iterators
 
-        iAux = (/ (i, i=1,num_fluids) /) 
+        iFix = (/ (i, i=1,num_fluids) /) 
 
         ! think how to solve pK, alphak, alpharhoek, given the energy mismatechs at the discontinuities 
         alpha0k = alphaik
@@ -308,12 +309,19 @@ contains
         m0k = mik
 
         ! Numerical correction of the volume fractions, partial densities, and internal energies
-        IF (mpp_lim) THEN
-          m0k( pack( iAux, ( alphaik < 0.0_wp ) .or. ( mik < 0.0_wp ) ) ) = 0.0_wp
-          alpharhoe0k( pack( iAux, ( alphaik < 0 ) .or. ( mik < 0 ) ) ) = 0.0_wp
-          alpha0k( pack( iAux, ( alphaik < 0.0_wp ) .or. ( mik < 0.0_wp ) ) ) = 0.0_wp
-          alpha0k( pack( iAux, alphaik > 0.0_wp ) ) = 1.0_wp
-          alpha0k = alpha0k / sum(alpha0k)           
+        IF (mpp_lim) THEN          
+          ! auxiliry variable to avoid do loops
+          iVar = iFix
+          iVar( pack( iFix, ( alphaik >= 0 ) .and. ( mik >= 0 ) ) ) = 0
+          ! if alpha < 0 or m < 0, set everything to 0
+          m0k( pack( iVar, iVar /= 0 ) ) = 0.0_wp
+          alpharhoe0k( pack( iVar, iVar /= 0 ) ) = 0.0_wp
+          alpha0k( pack( iVar, iVar /= 0 ) ) = 0.0_wp
+          ! if alpha > 1, set it to 1
+          alpha0k( pack( iFix, alphaik > 1.0_wp ) ) = 1.0_wp
+
+          ! renormalize alpha
+          alpha0k = alpha0k / sum(alpha0k)
         END IF
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
@@ -444,51 +452,65 @@ contains
 
         integer, intent(in) :: j, k, l
 
-        real(wp) :: fp, fpp, mQ, drhodp, den, num, pO !< variables for the Newton Solver
+        real(wp) :: fp, fpp, mQ, pO !< variables for the Newton Solver
         real(wp) :: gamma, pi_inf !< auxiliary variables
-        real(wp), dimension(num_fluids) :: alphak, alpharhoek, mk, pk, rhok 
-        integer, dimension(num_fluids) :: iAux !< auxiliary index for choosing appropiate values for conditional sums
+        real(wp), dimension(num_fluids) :: alphak, alpharhoek, mk, pk, rhok, num, den, drhodp
+        integer, dimension(num_fluids) :: iVar, iFix !< auxiliary index for choosing appropiate values for conditional sums
         character(20) :: nss, pSs
         !> @}
 
         integer :: i, ns !< generic loop iterators
-
-        iAux = (/ (i, i=1,num_fluids) /) 
         
+        iFix = (/ (i, i=1,num_fluids) /)
+
         ! initializing the partial energies
         alphak       = alpha0k
         alpharhoek   = alpharhoe0k
         mk           = m0k
 
         ! Numerical correction of the volume fractions, partial densities, and internal energies
-        IF (mpp_lim) THEN
-          mk( pack( iAux, ( alpha0k < 0.0_wp ) .or. ( m0k < 0.0_wp ) ) ) = 0.0_wp
-          alpharhoek( pack( iAux, ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
-          alphak( pack( iAux, ( alpha0k < 0.0_wp ) .or. ( m0k < 0.0_wp ) ) ) = 0.0_wp
-          alphak( pack( iAux, alpha0k > 0.0_wp ) ) = 1.0_wp
+        IF (mpp_lim) THEN  
+          ! auxiliry variable to avoid do loops
+          iVar = iFix
+          iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
+          
+          ! if alpha < 0 or m < 0, set everything to 0
+          mk( pack( iVar, iVar /= 0 ) ) = 0.0_wp
+          alpharhoek( pack( iVar, iVar /= 0 ) ) = 0.0_wp
+          alphak( pack( iVar, iVar /= 0 ) ) = 0.0_wp
+          ! if alpha > 1, set it to 1
+          alphak( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
+
+          ! renormalize alpha
           alphak = alphak / sum(alphak)           
         END IF
 
         ! Initial state
         pk = 0.0_wp
         
-        pk( pack( iAux, alphak > sgm_eps ) ) = ( ( alpharhoek( pack( iAux, alphak > sgm_eps ) ) &
-        - mk( pack( iAux, alphak > sgm_eps ) ) * qvs( pack( iAux, alphak > sgm_eps ) ) ) /      &
-        alphak( pack( iAux, alphak > sgm_eps ) ) - fluid_pp( pack( iAux, alphak > sgm_eps ) )%pi_inf) &
-        / fluid_pp( pack( iAux, alphak > sgm_eps ) )%gamma               
+        ! auxiliry variable to avoid do loops
+        iVar = iFix
+        iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
 
-        pk( pack( iAux, pk <= -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) = &
-        -(1.0_wp - ptgalpha_eps)*ps_inf( pack( iAux, pk <= -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) &
+        pk( pack( iVar, iVar /= 0 ) ) = ( ( alpharhoek( pack( iVar, iVar /= 0 ) ) &
+        - mk( pack( iVar, iVar /= 0 ) ) * qvs( pack( iVar, iVar /= 0 ) ) ) /      &
+        alphak( pack( iVar, iVar /= 0 ) ) - fluid_pp( pack( iVar, iVar /= 0 ) )%pi_inf) &
+        / fluid_pp( pack( iVar, iVar /= 0 ) )%gamma               
+
+        ! auxiliry variable to avoid do loops
+        iVar = iFix
+        iVar( pack( iFix, .not. ( pk < -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) ) = 0
+
+        pk( pack( iVar, iVar /= 0 ) ) = -(1.0_wp - ptgalpha_eps)*ps_inf( pack( iVar, iVar /= 0 ) ) &
         + ptgalpha_eps
-
+        
         ! initial guess for the relaxed pressure
         pS = sum( alphak * pk )
 
         ! Iterative process for relaxed pressure determination
         ns    = 0
         fp    = 2.0_wp * ptgalpha_eps
-        fpp   = 1d9
-        rhok  = 0.0_wp
+        fpp   = 2.0_wp * ptgalpha_eps
 
         ! Note that a solution is found when f(p) = 1
         ! keep an eye on this
@@ -496,54 +518,63 @@ contains
             
             ! setting old pressure
             pO = pS
+
+            ! Newton-Raphson method
+            ! Physical pressure?
+            if ( pO < minval(-(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps) ) then
+              pO = minval(-(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps)
+            end if
+
+            ! calulating fp and fpp
+            iVar = iFix
+            iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
+            
+            num       = gs_min * (pO + ps_inf)
+            den       = num + pk - pO
+            
+            rhok = 0.0_wp  
+            rhok( pack( iVar, iVar /= 0 ) ) = mk( pack( iVar, iVar /= 0 ) ) &
+            / alphak( pack( iVar, iVar /= 0 ) ) * num( pack( iVar, iVar /= 0 ) ) &
+            / den( pack( iVar, iVar /= 0 ) )
+
+            drhodp = 0.0_wp
+            drhodp( pack( iVar, iVar /= 0 ) ) = mk( pack( iVar, iVar /= 0 ) ) &
+            / alphak( pack( iVar, iVar /= 0 ) ) * gs_min( pack( iVar, iVar /= 0 ) ) &
+            * ( pk( pack( iVar, iVar /= 0 ) ) + ps_inf( pack( iVar, iVar /= 0 ) ) ) &
+            / ( den( pack( iVar, iVar /= 0 ) ) ** 2 )
+
+            fp        = sum( mk( pack( iVar, iVar /= 0 ) ) / rhok( pack( iVar, iVar /= 0 ) ) ) - 1.0_wp
+            fpp       = sum( - mk( pack( iVar, iVar /= 0 ) ) * drhodp( pack( iVar, iVar /= 0 ) ) &
+            / ( rhok( pack( iVar, iVar /= 0 ) ) **2 ) )
             
             ! updating pressure
             pS = pO - fp / fpp
 
-            ! Newton-Raphson method
-            fp  = -1.0_wp
-            fpp = 0.0_wp
-            DO i = 1, num_fluids
-                ! Physical pressure?
-                IF (pS <= -(1.0_wp - ptgalpha_eps)*ps_inf(i) + ptgalpha_eps) pS = -(1.0_wp - ptgalpha_eps)*ps_inf(i) + ptgalpha_eps
-                ! calulating fp and fpp
-                IF (alphak(i) > sgm_eps) THEN
-                    num       = gs_min(i) * (pS + ps_inf(i))
-                    den       = num + pk(i) - pS
-                    rhok(i)   = mk(i) / MAX(alphak(i),sgm_eps) * num / den
-                    drhodp    = mk(i) / MAX(alphak(i),sgm_eps) * gs_min(i) * ( pk(i) + ps_inf(i) ) / ( den**2 )
-                    fp        = fp  + mk(i) / rhok(i)
-                    fpp       = fpp - mk(i) * drhodp / (rhok(i)**2)
-                END IF
-            END DO
-
-            
             ! Convergence?
             ns = ns + 1
 #ifndef MFC_OpenACC
                 ! energy constraint for the p-equilibrium
                 ! checking if pressure is within expected bounds
-                if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
+                ! if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
 
-                    if (proc_rank == 0) then
+                !     if (proc_rank == 0) then
+                !         ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                !         !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, 0.0_wp, ps_inf, pS, (/pS - pO, pS + pO/) &
+                !         !                 , rhoe, q_cons_vf, 0.0_wp)
+                !     end if
 
-                        ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
-                        !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, 0.0_wp, ps_inf, pS, (/pS - pO, pS + pO/) &
-                        !                 , rhoe, q_cons_vf, 0.0_wp)
-                    end if
+                !     call s_real_to_str(pS, pSs)
+                !     call s_int_to_str(ns, nss)
+                !     call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_old_infinite_p_relaxation_k). &
+                !     &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
 
-                    call s_real_to_str(pS, pSs)
-                    call s_int_to_str(ns, nss)
-                    call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_old_infinite_p_relaxation_k). &
-                    &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
-
-                end if
+                ! end if
 #endif
         end do
 
         ! Cell update of the volume fraction - this is not needed to be outputed, as it will be later fixed by a more general subroutine
-        alphak( pack( iAux, alphak > sgm_eps ) ) = &
-                mk( pack( iAux, alphak > sgm_eps ) ) / rhok( pack( iAux, alphak > sgm_eps ) )
+        alphak( pack( iFix, alphak > sgm_eps ) ) = &
+                mk( pack( iFix, alphak > sgm_eps ) ) / rhok( pack( iFix, alphak > sgm_eps ) )
 
         ! Mixture-total-energy correction ==================================
 
@@ -925,11 +956,12 @@ contains
         real(wp), intent(in) :: rho
         logical, intent(inout) :: TR
         integer, intent(in) :: CT, j, k, l
-        integer, dimension(num_fluids) :: iAux !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
         integer :: i
         !> @}
 
-        iAux = (/ (i, i=1,num_fluids) /) 
+        iFix = (/ (i, i=1,num_fluids) /)
+        iVar = iFix
 
         ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction;
         ! CT = 2: crude correction; else: Total Mass correction
@@ -952,7 +984,7 @@ contains
                     TR = .true.
                 end if
             ! correcting the partial densities of the reacting fluids. In case liquid is negative
-            elseif (m0k(lp)/rM < mixM) then
+            elseif (m0k(lp) < rM * mixM) then
 
                 m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
                 
@@ -960,7 +992,7 @@ contains
                 TR = .true.
 
             ! correcting the partial densities of the reacting fluids. In case vapor is negative
-            elseif (m0k(vp)/rM < mixM) then
+            elseif (m0k(vp) < rM * mixM) then
 
                 m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
 
@@ -969,19 +1001,21 @@ contains
 
             end if
         elseif (CT == 2) then
+            ! auxiliry variable to avoid do loops - use Morgan's Law
+            iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
 
             ! if either the volume fraction or the partial density is negative, make them positive
-            alpha0k( pack( iAux, ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
-                m0k( pack( iAux, ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+            alpha0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+            m0k(pack(iVar, iVar /= 0) ) = 0.0_wp
             if (model_eqns .eq. 3) then
-                alpharhoe0k( pack( iAux, ( alpha0k < 0 ) .or. ( m0k < 0 ) ) ) = 0.0_wp
+                alpharhoe0k(pack(iVar, iVar /= 0) ) = 0.0_wp
             end if
 
             ! continue relaxation
             TR = .true.
         else
             ! if there are any insignificant values, make them significant 
-            m0k( pack( iAux, m0k < rho * mixM ) ) = rho * mixM
+            m0k( pack( iFix, m0k < rho * mixM ) ) = rho * mixM
 
             ! continue relaxation
             TR = .true.
