@@ -268,6 +268,7 @@ contains
                 end do
             end do
         end do
+        pause
     end subroutine s_infinite_relaxation_k ! ----------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
@@ -1023,6 +1024,8 @@ contains
 
         rM = m0k(lp) + m0k(vp)
 
+        print *, m0k
+
     end subroutine s_correct_partial_densities
 
     !>  This auxiliary subroutine calculates the 2 x 2 Jacobian and, its inverse and transpose
@@ -1336,8 +1339,7 @@ contains
         ! rhos =  0.0_wp
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
-
-            if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
+            ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
 
                 ! mass factions. Note that, at most, only liquid and vapor masses should change
                 q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
@@ -1352,8 +1354,7 @@ contains
 
                 ! Total entropy
                 ! rhos = rhos + q_cons_vf(i + contxb - 1)%sf(j, k, l)*sk(i)
-            end if
-
+            ! end if
         end do
         
     end subroutine update_conservative_vars
