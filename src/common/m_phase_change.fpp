@@ -160,6 +160,7 @@ contains
                         case (4) ! p-equilibrium
                             call s_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, rho, rhoe, rhoe6E, Tk)
                         case (5) ! pT-equilibrium
+                            print *, 'jkl', j, k, l
                             do i = 1, sys_size
                               print *, q_cons_vf(i)%sf(j, k, l)
                             end do
