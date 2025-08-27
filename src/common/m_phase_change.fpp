@@ -268,7 +268,7 @@ contains
                 end do
             end do
           do i = momxb, momxe
-            print *, 'vel', q_prim_vf(i)%sf(j, k, l)
+            print *, 'vel', q_cons_vf(i)%sf(j, k, l) / rho
           end do
         end do
         pause
