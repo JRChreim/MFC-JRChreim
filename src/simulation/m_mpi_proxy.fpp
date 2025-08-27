@@ -115,9 +115,8 @@ contains
             & 'bc_y%grcbc_in', 'bc_y%grcbc_out', 'bc_y%grcbc_vel_out',          &
             & 'bc_z%grcbc_in', 'bc_z%grcbc_out', 'bc_z%grcbc_vel_out',          &
             & 'cfl_adap_dt', 'cfl_const_dt', 'cfl_dt', 'surface_tension',       &
-            & 'shear_stress', 'bulk_stress', 'bubbles_lagrange',     &
-            & 'hyperelasticity', 'bc_io', 'powell', 'cont_damage', 'int_comp', &
-            & 'sph_coord' ]
+            & 'shear_stress', 'bulk_stress', 'bubbles_lagrange',                &
+            & 'hyperelasticity', 'down_sample', 'int_comp', 'sph_coord' ]
             call MPI_BCAST(${VAR}$, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 
@@ -237,6 +236,11 @@ contains
                 call MPI_BCAST(integral(j)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
         end do
+
+        ! NVIDIA UVM variables
+        call MPI_BCAST(nv_uvm_out_of_core, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
+        call MPI_BCAST(nv_uvm_igr_temps_on_gpu, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+        call MPI_BCAST(nv_uvm_pref_gpu, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
 
 #endif
 

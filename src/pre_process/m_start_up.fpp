@@ -152,7 +152,7 @@ contains
             elliptic_smoothing, elliptic_smoothing_iters, &
             viscous, bubbles_lagrange, bc_x, bc_y, bc_z, num_bc_patches, &
             patch_bc, Bx0, relativity, cont_damage, igr, igr_order, &
-            recon_type, muscl_order, sph_coord
+            down_sample, recon_type, muscl_order, sph_coord
 
         ! Inquiring the status of the pre_process.inp file
         file_loc = 'pre_process.inp'
@@ -860,9 +860,11 @@ contains
             call s_infinite_relaxation_k(q_cons_vf)
         end if
 
-        ! call  s_norm_denorm('D', q_cons_vf, q_prim_vf, q_T_sf)
-
-        call s_write_data_files(q_cons_vf, q_prim_vf, ib_markers, levelset, levelset_norm, bc_type)
+        if (ib) then
+            call s_write_data_files(q_cons_vf, q_prim_vf, bc_type, ib_markers, levelset, levelset_norm)
+        else
+            call s_write_data_files(q_cons_vf, q_prim_vf, bc_type)
+        end if
 
         call cpu_time(finish)
     end subroutine s_apply_initial_condition
