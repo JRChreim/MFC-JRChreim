@@ -142,6 +142,10 @@ contains
                     $:GPU_LOOP(parallelism='[seq]')
                     do i = momxb, momxe
                         dynE = dynE + 5.0e-1_wp*q_cons_vf(i)%sf(j, k, l)**2 / max(rho, sgm_eps)
+                        print *, 'i', i
+                        print *, 'j,k,l', j,k,l
+                        print *, 'mom', q_cons_vf(i)%sf(j, k, l)
+                        print *, 'rho', rho
                     end do
 
                     ! calculating the internal mixture energy that MUST be preserved throughout pT- and pTg-relaxation procedures
@@ -266,12 +270,12 @@ contains
                     call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
                 end do
             end do
-          do i = momxb, momxe
-            print *, 'i', i
-            print *, 'j,k,l', j,k,l
-            print *, 'mom', q_cons_vf(i)%sf(j, k, l)
-            print *, 'rho', rho
-          end do
+          ! do i = momxb, momxe
+          !   print *, 'i', i
+          !   print *, 'j,k,l', j,k,l
+          !   print *, 'mom', q_cons_vf(i)%sf(j, k, l)
+          !   print *, 'rho', rho
+          ! end do
         end do
         pause
     end subroutine s_infinite_relaxation_k ! ----------------
@@ -757,7 +761,7 @@ contains
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
-        print *, 'pS', pS
+        ! print *, 'pS', pS
 
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
