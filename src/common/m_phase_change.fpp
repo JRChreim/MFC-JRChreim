@@ -267,6 +267,9 @@ contains
                     call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
                 end do
             end do
+          do i = momxb, momxe
+            print *, 'vel', q_prim_vf(i)%sf(j, k, l)
+          end do
         end do
         pause
     end subroutine s_infinite_relaxation_k ! ----------------
@@ -752,6 +755,8 @@ contains
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
+        print *, 'pS', pS
+
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine is created to activate the pTg-equilibrium for N fluids under pT
@@ -1023,8 +1028,6 @@ contains
         end if
 
         rM = m0k(lp) + m0k(vp)
-
-        print *, m0k
 
     end subroutine s_correct_partial_densities
 
