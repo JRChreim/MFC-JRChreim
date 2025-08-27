@@ -760,7 +760,10 @@ contains
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
-        print *, 'pS', pS
+        do i = 1, sys_size
+          print *, q_cons_vf(i)%sf(j, k, l)
+          print *, 'pS', pS
+        end do
 
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
