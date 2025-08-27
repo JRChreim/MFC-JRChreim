@@ -268,16 +268,15 @@ contains
                     end if
                     ! updating conservative variables after the any relaxation procedures
                     call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+                    do i = momxb, momxe
+                      print *, 'i', i
+                      print *, 'j,k,l', j,k,l
+                      print *, 'mom', q_cons_vf(i)%sf(j, k, l)
+                      print *, 'rho', rho
+                    end do
                 end do
             end do
-          ! do i = momxb, momxe
-          !   print *, 'i', i
-          !   print *, 'j,k,l', j,k,l
-          !   print *, 'mom', q_cons_vf(i)%sf(j, k, l)
-          !   print *, 'rho', rho
-          ! end do
         end do
-        pause
     end subroutine s_infinite_relaxation_k ! ----------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
@@ -1318,7 +1317,7 @@ contains
 
     end subroutine s_TSat
 
-    pure subroutine update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+    impure subroutine update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
         
         !$acc routine seq
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
