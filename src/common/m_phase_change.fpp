@@ -1348,10 +1348,7 @@ contains
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
             ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
-
-          print *, 'i', i
-          print *, 'mass', i + contxb - 1
-          print *, 'volume fracion', i + advxb - 1
+          
                 ! mass factions. Note that, at most, only liquid and vapor masses should change
                 q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
 
