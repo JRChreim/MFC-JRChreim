@@ -267,6 +267,8 @@ contains
                 end do
             end do
           do i = momxb, momxe
+            print *, 'i', i
+            print *, 'j,k,l', j,k,l
             print *, 'mom', q_cons_vf(i)%sf(j, k, l)
             print *, 'rho', rho
           end do
