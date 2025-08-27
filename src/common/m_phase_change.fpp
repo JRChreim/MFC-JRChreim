@@ -260,7 +260,6 @@ contains
                         do i = 1, num_fluids
                             ! returning partial densities to what they were previous to any relaxation scheme.
                             m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
-                            print *, 'crap'
                         end do
                     end if
                     ! updating conservative variables after the any relaxation procedures
@@ -268,7 +267,8 @@ contains
                 end do
             end do
           do i = momxb, momxe
-            print *, 'vel', q_cons_vf(i)%sf(j, k, l) / rho
+            print *, 'mom', q_cons_vf(i)%sf(j, k, l)
+            print *, 'rho', rho
           end do
         end do
         pause
