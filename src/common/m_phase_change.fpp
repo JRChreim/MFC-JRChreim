@@ -160,6 +160,9 @@ contains
                         case (4) ! p-equilibrium
                             call s_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, rho, rhoe, rhoe6E, Tk)
                         case (5) ! pT-equilibrium
+                            do i = 1, sys_size
+                              print *, q_cons_vf(i)%sf(j, k, l)
+                            end do
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
                             call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
@@ -760,11 +763,8 @@ contains
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
-        do i = 1, sys_size
-          print *, q_cons_vf(i)%sf(j, k, l)
-          print *, 'pS', pS
-        end do
-
+        print *, 'pS', pS
+        
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine is created to activate the pTg-equilibrium for N fluids under pT
