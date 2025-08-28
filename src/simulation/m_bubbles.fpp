@@ -46,7 +46,7 @@ contains
         real(wp), intent(in) :: fntait, fBtait, f_bub_adv_src, f_divu
         real(wp), intent(in) :: fCson
 
-        real(wp) :: Dpbw, fCpbw, fCpinf, fCpinf_dot, fH, fHdot, c_gas, c_liquid
+        real(wp) :: fCpbw, fCpinf, fCpinf_dot, fH, fHdot, c_gas, c_liquid
         real(wp) :: f_rddot
 
         if (bubble_model == 1) then
@@ -73,7 +73,7 @@ contains
             fCpbw = f_cpbw_KM(fR0, fR, fV, fpb)
             f_rddot = f_rddot_RP(fP, fRho, fR, fV, fCpbw)
         end if
-        
+
     end function f_rddot
 
     !>  Function that computes that bubble wall pressure for Gilmore bubbles

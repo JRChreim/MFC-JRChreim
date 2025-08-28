@@ -293,6 +293,7 @@ contains
             do k = 0, n
                 do j = 0, m
                     call s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, qv, j, k, l)
+
                     call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c, qv)
 
                     if (viscous) then
