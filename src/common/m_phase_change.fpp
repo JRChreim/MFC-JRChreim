@@ -31,7 +31,7 @@ module m_phase_change
     integer, parameter :: max_iter = 1e8_wp             !< max # of iterations
     real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
     real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
-    real(wp), parameter :: mixM = 1.0e-8_wp             !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    real(wp), parameter :: mixM = sgm_eps             !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
     integer, parameter :: lp = 1                        !< index for the liquid phase of the reacting fluid
     integer, parameter :: vp = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
@@ -76,7 +76,7 @@ contains
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(wp) :: rhoe, rhoe6E, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
         real(wp) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
-        logical  :: TR
+        logical :: TR
 
         $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
         $:GPU_DECLARE(create='[rhoe,rhoe6E,dynE,rhos,rho,rM,m1,m2,TR]')
@@ -89,7 +89,7 @@ contains
 
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
-        
+
         ! starting equilibrium solver
         $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL, &
             & rhoe,rhoeT,dynE,rhos,rho,rM,m1,m2,TR, &
@@ -142,10 +142,6 @@ contains
                     $:GPU_LOOP(parallelism='[seq]')
                     do i = momxb, momxe
                         dynE = dynE + 5.0e-1_wp*q_cons_vf(i)%sf(j, k, l)**2 / max(rho, sgm_eps)
-                        ! print *, 'i', i
-                        ! print *, 'j,k,l', j,k,l
-                        ! print *, 'mom', q_cons_vf(i)%sf(j, k, l)
-                        ! print *, 'rho', rho
                     end do
 
                     ! calculating the internal mixture energy that MUST be preserved throughout pT- and pTg-relaxation procedures
@@ -160,10 +156,6 @@ contains
                         case (4) ! p-equilibrium
                             call s_infinite_p_relaxation_k(j, k, l, alphak, alpharhoe0k, m0k, pS, rho, rhoe, rhoe6E, Tk)
                         case (5) ! pT-equilibrium
-                            print *, 'jkl', j, k, l
-                            do i = 1, sys_size
-                              print *, q_cons_vf(i)%sf(j, k, l)
-                            end do
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
                             call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
@@ -257,7 +249,6 @@ contains
                                 do i = 1, num_fluids
                                     ! returning partial densities to what they were previous to any relaxation scheme.
                                     m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
-                                    ! print *, 'returning crap'
                                 end do
                                 ! cycles the innermost loop to the next iteration
                                 cycle 
@@ -272,12 +263,6 @@ contains
                     end if
                     ! updating conservative variables after the any relaxation procedures
                     call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
-                    ! do i = momxb, momxe
-                    !   print *, 'i', i
-                    !   print *, 'j,k,l', j,k,l
-                    !   print *, 'mom', q_cons_vf(i)%sf(j, k, l)
-                    !   print *, 'rho', rho
-                    ! end do
                 end do
             end do
         end do
@@ -763,8 +748,6 @@ contains
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
-
-        print *, 'pS', pS
         
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
@@ -1190,25 +1173,25 @@ contains
         !< Generic loop iterator
         integer :: i
 
-        ! print *, 'j, k, l', j, k, l
+        print *, 'j, k, l', j, k, l
 
-        ! print *, 'rhoe', rhoe
+        print *, 'rhoe', rhoe
 
-        ! print *, 'mQ', mQ
+        print *, 'mQ', mQ
 
-        ! print *, 'Energy constrain', (rhoe - mQ - minval(p_infA))
+        print *, 'Energy constrain', (rhoe - mQ - minval(p_infA))
 
-        ! print *, 'R2D', R2D
+        print *, 'R2D', R2D
 
-        ! print *, 'l2(R2D)', sqrt(R2D(1)**2 + R2D(2)**2)
+        print *, 'l2(R2D)', sqrt(R2D(1)**2 + R2D(2)**2)
 
-        ! print *, 'DeltamP', DeltamP
+        print *, 'DeltamP', DeltamP
 
-        ! print *, 'pS', pS
+        print *, 'pS', pS
 
-        ! print *, '-min(ps_inf)', -minval(p_infA)
+        print *, '-min(ps_inf)', -minval(p_infA)
 
-        ! print *, 'TS', TS
+        print *, 'TS', TS
 
         do i = 1, num_fluids
 
@@ -1216,27 +1199,27 @@ contains
 
         end do
 
-        ! print *, 'rho', rho
+        print *, 'rho', rho
 
         do i = 1, num_fluids
 
-            ! print *, 'i', i
+            print *, 'i', i
 
-            ! print *, 'alpha_i', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+            print *, 'alpha_i', q_cons_vf(i + advxb - 1)%sf(j, k, l)
 
-            ! print *, 'alpha_rho_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)
+            print *, 'alpha_rho_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)
 
-            ! print *, 'mq_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
+            print *, 'mq_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
 
             if (model_eqns == 3) then
-                ! print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
+                print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
             end if
 
-            ! print *, 'Y_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)/rho
+            print *, 'Y_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)/rho
 
         end do
 
-        ! print *, 'J', Jac, 'J-1', InvJac
+        print *, 'J', Jac, 'J-1', InvJac
 
     end subroutine s_whistleblower
 
