@@ -75,8 +75,10 @@ for rm = 1:length(RelMod)
         
         % colormap( flipud(gray(256)) ) ;
     
-        clearvars alpha_rho1 alpha_rho2 mom1 vel1 E alpha_rho_e1 alpha_rho_e2 pres
-        savefig( fig, strcat(RelMod{rm}, DiscLevel{dl} ) ) ;
+        clearvars alpha_rho1 alpha_rho2 mom1 vel1 E alpha_rho_e1 alpha_rho_e2 pres tCoord xCoord
+        
+        savefig(fig, fullfile('/p/global/jrchreim/Figures', strcat(RelMod{rm}, DiscLevel{dl} ) ) );
+
         close 
     end
 end

@@ -12,7 +12,6 @@ function [alpha_rho1, alpha_rho2, mom1, vel1, E, alpha_rho_e1, alpha_rho_e2, pre
             error(strcat("ERROR: invalid binDir (not a binary/root folder): ", binDir))
         end
         FoldName = fullfile(binDir, 'root') ;
-        FoldName
         tCoords = sortFilesFolder(FoldName, '*.dat') ;
         filename = fullfile(FoldName, [num2str(tCoords(1)), '.dat']) ;
         dat = f_binary_reader(filename, 'n', 'real*8', 50);
@@ -212,8 +211,6 @@ end
 function SSort = sortFilesFolder(FoldName, KeyWord)
 
     FC = dir( fullfile( FoldName, KeyWord ) ) ;
-
-    FC
 
     S = split( [FC.name], erase( KeyWord, '*') ) ;
 
