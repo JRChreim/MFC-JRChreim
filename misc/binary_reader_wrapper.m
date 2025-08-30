@@ -1,21 +1,19 @@
 % Wrapper for reading MFC binary output file
 % Works for 1D/2D/3D with multiple processors
 
-function pres = binary_reader_wrapper(binDir, ti, tf, t_delta, dim)
+function [alpha_rho1, alpha_rho2, mom1, vel1, E, alpha_rho_e1, alpha_rho_e2, pres, tCoords, xCoords] = binary_reader_wrapper(binDir, dim)
     % Add more output variables (like rho or xCoords) as desired
 
-    % Total time steps
-    tArr = ti : t_delta : tf;
-    tArrLen = length(tArr);
-
     if (dim ~= 1)
-        [iProcList, m, n, p, xIdxs, yIdxs, zIdxs, xCoords, yCoords, zCoords] = getProcIdx(binDir, tArr, dim);
+        [iProcList, m, n, p, xIdxs, yIdxs, zIdxs, tCoords, xCoords, yCoords, zCoords] = getProcIdx(binDir, dim);
     else
         % For 1D, the folder 'root' contains all the data
         if (isempty(binDir))
             error(strcat("ERROR: invalid binDir (not a binary/root folder): ", binDir))
         end
-        filename = fullfile(binDir, 'root', [num2str(tArr(1)), '.dat']);
+        FoldName = fullfile(binDir, 'root') ;
+        tCoords = sortFilesFolder(FoldName, '*.dat') ;
+        filename = fullfile(FoldName, [num2str(tCoords(1)), '.dat']) ;
         dat = f_binary_reader(filename, 'n', 'real*8', 50);
         m = dat.m;
         iProcList = 1;
@@ -23,17 +21,18 @@ function pres = binary_reader_wrapper(binDir, ti, tf, t_delta, dim)
     end
 
     % Loop through files for each time step
-    for tIdx = 1:tArrLen
+    for tIdx = 1:length(tCoords)
         if (mod(tIdx, 10) == 0 || tIdx == 1)
-            disp(['Reading time step ', num2str(tIdx), ' of ', num2str(tArrLen)]);
+            disp(['Reading time step ', num2str(tIdx), ' of ', num2str(length(tCoords))]);
         end
         
         for iProc = 1 : length(iProcList)
             if (dim ~= 1)
-                filename = fullfile(binDir, ['p', num2str(iProcList(iProc)-1)], [num2str(tArr(tIdx)), '.dat']);
+                filename = fullfile(binDir, ['p', num2str(iProcList(iProc)-1)], [num2str(tCoords(tIdx)), '.dat']);
             else
-                filename = fullfile(binDir, 'root', [num2str(tArr(tIdx)), '.dat']);
+                filename = fullfile(binDir, 'root', [num2str(tCoords(tIdx)), '.dat']);
             end
+
             dat = f_binary_reader(filename, 'n', 'real*8', 50);
 
             xIdx = xIdxs{iProc};
@@ -49,6 +48,14 @@ function pres = binary_reader_wrapper(binDir, ti, tf, t_delta, dim)
             
             % Add more variables (like rho) as desired
             if (dim == 1)
+                xCoords(xIdx, tIdx) = dat.x_cb(1) + cumsum( diff( dat.x_cb ) ) ;
+                alpha_rho1(xIdx, tIdx) = dat.alpha_rho1 ;
+                alpha_rho2(xIdx, tIdx) = dat.alpha_rho2 ;
+                mom1(xIdx, tIdx) = dat.mom1 ;
+                vel1(xIdx, tIdx) = dat.vel1 ;
+                E(xIdx, tIdx) = dat.E;
+                alpha_rho_e1(xIdx, tIdx) = dat.alpha_rho_e1 ;
+                alpha_rho_e2(xIdx, tIdx) = dat.alpha_rho_e2 ;
                 pres(xIdx, tIdx) = dat.pres;
             elseif (dim == 2)
                 pres(xIdx, yIdx, tIdx) = reshape(dat.pres, nx, ny);
@@ -61,7 +68,7 @@ end
 
 %% Helper Functions
 
-function [iProcList, m, n, p, xIdxs, yIdxs, zIdxs, xCoords, yCoords, zCoords] = getProcIdx(binDir, tArr, dim)
+function [iProcList, m, n, p, xIdxs, yIdxs, zIdxs, tCoords, xCoords, yCoords, zCoords] = getProcIdx(binDir, dim)
 % Set up global index mapping for multiple processors (only for 2D/3D, so dim == 2 or 3)
 
 % Returns:
@@ -83,7 +90,9 @@ function [iProcList, m, n, p, xIdxs, yIdxs, zIdxs, xCoords, yCoords, zCoords] = 
     iProcList = [];
     validProc = 0;
     for procNum = 1:nProcFolders
-        filename = fullfile(binDir, ['p', num2str(procNum-1)], [num2str(tArr(1)), '.dat']);
+        disp('talkey')
+        tCoords = sortFilesFolder(fullfile(binDir, ['p', num2str(procNum-1)]), '*.dat') ;
+        filename = fullfile(binDir, ['p', num2str(procNum-1)], [num2str(tCoords(1)), '.dat']);
         dat = f_binary_reader(filename, 'n', 'real*8', 50);
         if ((dat.m == 0) || (dim >= 2 && dat.n == 0) || (dim == 3 && dat.p == 0))
             continue
@@ -198,3 +207,18 @@ function globalIdxs = getGlobalIdx(localIdxs, procOrder)
         globalIdxs{i} = localIdxs{i} + offset;
     end
 end
+
+function SSort = sortFilesFolder(FoldName, KeyWord)
+
+    FC = dir( fullfile( FoldName, KeyWord ) ) ;
+    S = split( [FC.name], erase( KeyWord, '*') ) ;
+
+    for i = 1:size(S)
+        if not( isempty( str2num( S{i} ) ) )
+            SArr(i) = str2num(S{i});
+        end
+    end
+
+    SSort = sort(SArr) ;
+
+end 

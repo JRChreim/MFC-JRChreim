@@ -90,3 +90,4 @@ src/pre_process/m_checker.f90
 visitlog.py
 *.py
 *.txt
+*.fig
