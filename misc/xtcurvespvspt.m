@@ -79,6 +79,5 @@ for rm = 1:length(RelMod)
         
         savefig(fig, fullfile('/p/global/jrchreim/Figures', strcat(RelMod{rm}, DiscLevel{dl} ) ) );
 
-        close 
     end
 end
