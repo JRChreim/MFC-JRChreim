@@ -31,7 +31,7 @@ module m_phase_change
     integer, parameter :: max_iter = 1e8_wp             !< max # of iterations
     real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
     real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
-    real(wp), parameter :: mixM = sgm_eps             !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    real(wp), parameter :: mixM = sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
     integer, parameter :: lp = 1                        !< index for the liquid phase of the reacting fluid
     integer, parameter :: vp = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
@@ -345,11 +345,9 @@ contains
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
             if ((minval(ps_inf) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
-
                 call s_real_to_str(Econst, Econsts)
                 call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
 &                   . Please, check energy constraint. Econst ~'//Econsts//'. Aborting!')
-
             end if           
 #endif
 
