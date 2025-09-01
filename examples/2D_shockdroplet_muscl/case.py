@@ -9,7 +9,14 @@ rho_a = 1.204
 rho_w = 1000
 gam_a = 1.4
 gam_w = 6.12
+cvw = 1816
+cva = 717.5
+qwl = -1167000
+qpwl = 0.0E0
+qa = 0E0
+qpa = 0E0
 pi_w = 3.43e8
+pi_a = 0.0
 vel = 226
 rho = 1
 c_l = math.sqrt(1.4 * ps / rho)
@@ -56,6 +63,10 @@ print(
             "mpp_lim": "T",
             "mixture_err": "T",
             "time_stepper": 3,
+            "relax": 'T',
+            "relax_model": 5,
+            "palpha_eps": 1.0E-8,
+            "ptgalpha_eps": 1.0E-5,
             "recon_type": 2,
             "muscl_order": 2,
             "muscl_lim": 4,
@@ -117,7 +128,13 @@ print(
             "fluid_pp(1)%gamma": 1.0e00 / (gam_w - 1.0e00),
             "fluid_pp(1)%pi_inf": pi_w * gam_w / (gam_w - 1.0e00),
             "fluid_pp(2)%gamma": 1.0e00 / (gam_a - 1.0e00),
-            "fluid_pp(2)%pi_inf": 0.0e00,
+            "fluid_pp(2)%pi_inf": pi_a,
+	    'fluid_pp(1)%cv'               : cvw,
+	    'fluid_pp(1)%qv'               : qwl,
+	    'fluid_pp(1)%qvp'              : qpwl,
+	    'fluid_pp(2)%cv'               : cva,
+	    'fluid_pp(2)%qv'               : qa,
+	    'fluid_pp(2)%qvp'              : qpa,
         }
     )
 )

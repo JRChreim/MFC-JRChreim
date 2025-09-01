@@ -3,7 +3,7 @@
 
 clear; clc; close all;
 
-mfcPath = '/p/global/jrchreim/simulations/PhaseChange/1D/BubbleDynamics/StrongCollapse/6Eqn/';
+mfcPath = '/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/';
 
 %% Fluid properties
 
@@ -16,13 +16,13 @@ cp = [4267 1006]'; % J/KgK
 gama = cp ./ cv ;
 
 %% 1D data extraction
-RelMod = {'pFinalTest', 'pTFinalTest'} ;
-DiscLevel = {'N160E3', 'N320E3', 'N640E3', 'N1280E3'} ;
+RelMod = {'p', 'pT'} ;
+DiscLevel = {'N1E3', 'N2E3'} ;
 
 for rm = 1:length(RelMod)
     for dl = 1:length(DiscLevel)
 
-        binDir = fullfile(mfcPath, RelMod{rm}, 'Cartesian/BC-6/C000E-00', DiscLevel{dl}, 'binary' ) ;
+        binDir = fullfile(mfcPath, RelMod{rm}, DiscLevel{dl}, 'binary' ) ;
         
         [alpha_rho1, alpha_rho2, mom1, vel1, E, alpha_rho_e1, alpha_rho_e2, pres, tCoord, xCoord] = binary_reader_wrapper(binDir, 1) ;
         
@@ -77,7 +77,8 @@ for rm = 1:length(RelMod)
     
         clearvars alpha_rho1 alpha_rho2 mom1 vel1 E alpha_rho_e1 alpha_rho_e2 pres tCoord xCoord
         
-        savefig(fig, fullfile('/p/global/jrchreim/Figures', strcat(RelMod{rm}, DiscLevel{dl} ) ) );
+        savefig(fig, fullfile('/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/Figures/', strcat(RelMod{rm}, DiscLevel{dl} ) ), '-v7.3' );
 
+        close 
     end
 end
