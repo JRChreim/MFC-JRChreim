@@ -773,14 +773,18 @@ contains
         ! assigning the relexant pi_infs based on the previous pT-equilibrium
         p_infpTg = p_infpT
 
-        ! checking if homogeneous cavitation is expected. If yes, transfering an amount of mass to the depleted (liquid,
-        ! for the moment) phase, and then let the algorithm run. 
-        ! checking if homogeneous cavitation is possible
+        ! checking if homogeneous cavitation is expected. If yes, transfering a small amount of mass to the depleted
+        ! phase, and then let the algorithm run.
+        
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
         if ((pS < 0.0_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp))) then
 
             ! transfer a bit of mass to the deficient phase, enforce phase change
             call s_correct_partial_densities(1, alphak, alpharhoe0k, m0k, rM, rho, TR, i, j, k, l)
+
+            ! reestabilish the fluid parameters that are now important for the phase change
+            ! This might be temporary. Keep an eye on it
+            p_infpTg(lp) = ps_inf(lp) ; p_infpTg(vp) = ps_inf(vp)
 
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0_wp) then
@@ -824,14 +828,14 @@ contains
 
             ! mCP - the contribution from the reacting phases
             mCPD = mCP - m0k(lp) * cvs(lp) * gs_min(lp) &
-                      - m0k(vp) * cvs(vp) * gs_min(vp)
+                       - m0k(vp) * cvs(vp) * gs_min(vp)
 
             ! sum of the total alpha*rho*q of the system
             mQ = sum( m0k * qvs )
 
             ! mQ - the contribution from the reacting phases
             mQD = mQ - m0k(lp) * qvs(lp) &
-                    - m0k(vp) * qvs(vp)
+                     - m0k(vp) * qvs(vp)
 
             ! mCVG - the contribution from the reacting phases
             mCVGP = sum( m0k * cvs * ( gs_min - 1 ) / ( pS + ps_inf ) ) &
@@ -843,18 +847,15 @@ contains
                   - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( ( pS + ps_inf(lp) ) ** 2 ) &
                   - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
-                ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
-                ! end if
-
             ! Checking pressure and energy criteria for the (pT) solver to find a solution
 #ifndef MFC_OpenACC
-            if ((pS <= -1.0_wp*minval(ps_inf)) .or. ((rhoe - mQ - minval(ps_inf)) < 0.0_wp)) then
+            if ((pS <= -1.0_wp*minval(p_infpTg)) .or. ((rhoe - mQ - minval(p_infpTg)) < 0.0_wp)) then
                 if (proc_rank == 0) then
-                    ! call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, ps_inf, pS &
+                    ! call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, p_infpTg, pS &
                     !                   , R2D, rhoe, q_cons_vf, TS)
                 end if
 
-                call s_real_to_str(rhoe - mQ - minval(ps_inf), Econsts)
+                call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
                 call s_real_to_str(pS, pSs)
                 call s_mpi_abort('Solver for the pTg-relaxation failed (m_phase_change, s_infinite_ptg_relaxation_k). &
                 &   pS ~'//pSs//'. Econst = '//Econsts//'. Aborting!')
@@ -882,8 +883,8 @@ contains
             else
                 Oc(2) = OmI
             end if
-            if (pS + minval(ps_inf) - Om*DeltamP(2) <= 0.0_wp) then
-                Oc(3) = (pS + minval(ps_inf))/(2*DeltamP(2))
+            if (pS + minval(p_infpTg) - Om*DeltamP(2) <= 0.0_wp) then
+                Oc(3) = (pS + minval(p_infpTg))/(2*DeltamP(2))
             else
                 Oc(3) = OmI
             end if
