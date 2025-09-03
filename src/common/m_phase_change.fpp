@@ -610,12 +610,12 @@ contains
 
         ! initializing variables
         real(wp), intent(out) :: pS, TS
-        real(wp), dimension(num_fluids), intent(out) :: p_infpT, p_infpTT 
+        real(wp), dimension(num_fluids), intent(out) :: p_infpT
         real(wp), intent(in) :: rhoe, rM
         real(wp), intent(in), dimension(num_fluids) :: m0k
         integer, intent(in) :: j, k, l, MFL
         integer, dimension(num_fluids) :: iVar, iFix !< auxiliary index for choosing appropiate values for conditional sums
-        integer, dimension(num_fluids) :: ig !< flags to toggle the inclusion of fluids for the pT-equilibrium
+        integer, dimension(num_fluids) :: ig, p_infpTT !< flags to toggle the inclusion of fluids for the pT-equilibrium
         real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
 
