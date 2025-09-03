@@ -552,20 +552,18 @@ contains
 #ifndef MFC_OpenACC
                 ! energy constraint for the p-equilibrium
                 ! checking if pressure is within expected bounds
-                ! if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
+                if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
+                    if (proc_rank == 0) then
+                        call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                                        , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, 0.0_wp, ps_inf, pS, (/pS - pO, pS + pO/) &
+                                        , rhoe, q_cons_vf, 0.0_wp)
+                    end if
 
-                !     if (proc_rank == 0) then
-                !         ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
-                !         !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, 0.0_wp, ps_inf, pS, (/pS - pO, pS + pO/) &
-                !         !                 , rhoe, q_cons_vf, 0.0_wp)
-                !     end if
-
-                !     call s_real_to_str(pS, pSs)
-                !     call s_int_to_str(ns, nss)
-                !     call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_old_infinite_p_relaxation_k). &
-                !     &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
-
-                ! end if
+                    call s_real_to_str(pS, pSs)
+                    call s_int_to_str(ns, nss)
+                    call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_old_infinite_p_relaxation_k). &
+                    &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
+                end if
 #endif
         end do
 
@@ -612,10 +610,11 @@ contains
 
         ! initializing variables
         real(wp), intent(out) :: pS, TS
-        real(wp), dimension(num_fluids), intent(out) :: p_infpT
+        real(wp), dimension(num_fluids), intent(out) :: p_infpT, p_infpTT 
         real(wp), intent(in) :: rhoe, rM
         real(wp), intent(in), dimension(num_fluids) :: m0k
         integer, intent(in) :: j, k, l, MFL
+        integer, dimension(num_fluids) :: iVar, iFix !< auxiliary index for choosing appropiate values for conditional sums
         integer, dimension(num_fluids) :: ig !< flags to toggle the inclusion of fluids for the pT-equilibrium
         real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
@@ -625,11 +624,21 @@ contains
         ! auxiliary variables for the pT-equilibrium solver
         p_infpT = ps_inf
 
+        p_infpTT = ps_inf
+
+        iFix = (/ (i, i=1,num_fluids) /)
+        iVar = iFix
+
         ! these are slowing the computations significantly. Think about a workaround
         ig = 0
 
+        iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
+        p_infpTT( pack(ig, ig /= 0) ) = 2 * MAXVAL( ps_inf )
+
         ! Performing tests before initializing the pT-equilibrium
+
         $:GPU_LOOP(parallelism='[seq]')
+
         do i = 1, num_fluids
           ! check if all alpha(i)*rho(i) are negative. If so, abort
 #ifndef MFC_OpenACC
@@ -646,6 +655,12 @@ contains
 #endif
         end do
 
+        print *, 'p_infT', p_infpT, p_infpTT
+        print *, 'p_infTT', p_infpTT
+
+        print *, 'ig', ig
+        print *, 'iVar', iVar
+        
         ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
           ! sum of the total alpha*rho*cp of the system
           mCP = sum( m0k * cvs * gs_min )
@@ -781,6 +796,9 @@ contains
 
         !< Generic loop iterators
         integer :: i, ns
+
+        ! assigning the relexant pi_infs based on the previous pT-equilibrium
+        p_infpTg = p_infpT
 
         ! checking if homogeneous cavitation is expected. If yes, transfering an amount of mass to the depleted (liquid,
         ! for the moment) phase, and then let the algorithm run. 
