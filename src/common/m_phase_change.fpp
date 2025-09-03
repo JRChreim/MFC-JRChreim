@@ -854,7 +854,7 @@ contains
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
             call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
 
-            print *, InvJac, Jac, TJac
+            ! print *, InvJac, Jac, TJac
 
             ! calculating correction array for Newton's method
             DeltamP = matmul(InvJac, R2D)
