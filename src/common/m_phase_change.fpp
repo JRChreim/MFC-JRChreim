@@ -811,6 +811,8 @@ contains
         ! starting counter for the Newton solver
         ns = 0
 
+        print *, m0k
+        
         ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
         do while (((sqrt(R2D(1)**2 + R2D(2)**2) > ptgalpha_eps) &
                     .and. ((sqrt(R2D(1)**2 + R2D(2)**2)/rhoe) > (ptgalpha_eps/1.e6_wp))) &
