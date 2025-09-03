@@ -554,9 +554,9 @@ contains
                 ! checking if pressure is within expected bounds
                 if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
                     if (proc_rank == 0) then
-                        call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
-                                        , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, 0.0_wp, ps_inf, pS, (/pS - pO, pS + pO/) &
-                                        , rhoe, q_cons_vf, 0.0_wp)
+                        ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                        !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, 0.0_wp, ps_inf, pS, (/pS - pO, pS + pO/) &
+                        !                 , rhoe, q_cons_vf, 0.0_wp)
                     end if
 
                     call s_real_to_str(pS, pSs)
