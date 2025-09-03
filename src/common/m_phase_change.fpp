@@ -856,6 +856,8 @@ contains
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
             call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
 
+            print *, InvJac, Jac, TJac
+
             ! calculating correction array for Newton's method
             DeltamP = matmul(InvJac, R2D)
 
@@ -897,8 +899,6 @@ contains
             ! calculating residuals, which are (i) the difference between the Gibbs Free energy of the gas and the liquid
             ! and (ii) the energy before and after the phase-change process.
             call s_compute_pTg_residue(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
-
-            print *, pS, R2D
 
             ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
