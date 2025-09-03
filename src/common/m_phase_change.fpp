@@ -655,8 +655,7 @@ contains
 #endif
         end do
 
-        print *, 'p_infT', p_infpT
-        print *, 'p_infTT', p_infpTT
+        print *, 'Dp_infT,TT', p_infpT - p_infpTT
 
         print *, 'DigiVar', ig - iVar
         
