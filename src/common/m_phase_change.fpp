@@ -205,8 +205,6 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
-                                print *, 'TSatOV, TSOV, TSatSL, TSSL', TSatOV, TSOV, TSatSL, TSSL
-
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
 
@@ -786,6 +784,8 @@ contains
             ! This might be temporary. Keep an eye on it
             p_infpTg(lp) = ps_inf(lp) ; p_infpTg(vp) = ps_inf(vp)
 
+            pS = 1.0e4_wp
+
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0_wp) then
             
@@ -811,9 +811,7 @@ contains
         ! starting counter for the Newton solver
         ns = 0
 
-        print *, m0k
-        print *, 'pinfpT', p_infpT
-        print *, 'pinfpTg', p_infpTg
+        print *, 'm0k', m0k
 
         ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
         do while (((sqrt(R2D(1)**2 + R2D(2)**2) > ptgalpha_eps) &
