@@ -853,21 +853,6 @@ contains
 
             print *, mCP, mCPD, mQ, mQD, mCVGP, mCVGP2
 
-            ! Checking pressure and energy criteria for the (pT) solver to find a solution
-#ifndef MFC_OpenACC
-            if ((pS <= -1.0_wp*minval(p_infpTg)) .or. ((rhoe - mQ - minval(p_infpTg)) < 0.0_wp)) then
-                if (proc_rank == 0) then
-                    ! call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, p_infpTg, pS &
-                    !                   , R2D, rhoe, q_cons_vf, TS)
-                end if
-
-                call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
-                call s_real_to_str(pS, pSs)
-                call s_mpi_abort('Solver for the pTg-relaxation failed (m_phase_change, s_infinite_ptg_relaxation_k). &
-                &   pS ~'//pSs//'. Econst = '//Econsts//'. Aborting!')
-
-            end if
-#endif
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
             call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
 
@@ -920,6 +905,20 @@ contains
                 call s_int_to_str(ns, nss)
                 call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
                                   //nss//' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
+
+            end if
+            ! if not,
+            ! Checking pressure and energy criteria for the (pT) solver to find a solution
+            if ((pS <= -1.0_wp*minval(p_infpTg)) .or. ((rhoe - mQ - minval(p_infpTg)) < 0.0_wp)) then
+                if (proc_rank == 0) then
+                    ! call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, p_infpTg, pS &
+                    !                   , R2D, rhoe, q_cons_vf, TS)
+                end if
+
+                call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
+                call s_real_to_str(pS, pSs)
+                call s_mpi_abort('Solver for the pTg-relaxation failed (m_phase_change, s_infinite_ptg_relaxation_k). &
+                &   pS ~'//pSs//'. Econst = '//Econsts//'. Aborting!')
 
             end if
 #endif
