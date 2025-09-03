@@ -851,7 +851,7 @@ contains
                   - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( ( pS + ps_inf(lp) ) ** 2 ) &
                   - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
-            print *, mCP, mCPD, mQ, mWD, mCVGP, mCVGP2
+            print *, mCP, mCPD, mQ, mQD, mCVGP, mCVGP2
 
             ! Checking pressure and energy criteria for the (pT) solver to find a solution
 #ifndef MFC_OpenACC
