@@ -980,7 +980,7 @@ contains
             ! correcting the partial densities of the reacting fluids. In case liquid is negative
             elseif (m0k(lp) < rM * mixM) then
 
-                m0k(lp) = rM / 2 ; m0k(vp) = rM / 2
+                m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
                 
                 ! continue relaxation
                 TR = .true.
@@ -988,7 +988,7 @@ contains
             ! correcting the partial densities of the reacting fluids. In case vapor is negative
             elseif (m0k(vp) < rM * mixM) then
 
-                m0k(lp) = rM / 2 ; m0k(vp) = rM / 2
+                m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
 
                 ! continue relaxation
                 TR = .true.
