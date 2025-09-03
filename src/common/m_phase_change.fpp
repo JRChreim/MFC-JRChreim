@@ -615,7 +615,6 @@ contains
         real(wp), intent(in), dimension(num_fluids) :: m0k
         integer, intent(in) :: j, k, l, MFL
         integer, dimension(num_fluids) :: iVar, iFix !< auxiliary index for choosing appropiate values for conditional sums
-        integer, dimension(num_fluids) :: ig, p_infpTT !< flags to toggle the inclusion of fluids for the pT-equilibrium
         real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
 
@@ -624,40 +623,16 @@ contains
         ! auxiliary variables for the pT-equilibrium solver
         p_infpT = ps_inf
 
-        p_infpTT = ps_inf
-
+        ! auxiliary variables to skip index looping
         iFix = (/ (i, i=1,num_fluids) /)
         iVar = iFix
 
-        ! these are slowing the computations significantly. Think about a workaround
-        ig = 0
-
+        ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction
         iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
-        p_infpTT( pack(iVar, iVar /= 0) ) = 2 * MAXVAL( ps_inf )
-
-        ! Performing tests before initializing the pT-equilibrium
-
-        $:GPU_LOOP(parallelism='[seq]')
-
-        do i = 1, num_fluids
-          ! check if all alpha(i)*rho(i) are negative. If so, abort
-#ifndef MFC_OpenACC
-            ! check which indices I will ignore (no need to abort the solver in this case). Adjust this sgm_eps value for mixture cells
-            if( ( m0k(i) >=  0.0_wp ) .and. ( m0k(i) - rM * mixM <= sgm_eps ) ) then
-
-              ig(i) = i
-
-              ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
-              ! This way, I am ensuring this value will not be selected.
-              p_infpT(i) = 2 * MAXVAL( ps_inf )
-
-            end if
-#endif
-        end do
-
-        print *, 'Dp_infT,TT', p_infpT - p_infpTT
-
-        print *, 'DigiVar', ig - iVar
+        
+        ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
+        ! This way, I am ensuring this value will not be selected.
+        p_infpT( pack(iVar, iVar /= 0) ) = 2 * MAXVAL( ps_inf )
         
         ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
           ! sum of the total alpha*rho*cp of the system
@@ -721,15 +696,15 @@ contains
             ! updating functions used in the Newton's solver
             gp = sum( ( gs_min - 1.0_wp ) * m0k * cvs * ( rhoe + pO - mQ ) &
               / ( mCP * ( pO + p_infpT ) ) ) &
-               - sum( ( gs_min( pack(ig, ig /= 0) ) - 1.0_wp ) * m0k( pack(ig, ig /= 0) ) &
-               * cvs( pack(ig, ig /= 0) ) * ( rhoe + pO - mQ ) &
-              / ( mCP * ( pO + p_infpT( pack(ig, ig /= 0) ) ) ) )
+               - sum( ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) * m0k( pack(iVar, iVar /= 0) ) &
+               * cvs( pack(iVar, iVar /= 0) ) * ( rhoe + pO - mQ ) &
+              / ( mCP * ( pO + p_infpT( pack(iVar, iVar /= 0) ) ) ) )
 
             gpp = sum( ( gs_min - 1.0_wp ) * m0k * cvs * ( p_infpT - rhoe + mQ ) &
               / ( mCP * ( pO + p_infpT ) **2 ) ) &
-              - sum( ( gs_min( pack(ig, ig /= 0) ) - 1.0_wp ) * m0k( pack(ig, ig /= 0) ) &
-              * cvs( pack(ig, ig /= 0) ) * ( p_infpT( pack(ig, ig /= 0) ) - rhoe + mQ )  &
-              / ( mCP * ( pO + p_infpT( pack(ig, ig /= 0) ) ) **2 ) )
+              - sum( ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) * m0k( pack(iVar, iVar /= 0) ) &
+              * cvs( pack(iVar, iVar /= 0) ) * ( p_infpT( pack(iVar, iVar /= 0) ) - rhoe + mQ )  &
+              / ( mCP * ( pO + p_infpT( pack(iVar, iVar /= 0) ) ) **2 ) )
 
             hp = 1.0_wp/(rhoe + pO - mQ) + 1.0_wp/(pO + minval(p_infpT))
 
