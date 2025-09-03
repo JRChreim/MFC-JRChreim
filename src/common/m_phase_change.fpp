@@ -633,7 +633,7 @@ contains
         ig = 0
 
         iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
-        p_infpTT( pack(ig, ig /= 0) ) = 2 * MAXVAL( ps_inf )
+        p_infpTT( pack(iVar, iVar /= 0) ) = 2 * MAXVAL( ps_inf )
 
         ! Performing tests before initializing the pT-equilibrium
 
@@ -655,11 +655,10 @@ contains
 #endif
         end do
 
-        print *, 'p_infT', p_infpT, p_infpTT
+        print *, 'p_infT', p_infpT
         print *, 'p_infTT', p_infpTT
 
-        print *, 'ig', ig
-        print *, 'iVar', iVar
+        print *, 'DigiVar', ig - iVar
         
         ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
           ! sum of the total alpha*rho*cp of the system
