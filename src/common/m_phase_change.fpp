@@ -171,7 +171,6 @@ contains
                             alphak = m0k / rhok
 
                             ! 1 - model activation, 1st order transition (p,T) <= (pCr, TCr)
-                            ! if ( ( pS < pCr ) .and. ( pS > 0 ) .and. &
                             if ( ( pS < pCr ) .and. &
                             ! 2.1 Homogeneous pTg-equilibrium criterium
                             ( ( ( pS < 0 ) .and. ( pS + minval(p_infpT) > 0.0_wp ) ) &
@@ -205,6 +204,8 @@ contains
 
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
+
+                                print *, 'TSatOV, TSOV, TSatSL, TSSL', TSatOV, TSOV, TSatSL, TSSL
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
