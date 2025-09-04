@@ -4,7 +4,7 @@
 clear; clc; close all;
 
 % toggle location
-loc = 'local';
+loc = 'carpenter';
 switch loc
     case 'carpenter'
         mfcPath = '/p/global/jrchreim/simulations/PhaseChange/1D/BubbleDynamics/StrongCollapse/6Eqn/';
