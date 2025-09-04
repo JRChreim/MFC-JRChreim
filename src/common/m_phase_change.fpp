@@ -780,10 +780,15 @@ contains
             ! transfer a bit of mass to the deficient phase, enforce phase change
             call s_correct_partial_densities(1, alphak, alpharhoe0k, m0k, rM, rho, TR, i, j, k, l)
 
+            ! The following changes do not have a strong physicial rationale. So keep an eye on them,
+            ! as they might be a weakness of the solver
+
             ! reestabilish the fluid parameters that are now important for the phase change
-            ! This might be temporary. Keep an eye on it
             p_infpTg(lp) = ps_inf(lp) ; p_infpTg(vp) = ps_inf(vp)
 
+            ! give an arbitrary value 'positive' value for the pressure as,
+            ! since now both vapor and liquid exist pS > -min(pi_inf) for the 
+            ! solver to converge (at least) within the pR-relaxation context
             pS = 1.0e4_wp
 
         ! the metastable state is not enough to sustain phase change
