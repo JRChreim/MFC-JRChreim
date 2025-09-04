@@ -862,7 +862,6 @@ contains
 
             ! checking if the correction in the mass/pressure will lead to negative values for those quantities
             ! If so, adjust the underrelaxation parameter Om
-
 #ifndef MFC_OpenACC
             ! creating criteria for variable underrelaxation factor
             if (m0k(lp) - Om*DeltamP(1) <= 0.0_wp) then
