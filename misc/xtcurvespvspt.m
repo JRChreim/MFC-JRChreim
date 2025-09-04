@@ -11,7 +11,7 @@ switch loc
         RelMod = {'pFinalTest', 'pTFinalTest'} ;
         DiscLevel = {'N160E3', 'N320E3', 'N640E3', 'N1280E3'} ;
         compliment = 'Cartesian/BC-6/C000E-00';
-        figFold = '/p/global/jrchreim/Figures/';
+        FigFolder = '/p/global/jrchreim/Figures/';
     case 'local'
         mfcPath = '/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/';
         RelMod = {'p', 'pT'} ;
