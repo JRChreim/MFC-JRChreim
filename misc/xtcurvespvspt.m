@@ -103,7 +103,7 @@ for rm = 1:length(RelMod)
         clearvars alpha_rho1 alpha_rho2 mom1 vel1 E alpha_rho_e1 alpha_rho_e2 pres tCoord xCoord
         
         % savefig(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), '-v7.3' );
-        saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'epsc' );
+        % saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'epsc' );
         saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'png' );
 
         close 
