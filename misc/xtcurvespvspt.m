@@ -30,8 +30,8 @@ for rm = 1:length(RelMod)
         
         %% calculations for the x-t plots
         
-        alpha1 = (gama(1) - 1) .* (alpha_rho_e1 - alpha_rho1 .* q(1) ) ./ ( pres + gama(1) .* pii(1) ) ;
-        alpha2 = (gama(2) - 1) .* (alpha_rho_e2 - alpha_rho2 .* q(2) ) ./ ( pres + gama(2) .* pii(2) ) ;
+        alpha1 = (gama(1) - 1) .* (alpha_rho_e1 - alpha_rho1 .* q(1)) ./ ( pres + gama(1) .* pii(1) ) ;
+        alpha2 = (gama(2) - 1) .* (alpha_rho_e2 - alpha_rho2 .* q(2)) ./ ( pres + gama(2) .* pii(2) ) ;
         
         rho1 = alpha_rho1 ./ alpha1 ;
         rho2 = alpha_rho2 ./ alpha2 ;
@@ -45,28 +45,35 @@ for rm = 1:length(RelMod)
         
         Lx = xCoord(end,1) - xCoord(1,1) ;        
 
+        tOtend = tCoord ./ tCoord(end) ;
+        xOL = xCoord ./ Lx ;
+
+        xC{1} = (xOL > 0.3 & xOL < 0.75) ;
         nexttile(1) ;
-        contourf(tCoord ./ tCoord(end), xCoord ./ Lx, pres) ;
+        contourf(reshape(tOtend(xC{1}), [], size(xOL, 2)), reshape(xOL( xC{1} ), [], size(xOL, 2)), reshape(pres(xC{1}), [], size(xOL,2) ) ) ;
         title( '$ p \; [Pa] $', 'interpreter', 'latex', 'Fontsize', fs);
-        xtickformat('%.1f'); ytickformat('%.1f');
+        xtickformat('%.1f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
         
+        xC{2} = (xOL > 0.2 & xOL < 0.7) ;
         nexttile(2) ;
-        contourf(tCoord ./ tCoord(end), xCoord ./ Lx, T2) ;
+        contourf(reshape(tOtend(xC{2}), [], size(xOL, 2)), reshape(xOL( xC{2} ), [], size(xOL, 2)), reshape(T2(xC{2}), [], size(xOL,2) ) ) ;
         title( '$ T_{v} \; [K] $', 'interpreter', 'latex', 'Fontsize', fs);
-        xtickformat('%.1f'); ytickformat('%.1f');
+        xtickformat('%.1f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
 
+        xC{3} = (xOL > 0.3320 & xOL < 0.336) ;
         nexttile(3) ;
-        contourf(tCoord ./ tCoord(end), xCoord ./ Lx, E) ;
+        contourf(reshape(tOtend(xC{3}), [], size(xOL, 2)), reshape(xOL( xC{3} ), [], size(xOL, 2)), reshape(E(xC{3}), [], size(xOL,2) ) ) ;
         title( '$ E \; [J] $', 'interpreter', 'latex', 'Fontsize', fs);
-        xtickformat('%.1f'); ytickformat('%.1f');
+        xtickformat('%.1f'); ytickformat('%.4f');
         ax = gca; ax.FontSize = fs;
 
-        nexttile(4) ;
-        contourf(tCoord ./ tCoord(end), xCoord ./ Lx, alpha_rho2) ;
+        xC{4} = (xOL > 0.3300 & xOL < 0.336) ;
+        nexttile(4) ;        
+        contourf(reshape(tOtend(xC{4}), [], size(xOL, 2)), reshape(xOL( xC{4} ), [], size(xOL, 2)), reshape(alpha_rho2(xC{4}), [], size(xOL,2) ) ) ;
         title( '$ m_{2} \; [kg/m^3] $', 'interpreter', 'latex', 'Fontsize', fs);
-        xtickformat('%.1f'); ytickformat('%.1f');
+        xtickformat('%.1f'); ytickformat('%.4f');
         ax = gca; ax.FontSize = fs;
 
         title( tl, strcat(RelMod{rm}, '-relax. Discr ', DiscLevel{dl}), 'interpreter', 'latex', 'Fontsize', fs);
@@ -78,7 +85,7 @@ for rm = 1:length(RelMod)
         clearvars alpha_rho1 alpha_rho2 mom1 vel1 E alpha_rho_e1 alpha_rho_e2 pres tCoord xCoord
         
         savefig(fig, fullfile('/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/Figures/', strcat(RelMod{rm}, DiscLevel{dl} ) ), '-v7.3' );
-
+ 
         close 
     end
 end
