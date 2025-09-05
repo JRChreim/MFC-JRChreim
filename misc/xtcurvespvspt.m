@@ -8,8 +8,10 @@ loc = 'carpenter';
 switch loc
     case 'carpenter'
         mfcPath = '/p/global/jrchreim/simulations/PhaseChange/1D/BubbleDynamics/StrongCollapse/6Eqn/';
-        RelMod = {'pFinalTest', 'pTFinalTest'} ;
-        DiscLevel = {'N160E3', 'N320E3', 'N640E3', 'N1280E3'} ;
+        % RelMod = {'pFinalTest', 'pTFinalTest'} ;
+        RelMod = {'pFinalTest'} ;
+        % DiscLevel = {'N160E3', 'N320E3', 'N640E3', 'N1280E3'} ;
+        DiscLevel = {'N160E3'} ;
         compliment = 'Cartesian/BC-6/C000E-00';
         FigFolder = '/p/global/jrchreim/Figures/';
     case 'local'
@@ -78,16 +80,16 @@ for rm = 1:length(RelMod)
         xtickformat('%.1f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
 
-        % xC{3} = (xOL > 0.3320 & xOL < 0.336) ;
-        xC{3} = (xOL >= 0.0 & xOL <= 1.0) ;
+        xC{3} = (xOL > 0.330 & xOL < 0.336) ;
+        % xC{3} = (xOL >= 0.0 & xOL <= 1.0) ;
         nexttile(3) ;
         contourf(reshape(tOtend(xC{3}), [], size(xOL, 2)), reshape(xOL( xC{3} ), [], size(xOL, 2)), reshape(E(xC{3}), [], size(xOL,2) ) ) ;
         title( '$ E \; [J] $', 'interpreter', 'latex', 'Fontsize', fs);
         xtickformat('%.1f'); ytickformat('%.4f');
         ax = gca; ax.FontSize = fs;
 
-        % xC{4} = (xOL > 0.3300 & xOL < 0.336) ;
-        xC{4} = (xOL >= 0.0 & xOL <= 1.0) ;
+        xC{4} = (xOL > 0.3300 & xOL < 0.336) ;
+        % xC{4} = (xOL >= 0.0 & xOL <= 1.0) ;
         nexttile(4) ;        
         contourf(reshape(tOtend(xC{4}), [], size(xOL, 2)), reshape(xOL( xC{4} ), [], size(xOL, 2)), reshape(alpha_rho2(xC{4}), [], size(xOL,2) ) ) ;
         title( '$ m_{2} \; [kg/m^3] $', 'interpreter', 'latex', 'Fontsize', fs);
