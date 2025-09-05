@@ -80,7 +80,7 @@ for rm = 1:length(RelMod)
         xtickformat('%.1f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
 
-        xC{3} = (xOL > 0.330 & xOL < 0.336) ;
+        xC{3} = (xOL > 0.30 & xOL < 0.40) ;
         % xC{3} = (xOL >= 0.0 & xOL <= 1.0) ;
         nexttile(3) ;
         contourf(reshape(tOtend(xC{3}), [], size(xOL, 2)), reshape(xOL( xC{3} ), [], size(xOL, 2)), reshape(E(xC{3}), [], size(xOL,2) ) ) ;
@@ -88,7 +88,7 @@ for rm = 1:length(RelMod)
         xtickformat('%.1f'); ytickformat('%.4f');
         ax = gca; ax.FontSize = fs;
 
-        xC{4} = (xOL > 0.3300 & xOL < 0.336) ;
+        xC{4} = (xOL > 0.30 & xOL < 0.40) ;
         % xC{4} = (xOL >= 0.0 & xOL <= 1.0) ;
         nexttile(4) ;        
         contourf(reshape(tOtend(xC{4}), [], size(xOL, 2)), reshape(xOL( xC{4} ), [], size(xOL, 2)), reshape(alpha_rho2(xC{4}), [], size(xOL,2) ) ) ;
