@@ -8,16 +8,16 @@ loc = 'carpenter';
 switch loc
     case 'carpenter'
         mfcPath = '/p/global/jrchreim/simulations/PhaseChange/1D/BubbleDynamics/StrongCollapse/6Eqn/';
-        % RelMod = {'pFinalTest', 'pTFinalTest'} ;
-        RelMod = {'pTFinalTest'} ;
-        % DiscLevel = {'N160E3', 'N320E3', 'N640E3', 'N1280E3'} ;
-        DiscLevel = {'N160E3'} ;
+        RelMod = {'pFinalTest', 'pTFinalTest'} ;
+        % RelMod = {'pTFinalTest'} ;
+        DiscLevel = {'N160E3', 'N320E3', 'N640E3', 'N1280E3'} ;
+        % DiscLevel = {'N160E3'} ;
         compliment = 'Cartesian/BC-6/C000E-00';
         FigFolder = '/p/global/jrchreim/Figures/';
     case 'local'
         mfcPath = '/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/';
         RelMod = {'p', 'pT'} ;
-        DiscLevel = {'N1E3', 'N2E3'} ;
+        DiscLevel = {'N1E3'} ;
         compliment = '';
         FigFolder = '/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/Figures/';
 end
@@ -63,13 +63,13 @@ for rm = 1:length(RelMod)
         tOtend = tCoord ./ tCoord(end) ;
         xOL = xCoord ./ Lx ;
 
-        % xC{1} = (xOL > 0.3 & xOL < 0.75) ;
-        xC{1} = (xOL >= 0.0 & xOL <= 1.0) ;
+        xC{1} = (tOtend > 0 & tOtend < 0.25) ;
+        % xC{1} = (xOL >= 0.0 & xOL <= 1.0) ;
 
         nexttile(1) ;
-        contourf(reshape(tOtend(xC{1}), [], size(xOL, 2)), reshape(xOL( xC{1} ), [], size(xOL, 2)), reshape(pres(xC{1}), [], size(xOL,2) ) ) ;
+        contourf(reshape(tOtend(xC{1}), size(xOL, 1), []), reshape(xOL( xC{1} ), size(xOL, 1), []), reshape(pres(xC{1}), size(xOL,1), [] ) ) ;
         title( '$ p \; [Pa] $', 'interpreter', 'latex', 'Fontsize', fs);
-        xtickformat('%.1f'); ytickformat('%.2f');
+        xtickformat('%.2f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
         
         % xC{2} = (xOL > 0.2 & xOL < 0.7) ;
@@ -80,7 +80,7 @@ for rm = 1:length(RelMod)
         xtickformat('%.1f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
 
-        xC{3} = (xOL > 0.30 & xOL < 0.40) ;
+        xC{3} = (xOL > 0.32 & xOL < 0.34) ;
         % xC{3} = (xOL >= 0.0 & xOL <= 1.0) ;
         nexttile(3) ;
         contourf(reshape(tOtend(xC{3}), [], size(xOL, 2)), reshape(xOL( xC{3} ), [], size(xOL, 2)), reshape(E(xC{3}), [], size(xOL,2) ) ) ;
@@ -88,7 +88,7 @@ for rm = 1:length(RelMod)
         xtickformat('%.1f'); ytickformat('%.4f');
         ax = gca; ax.FontSize = fs;
 
-        xC{4} = (xOL > 0.30 & xOL < 0.40) ;
+        xC{4} = (xOL > 0.32 & xOL < 0.34) ;
         % xC{4} = (xOL >= 0.0 & xOL <= 1.0) ;
         nexttile(4) ;        
         contourf(reshape(tOtend(xC{4}), [], size(xOL, 2)), reshape(xOL( xC{4} ), [], size(xOL, 2)), reshape(alpha_rho2(xC{4}), [], size(xOL,2) ) ) ;
@@ -104,10 +104,9 @@ for rm = 1:length(RelMod)
     
         clearvars alpha_rho1 alpha_rho2 mom1 vel1 E alpha_rho_e1 alpha_rho_e2 pres tCoord xCoord
         
-        % savefig(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), '-v7.3' );
+        savefig(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), '-v7.3' );
         % saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'epsc' );
-        saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'png' );
+        % saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'png' );
 
-        close 
     end
 end
