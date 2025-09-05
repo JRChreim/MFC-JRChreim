@@ -9,7 +9,7 @@ switch loc
     case 'carpenter'
         mfcPath = '/p/global/jrchreim/simulations/PhaseChange/1D/BubbleDynamics/StrongCollapse/6Eqn/';
         % RelMod = {'pFinalTest', 'pTFinalTest'} ;
-        RelMod = {'pFinalTest'} ;
+        RelMod = {'pTFinalTest'} ;
         % DiscLevel = {'N160E3', 'N320E3', 'N640E3', 'N1280E3'} ;
         DiscLevel = {'N160E3'} ;
         compliment = 'Cartesian/BC-6/C000E-00';
