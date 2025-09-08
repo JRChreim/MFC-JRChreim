@@ -898,6 +898,7 @@ contains
             ! and (ii) the energy before and after the phase-change process.
             call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
+            print *, R2D
             ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
             if ((ieee_is_nan(R2D(1))) .or. (ieee_is_nan(R2D(2))) .or. (ns > max_iter)) then
