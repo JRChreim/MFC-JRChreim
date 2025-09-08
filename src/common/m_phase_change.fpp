@@ -903,8 +903,11 @@ contains
             if ((ieee_is_nan(R2D(1))) .or. (ieee_is_nan(R2D(2))) .or. (ns > max_iter)) then
 
                 call s_int_to_str(ns, nss)
+                call s_real_to_str(R2D(1), R2D1s)
+                call s_real_to_str(R2D(2), R2D2s)
                 call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
-                                  //nss//' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
+                                  //nss//', R2D(1) = '//R2D1s//', R2D(2) = '//R2D2s// &
+                                  ' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
 
             end if
             ! if not,
