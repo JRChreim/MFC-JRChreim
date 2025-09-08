@@ -808,7 +808,7 @@ contains
         end if
 
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
-        OmI = 1.0e-1_wp
+        OmI = 5.0e-1_wp
         ! Critical relaxation factors, for variable sub-relaxation
         Oc = OmI;
 
