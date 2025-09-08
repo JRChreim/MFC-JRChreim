@@ -1282,7 +1282,7 @@ contains
             TSat = TSIn
 
             ! underrelaxation factor
-            Om = 1d-1
+            Om = 8d-1
             ! starting counter for the Newton solver
             ns = 0
 
