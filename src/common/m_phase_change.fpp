@@ -902,6 +902,7 @@ contains
 #ifndef MFC_OpenACC
             if ((ieee_is_nan(R2D(1))) .or. (ieee_is_nan(R2D(2))) .or. (ns > max_iter)) then
 
+                print *, Om
                 call s_int_to_str(ns, nss)
                 call s_real_to_str(R2D(1), R2D1s)
                 call s_real_to_str(R2D(2), R2D2s)
