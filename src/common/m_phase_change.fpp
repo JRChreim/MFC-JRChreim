@@ -757,13 +757,13 @@ contains
         real(wp), intent(in) :: rho, rhoe
         integer, intent(in) :: j, k, l
         logical, intent(inout) :: TR
-        real(wp), dimension(num_fluids) :: p_infpTg
+        real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
         real(wp) :: Om, OmI ! underrelaxation factor
-        real(wp) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, TSat ! auxiliary variables for the pTg-solver
-        character(20) :: nss, pSs, Econsts
+        real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, TSat ! auxiliary variables for the pTg-solver
+        character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
         !< Generic loop iterators
         integer :: i, ns
@@ -808,7 +808,7 @@ contains
         end if
 
         ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
-        OmI = 1.0e-1_wp
+        OmI = 8.0e-1_wp
         ! Critical relaxation factors, for variable sub-relaxation
         Oc = OmI;
 
@@ -816,10 +816,24 @@ contains
         ! starting counter for the Newton solver
         ns = 0
 
+        ! (initial) common temperature
+        TS = (rhoe + pS - mQ)/mCP
+
+        ! entropy
+        sk = cvs*DLOG((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+
+        ! enthalpy
+        hk = gs_min*cvs*TS + qvs
+
+        ! Gibbs-free energy.
+        gk = hk - TS*sk
+
+        ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
+        maxg = maxval([gk(lp),gk(vp)])
+
         ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
-        do while (((sqrt(R2D(1)**2 + R2D(2)**2) > ptgalpha_eps) &
-                    .and. ((sqrt(R2D(1)**2 + R2D(2)**2)/rhoe) > (ptgalpha_eps/1.e6_wp))) &
-                  .or. (ns == 0))
+        do while (((NORM2(R2D) > ptgalpha_eps) .and. (NORM2(R2D*(/maxg,rhoe/))/NORM2((/maxg,rhoe/)) > ptgalpha_eps)) &
+          .or. (ns == 0))
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
@@ -896,15 +910,21 @@ contains
 
             ! calculating residuals, which are (i) the difference between the Gibbs Free energy of the gas and the liquid
             ! and (ii) the energy before and after the phase-change process.
-            call s_compute_pTg_residue(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+
+            print *, NORM2(R2D) 
 
             ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
             if ((ieee_is_nan(R2D(1))) .or. (ieee_is_nan(R2D(2))) .or. (ns > max_iter)) then
 
+                print *, NORM2(R2D) 
                 call s_int_to_str(ns, nss)
+                call s_real_to_str(R2D(1), R2D1s)
+                call s_real_to_str(R2D(2), R2D2s)
                 call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
-                                  //nss//' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
+                                  //nss//', R2D(1) = '//R2D1s//', R2D(2) = '//R2D2s// &
+                                  ' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
 
             end if
             ! if not,
@@ -922,10 +942,22 @@ contains
 
             end if
 #endif
-        end do
+          ! updating common temperature
+          TS = (rhoe + pS - mQ)/mCP
 
-        ! common temperature
-        TS = (rhoe + pS - mQ)/mCP
+          ! entropy
+          sk = cvs*DLOG((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+
+          ! enthalpy
+          hk = gs_min*cvs*TS + qvs
+
+          ! Gibbs-free energy
+          gk = hk - TS*sk
+
+          ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
+          maxg = maxval([gk(lp),gk(vp)])
+
+        end do
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
@@ -1124,8 +1156,8 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param rhoe mixture energy
         !!  @param R2D (2D) residue array
-    impure subroutine s_compute_pTg_residue(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
-        $:GPU_ROUTINE(function_name='s_compute_pTg_residue', &
+    impure subroutine s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+        $:GPU_ROUTINE(function_name='s_compute_pTg_residual', &
             & parallelism='[seq]', cray_inline=True)
 
         real(wp), dimension(num_fluids), intent(in) :: m0k
@@ -1153,7 +1185,7 @@ contains
                   + (m0k(lp)*(gs_min(vp)*cvs(vp) - gs_min(lp)*cvs(lp)) &
                      - rM*gs_min(vp)*cvs(vp) - mCPD) * TS ) / 1
 
-    end subroutine s_compute_pTg_residue
+    end subroutine s_compute_pTg_residual
 
     ! SUBROUTINE CREATED TO TELL ME WHERE THE ERROR IN THE PT- AND PTG-EQUILIBRIUM SOLVERS IS
     impure subroutine s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, p_infA, pS, R2D, rhoe, q_cons_vf, TS) ! ----------------
