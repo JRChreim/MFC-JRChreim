@@ -896,13 +896,13 @@ contains
 
             ! calculating residuals, which are (i) the difference between the Gibbs Free energy of the gas and the liquid
             ! and (ii) the energy before and after the phase-change process.
-            call s_compute_pTg_residue(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
             ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
             if ((ieee_is_nan(R2D(1))) .or. (ieee_is_nan(R2D(2))) .or. (ns > max_iter)) then
 
-                print *, Om
+                print *, rhoe 
                 call s_int_to_str(ns, nss)
                 call s_real_to_str(R2D(1), R2D1s)
                 call s_real_to_str(R2D(2), R2D2s)
@@ -1128,8 +1128,8 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param rhoe mixture energy
         !!  @param R2D (2D) residue array
-    impure subroutine s_compute_pTg_residue(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
-        $:GPU_ROUTINE(function_name='s_compute_pTg_residue', &
+    impure subroutine s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+        $:GPU_ROUTINE(function_name='s_compute_pTg_residual', &
             & parallelism='[seq]', cray_inline=True)
 
         real(wp), dimension(num_fluids), intent(in) :: m0k
@@ -1157,7 +1157,7 @@ contains
                   + (m0k(lp)*(gs_min(vp)*cvs(vp) - gs_min(lp)*cvs(lp)) &
                      - rM*gs_min(vp)*cvs(vp) - mCPD) * TS ) / 1
 
-    end subroutine s_compute_pTg_residue
+    end subroutine s_compute_pTg_residual
 
     ! SUBROUTINE CREATED TO TELL ME WHERE THE ERROR IN THE PT- AND PTG-EQUILIBRIUM SOLVERS IS
     impure subroutine s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, p_infA, pS, R2D, rhoe, q_cons_vf, TS) ! ----------------
