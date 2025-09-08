@@ -757,12 +757,12 @@ contains
         real(wp), intent(in) :: rho, rhoe
         integer, intent(in) :: j, k, l
         logical, intent(inout) :: TR
-        real(wp), dimension(num_fluids) :: p_infpTg
+        real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
         real(wp) :: Om, OmI ! underrelaxation factor
-        real(wp) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, TSat ! auxiliary variables for the pTg-solver
+        real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
         !< Generic loop iterators
@@ -816,10 +816,24 @@ contains
         ! starting counter for the Newton solver
         ns = 0
 
+        ! (initial) common temperature
+        TS = (rhoe + pS - mQ)/mCP
+
+        ! entropy
+        sk = cvs*DLOG((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+
+        ! enthalpy
+        hk = gs_min*cvs*TS + qvs
+
+        ! Gibbs-free energy.
+        gk = hk - TS*sk
+
+        ! maximum Gibbs Free Energy. This will be used, for the moment, as a relative criterion for the solver
+        maxg = maxval(gk(lp),gk(vp))
+
         ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
-        do while (((sqrt(R2D(1)**2 + R2D(2)**2) > ptgalpha_eps) &
-                    .and. ((sqrt(R2D(1)**2 + R2D(2)**2)/rhoe) > (ptgalpha_eps/1.e6_wp))) &
-                  .or. (ns == 0))
+        do while (((sqrt(R2D(1)**2 + R2D(2)**2) > ptgalpha_eps) .and. ((sqrt((R2D(1)*maxg)**2 + (R2D(2)*rhoe)**2) &
+          /sqrt(maxg**2 + rhoe**2)) > ptgalpha_eps)) .or. (ns == 0))
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
@@ -865,17 +879,17 @@ contains
 #ifndef MFC_OpenACC
             ! creating criteria for variable underrelaxation factor
             if (m0k(lp) - Om*DeltamP(1) <= 0.0_wp) then
-                Oc(1) = 9*m0k(lp)/(10*DeltamP(1))
+                Oc(1) = m0k(lp)/(2*DeltamP(1))
             else
                 Oc(1) = OmI
             end if
             if (m0k(vp) + Om*DeltamP(1) <= 0.0_wp) then
-                Oc(2) = -9*m0k(vp)/(10*DeltamP(1))
+                Oc(2) = -m0k(vp)/(2*DeltamP(1))
             else
                 Oc(2) = OmI
             end if
             if (pS + minval(p_infpTg) - Om*DeltamP(2) <= 0.0_wp) then
-                Oc(3) = 9*(pS + minval(p_infpTg))/(10*DeltamP(2))
+                Oc(3) = (pS + minval(p_infpTg))/(2*DeltamP(2))
             else
                 Oc(3) = OmI
             end if
@@ -927,10 +941,18 @@ contains
 
             end if
 #endif
-        end do
+          ! updating common temperature
+          TS = (rhoe + pS - mQ)/mCP
 
-        ! common temperature
-        TS = (rhoe + pS - mQ)/mCP
+          ! entropy
+          sk = cvs*DLOG((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+
+          ! enthalpy
+          hk = gs_min*cvs*TS + qvs
+
+          ! Gibbs-free energy, which will be used as a relative criterion for the solver
+          gk = hk - TS*sk
+        end do
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
