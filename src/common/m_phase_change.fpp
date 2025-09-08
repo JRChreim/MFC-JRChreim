@@ -865,17 +865,17 @@ contains
 #ifndef MFC_OpenACC
             ! creating criteria for variable underrelaxation factor
             if (m0k(lp) - Om*DeltamP(1) <= 0.0_wp) then
-                Oc(1) = m0k(lp)/(2*DeltamP(1))
+                Oc(1) = 9*m0k(lp)/(10*DeltamP(1))
             else
                 Oc(1) = OmI
             end if
             if (m0k(vp) + Om*DeltamP(1) <= 0.0_wp) then
-                Oc(2) = -m0k(vp)/(2*DeltamP(1))
+                Oc(2) = -9*m0k(vp)/(10*DeltamP(1))
             else
                 Oc(2) = OmI
             end if
             if (pS + minval(p_infpTg) - Om*DeltamP(2) <= 0.0_wp) then
-                Oc(3) = (pS + minval(p_infpTg))/(2*DeltamP(2))
+                Oc(3) = 9*(pS + minval(p_infpTg))/(10*DeltamP(2))
             else
                 Oc(3) = OmI
             end if
