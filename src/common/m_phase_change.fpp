@@ -763,7 +763,7 @@ contains
         real(wp), dimension(3) :: Oc
         real(wp) :: Om, OmI ! underrelaxation factor
         real(wp) :: mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, TSat ! auxiliary variables for the pTg-solver
-        character(20) :: nss, pSs, Econsts
+        character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
         !< Generic loop iterators
         integer :: i, ns
