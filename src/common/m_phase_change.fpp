@@ -656,11 +656,9 @@ contains
 #ifndef MFC_OpenACC
             else
                 if (proc_rank == 0) then
-
-                    ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
-                    !                   , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, mQ, p_infpT, pS, (/abs(pS - pO), abs(pS - pO)/) &
-                    !                   , rhoe, q_cons_vf, TS)
-
+                    call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
+                                      , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, mQ, p_infpT, pS, (/abs(pS - pO), abs(pS - pO)/) &
+                                      , rhoe, q_cons_vf, 0.0E0)
                 end if
 
                 call s_real_to_str(rhoe - mQ - minval(p_infpT), Econsts)
@@ -679,7 +677,7 @@ contains
         ns = 0
 
         ! arbitrary value for g(p), used for the newton solver
-        gp = 2.0_wp
+        gp = 0.0_wp
 
         ! Newton solver for pT-equilibrium. 1d1 is arbitrary, and ns == 0, to the loop is entered at least once.
         ! Note that a solution is found when gp(p) = 1
@@ -710,15 +708,19 @@ contains
             pS = pO + ((1.0_wp - gp)/gpp)/(1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) &
                                           /(2.0_wp*gpp)*hp)
 
+            ! common temperature
+            TS = (rhoe + pS - mQ)/mCP
+
             ! check if solution is out of bounds (which I believe it won`t happen given the solver is gloabally convergent.
 #ifndef MFC_OpenACC
             if ((pS <= -1.0_wp*minval(p_infpT)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
                 if (proc_rank == 0) then
-                    ! call s_whistleblower((/0.0_wp, 0.0_wp/), reshape((/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), (/2, 2/)) &
-                    !                   , j, (/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
-                    !                   , rhoe, q_cons_vf, TS)
+                    call s_whistleblower((/0.0_wp, 0.0_wp/), reshape((/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), (/2, 2/)) &
+                                      , j, (/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
+                                      , rhoe, q_cons_vf, TS)
                 end if
 
+                print *, gp, gpp, pS, TS
                 call s_real_to_str(pS, pSs)
                 call s_int_to_str(nS, nss)
                 call s_mpi_abort('Solver for the pT-relaxation failed (m_phase_change, s_infinite_pt_relaxation_k). &
@@ -727,9 +729,6 @@ contains
             end if
 #endif
         end do
-
-        ! common temperature
-        TS = (rhoe + pS - mQ)/mCP
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
