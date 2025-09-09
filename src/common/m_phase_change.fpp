@@ -916,16 +916,17 @@ contains
 #ifndef MFC_OpenACC
             if (ieee_is_nan(NORM2(R2D)) .or. (ns > max_iter)) then
 
-                print *, NORM2(R2D)
-                print *, NORM2(R2D*(/maxg,rhoe/))/NORM2((/maxg,rhoe/)) 
+              print *, 'pS', pS
+              print *, 'm0k', m0k
+              print *, NORM2(R2D)
+              print *, NORM2(R2D*(/maxg,rhoe/))/NORM2((/maxg,rhoe/)) 
 
-                call s_int_to_str(ns, nss)
-                call s_real_to_str(R2D(1), R2D1s)
-                call s_real_to_str(R2D(2), R2D2s)
-                call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
-                                  //nss//', R2D(1) = '//R2D1s//', R2D(2) = '//R2D2s// &
-                                  ' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
-
+              call s_int_to_str(ns, nss)
+              call s_real_to_str(R2D(1), R2D1s)
+              call s_real_to_str(R2D(2), R2D2s)
+              call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
+                                //nss//', R2D(1) = '//R2D1s//', R2D(2) = '//R2D2s// &
+                                ' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
             end if
             ! if not,
             ! Checking pressure and energy criteria for the (pT) solver to find a solution
