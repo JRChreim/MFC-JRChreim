@@ -22,7 +22,6 @@ switch loc
         FigFolder = '/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/Figures/';
 end
 
-
 %% Fluid properties
 
 % Water Liquid (1) and air(2)
