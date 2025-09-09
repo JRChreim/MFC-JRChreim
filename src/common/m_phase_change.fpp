@@ -912,13 +912,13 @@ contains
             ! and (ii) the energy before and after the phase-change process.
             call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
-            print *, NORM2(R2D) 
-
             ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
-            if ((ieee_is_nan(R2D(1))) .or. (ieee_is_nan(R2D(2))) .or. (ns > max_iter)) then
+            if (ieee_is_nan(NORM2(R2D)) .or. (ns > max_iter)) then
 
-                print *, NORM2(R2D) 
+                print *, NORM2(R2D)
+                print *, NORM2(R2D*(/maxg,rhoe/))/NORM2((/maxg,rhoe/)) 
+
                 call s_int_to_str(ns, nss)
                 call s_real_to_str(R2D(1), R2D1s)
                 call s_real_to_str(R2D(2), R2D2s)
