@@ -110,10 +110,6 @@ contains
                         ! initial partial density
                         m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
 
-                        if ( ieee_is_nan( m0k(i) ) ) then
-                            print *, 'partial density i = ', i, 'is NaN'
-                        end if
-
                         ! calculating the total internal energy such that the energy-fraction for each of the
                         ! fluids can be proportionally distributed when the sum of the internal energies differs from
                         ! either approach
@@ -126,12 +122,9 @@ contains
                         end if
                     end do
 
-                    ! Mixture density
-                    rho = sum(m0k)
-
-                    ! calculating the total reacting mass for the phase change process. By hypothesis, this should not change
-                    ! throughout the phase-change process. In ANY HYPOTHESIS, UNLESS correcting them artifically
-                    rM = m0k(lp) + m0k(vp)
+                    if ( count( ieee_is_nan( m0k ) ) == num_fluids ) then
+                      TR = .false.  
+                    end if
 
                     ! correcting possible negative mass fraction values
                     ! at this time, TR is updated if phase change needs to be stopped
@@ -754,7 +747,7 @@ contains
         real(wp), dimension(num_fluids), intent(inout) :: alphak, alpharhoe0k, m0k
         real(wp), dimension(num_fluids), intent(in) :: p_infpT
         real(wp), intent(inout) :: pS, TS, rM
-        real(wp), intent(in) :: rho, rhoe
+        real(wp), intent(in) :: rhoe
         integer, intent(in) :: j, k, l
         logical, intent(inout) :: TR
         real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk
@@ -762,7 +755,7 @@ contains
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
         real(wp) :: Om, OmI ! underrelaxation factor
-        real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, TSat ! auxiliary variables for the pTg-solver
+        real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
         !< Generic loop iterators
@@ -963,8 +956,7 @@ contains
         !> @name variables for the correction of the reacting partial densities
         !> @{
         real(wp), dimension(num_fluids), intent(inout) :: alpha0k, alpharhoe0k, m0k
-        real(wp), intent(inout) :: rM
-        real(wp), intent(in) :: rho
+        real(wp), intent(out) :: rM, rho
         logical, intent(inout) :: TR
         integer, intent(in) :: CT, j, k, l
         integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
@@ -973,6 +965,13 @@ contains
 
         iFix = (/ (i, i=1,num_fluids) /)
         iVar = iFix
+
+        ! Mixture density
+        rho = sum(m0k)
+
+        ! calculating the total reacting mass for the phase change process. By hypothesis, this should not change
+        ! throughout the phase-change process. In ANY HYPOTHESIS, UNLESS correcting them artifically
+        rM = m0k(lp) + m0k(vp)
 
         ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction;
         ! CT = 2: crude correction; else: Total Mass correction
@@ -1032,6 +1031,10 @@ contains
             TR = .true.
         end if
 
+        ! Mixture density
+        rho = sum(m0k)
+
+        ! calculating the total reacting mass for the phase change process.
         rM = m0k(lp) + m0k(vp)
 
     end subroutine s_correct_partial_densities
