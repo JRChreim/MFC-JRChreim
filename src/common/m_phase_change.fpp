@@ -624,6 +624,7 @@ contains
         iFix = (/ (i, i=1,num_fluids) /)
         iVar = iFix
 
+        print *, 'crap', m0k
         ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction
         iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
         
@@ -1204,9 +1205,9 @@ contains
         ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
 
         !! printing output !!
-        print *, 'respective cell at which the error happened'
+        print *, 'cell at which the error happened'
 
-        print *, 'j, k, l', j, k, l
+        print *, '[x,y,z]_index', j, k, l
 
         !! per fluid quantities !!
         print *, 'per fluid quantities'
