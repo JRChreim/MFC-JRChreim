@@ -374,14 +374,20 @@ contains
                 ! updating the relaxed pressure
                 pS = pO + ((1.0_wp - fp)/fpp)/(1.0_wp - (1.0_wp - fp + abs(1.0_wp - fp))/(2.0_wp*fpp*(pO + minval(gs_min*ps_inf))))
 
+                ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
+                ! volume fractions
+                alphak = (gs_min - 1.0_wp)*(alpharhoek - m0k*qvs) / (pS + gs_min*ps_inf)
+
+                ! internal energies               
+                alpharhoek = alpharhoe0k - ( pS + pS ) * (alphak - alpha0k) / 2
+
                 ! checking if pS is within expected bounds
                 if ( ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) ) then
 
                     if (proc_rank == 0) then
-
-                        ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
-                        !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, rhoe6E, ps_inf, pS, (/pS - pO, pS + pO/) &
-                        !                 , rhoe, q_cons_vf, 0.0_wp)
+                        call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                          , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                          , pS, (/fp, 0.0_wp/), rhoe, Tk)
                     end if
 
                     call s_real_to_str(pS, pSs)
@@ -391,13 +397,6 @@ contains
 
                 end if
             end do
-
-            ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
-            ! volume fractions
-            alphak = (gs_min - 1.0_wp)*(alpharhoek - m0k*qvs) / (pS + gs_min*ps_inf)
-
-            ! internal energies               
-            alpharhoek = alpharhoe0k - ( pS + pS ) * (alphak - alpha0k) / 2
         end do
 
         ! Mixture-total-energy correction ==================================
@@ -552,9 +551,9 @@ contains
                 ! checking if pressure is within expected bounds
                 if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
                     if (proc_rank == 0) then
-                        ! call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
-                        !                 , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, 0.0_wp, ps_inf, pS, (/pS - pO, pS + pO/) &
-                        !                 , rhoe, q_cons_vf, 0.0_wp)
+                        call s_whistleblower((/ -fp/fpp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                          , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                          , pS, (/fp, 0.0_wp/), rhoe, Tk)
                     end if
 
                     call s_real_to_str(pS, pSs)
@@ -656,9 +655,9 @@ contains
 #ifndef MFC_OpenACC
             else
                 if (proc_rank == 0) then
-                    call s_whistleblower((/ 0.0_wp,  0.0_wp/), reshape((/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), (/2, 2/)) &
-                                      , j, (/ 0.0_wp,  0.0_wp,  0.0_wp,  0.0_wp/), k, l, mQ, p_infpT, pS, (/abs(pS - pO), abs(pS - pO)/) &
-                                      , rhoe, q_cons_vf, 0.0E0)
+                    call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                      , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                      , 0.0_wp, (/0.0_wp, 0.0_wp/), rhoe, spread(0.0_wp, 1, num_fluids))                                      
                 end if
 
                 call s_real_to_str(rhoe - mQ - minval(p_infpT), Econsts)
@@ -715,14 +714,12 @@ contains
 #ifndef MFC_OpenACC
             if ((pS <= -1.0_wp*minval(p_infpT)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
                 if (proc_rank == 0) then
-                    call s_whistleblower((/0.0_wp, 0.0_wp/), reshape((/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), (/2, 2/)) &
-                                      , j, (/0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp/), k, l, mQ, p_infpT, pS, (/pS - pO, pS + pO/) &
-                                      , rhoe, q_cons_vf, TS)
+                    call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                      , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                      , pS, (/gp, 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
                 end if
 
-                print *, gp, gpp, pS, TS
-                call s_real_to_str(pS, pSs)
-                call s_int_to_str(nS, nss)
+                call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
                 call s_mpi_abort('Solver for the pT-relaxation failed (m_phase_change, s_infinite_pt_relaxation_k). &
                 &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
 
@@ -819,7 +816,7 @@ contains
         TS = (rhoe + pS - mQ)/mCP
 
         ! entropy
-        sk = cvs*DLOG((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+        sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
 
         ! enthalpy
         hk = gs_min*cvs*TS + qvs
@@ -911,42 +908,11 @@ contains
             ! and (ii) the energy before and after the phase-change process.
             call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
-            ! checking if the residue returned any NaN values
-#ifndef MFC_OpenACC
-            if (ieee_is_nan(NORM2(R2D)) .or. (ns > max_iter)) then
-
-              print *, 'pS', pS
-              print *, 'm0k', m0k
-              print *, NORM2(R2D)
-              print *, NORM2(R2D*(/maxg,rhoe/))/NORM2((/maxg,rhoe/)) 
-
-              call s_int_to_str(ns, nss)
-              call s_real_to_str(R2D(1), R2D1s)
-              call s_real_to_str(R2D(2), R2D2s)
-              call s_mpi_abort('Residual for the pTg-relaxation possibly returned NaN values. ns = ' &
-                                //nss//', R2D(1) = '//R2D1s//', R2D(2) = '//R2D2s// &
-                                ' (m_phase_change, s_infinite_ptg_relaxation_k). Aborting!')
-            end if
-            ! if not,
-            ! Checking pressure and energy criteria for the (pT) solver to find a solution
-            if ((pS <= -1.0_wp*minval(p_infpTg)) .or. ((rhoe - mQ - minval(p_infpTg)) < 0.0_wp)) then
-                if (proc_rank == 0) then
-                    ! call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, p_infpTg, pS &
-                    !                   , R2D, rhoe, q_cons_vf, TS)
-                end if
-
-                call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
-                call s_real_to_str(pS, pSs)
-                call s_mpi_abort('Solver for the pTg-relaxation failed (m_phase_change, s_infinite_ptg_relaxation_k). &
-                &   pS ~'//pSs//'. Econst = '//Econsts//'. Aborting!')
-
-            end if
-#endif
           ! updating common temperature
           TS = (rhoe + pS - mQ)/mCP
 
           ! entropy
-          sk = cvs*DLOG((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+          sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
 
           ! enthalpy
           hk = gs_min*cvs*TS + qvs
@@ -957,6 +923,23 @@ contains
           ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
           maxg = maxval([gk(lp),gk(vp)])
 
+                      ! checking if the residue returned any NaN values
+#ifndef MFC_OpenACC
+          if (ieee_is_nan(NORM2(R2D)) .or. (ns > max_iter)) then
+
+            if (proc_rank == 0) then
+                call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, m0k, ns, p_infpTg &
+                                    , pS, R2D, rhoe, spread(TS, 1, num_fluids))
+            end if
+            
+            call s_real_to_str(R2D(1), R2D1s) ; call s_real_to_str(R2D(2), R2D2s)
+            call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
+            call s_int_to_str(ns, nss); call s_real_to_str(pS, pSs)
+            call s_mpi_abort('Solver for the pTg-relaxation failed (m_phase_change, s_infinite_ptg_relaxation_k). &
+            &. ns = ' //nss//', R2D(1) = '//R2D1s//', R2D(2) = '//R2D2s//'. pS ~'//pSs//' &
+            . Econst = '//Econsts//'. Aborting!')
+          end if
+#endif
         end do
 
         ! updating maximum number of iterations
@@ -1188,64 +1171,89 @@ contains
     end subroutine s_compute_pTg_residual
 
     ! SUBROUTINE CREATED TO TELL ME WHERE THE ERROR IN THE PT- AND PTG-EQUILIBRIUM SOLVERS IS
-    impure subroutine s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mQ, p_infA, pS, R2D, rhoe, q_cons_vf, TS) ! ----------------
+    impure subroutine s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mk, ns, p_inf, pS, R2D, rhoe, Tk) ! ----------------
 
-        type(scalar_field), dimension(sys_size), intent(in) :: q_cons_vf
         real(wp), dimension(2, 2), intent(in) :: Jac, InvJac
-        real(wp), dimension(num_fluids), intent(in) :: p_infA
+        real(wp), dimension(num_fluids), intent(in) :: mk, p_inf, Tk
         real(wp), dimension(2), intent(in) :: R2D, DeltamP
-        real(wp), intent(in) :: pS, TS
-        real(wp), intent(in) :: rhoe, mQ
-        integer, intent(in) :: j, k, l
-        real(wp) :: rho
+        real(wp), intent(in) :: pS, rhoe
+        integer, intent(in) :: j, k, l, ns
+        real(wp), dimension(num_fluids) :: ek, hk, gk, sk, rhok
+        real(wp) :: maxg, rho
         !< Generic loop iterator
         integer :: i
 
+        ! auxiliary calculations
+        ! Thermodynamic state
+        ! entropy
+        sk = cvs*log((Tk**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+
+        ! enthalpy
+        hk = gs_min*cvs*Tk + qvs
+
+        ! Gibbs-free energy
+        gk = hk - Tk*sk
+
+        ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
+        maxg = maxval([gk(lp),gk(vp)])
+
+        ! densities
+        rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
+
+        ! internal energy
+        ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
+
+        !! printing output !!
+        print *, 'respective cell at which the error happened'
+
         print *, 'j, k, l', j, k, l
 
-        print *, 'rhoe', rhoe
+        !! per fluid quantities !!
+        print *, 'per fluid quantities'
 
-        print *, 'mQ', mQ
+        print *, 'alphak', mk / rhok
+        
+        print *, 'mk', mk
 
-        print *, 'Energy constrain', (rhoe - mQ - minval(p_infA))
+        if (model_eqns == 3) then
+            print *, 'mek', mk * ek
+        end if
 
-        print *, 'R2D', R2D
+        print *, 'mqk', mk * qvs
 
-        print *, 'l2(R2D)', sqrt(R2D(1)**2 + R2D(2)**2)
+        print *, 'Yk', mk / sum(mk)
 
-        print *, 'DeltamP', DeltamP
+        print *, 'Tk', Tk
+
+        !! global quantities !!
+        print *, 'global quantities'
+
+        print *, 'mQ', sum(mk * qvs)
 
         print *, 'pS', pS
 
-        print *, '-min(ps_inf)', -minval(p_infA)
+        print *, 'rho', sum(mk)
 
-        print *, 'TS', TS
+        print *, 'rhoe', rhoe
+        
+        print *, 'expected TS', (rhoe + pS - sum(mk * qvs)) / sum(mk * cvs * gs_min) 
 
-        do i = 1, num_fluids
+        !! Solver quantities !!
+        print *, 'solver quantities'
 
-            rho = rho + q_cons_vf(i + contxb - 1)%sf(j, k, l)
+        print *, 'ns', ns
 
-        end do
+        print *, 'Energy constrain', (rhoe - sum(mk * qvs) - minval(p_inf))
 
-        print *, 'rho', rho
+        print *, 'R2D', R2D
 
-        do i = 1, num_fluids
+        print *, 'l2(R2D)', NORM2(R2D)
 
-            print *, 'i', i
+        print *, 'l2(R2Dr)', NORM2(R2D*(/maxg,rhoe/))/NORM2((/maxg,rhoe/)) 
 
-            print *, 'alpha_i', q_cons_vf(i + advxb - 1)%sf(j, k, l)
+        print *, 'DeltamP', DeltamP
 
-            print *, 'alpha_rho_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)
-
-            print *, 'mq_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
-
-            if (model_eqns == 3) then
-                print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
-            end if
-
-            print *, 'Y_i', q_cons_vf(i + contxb - 1)%sf(j, k, l)/rho
-
-        end do
+        print *, '-min(ps_inf)', -minval(p_inf)
 
         print *, 'J', Jac, 'J-1', InvJac
 
@@ -1294,7 +1302,7 @@ contains
                 ns = ns + 1
 
                 ! calculating residual
-                ! FT = A + B / TSat + C * DLOG( TSat ) + D * DLOG( ( pSat + ps_inf( lp ) ) ) - DLOG( pSat + ps_inf( vp ) )
+                ! FT = A + B / TSat + C * log( TSat ) + D * log( ( pSat + ps_inf( lp ) ) ) - log( pSat + ps_inf( vp ) )
                 
                 FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
                            *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
@@ -1344,7 +1352,7 @@ contains
 
         ! Thermodynamic state calculations
         ! entropy
-        sk = cvs*DLOG((Tk**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+        sk = cvs*log((Tk**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
 
         ! enthalpy
         hk = gs_min*cvs*Tk + qvs
