@@ -135,6 +135,18 @@ contains
 
                     ! correcting possible negative mass fraction values
                     ! at this time, TR is updated if phase change needs to be stopped
+                    if (j == 3 .and. k == 38) then
+                      print *, 'before crap', m0k
+                    end if
+
+                    if (j == 10 .and. k == 0) then
+                      print *, 'before crap', m0k
+                    end if
+
+                    if (j == 3 .and. k == 18) then
+                      print *, 'before crap', m0k
+                    end if
+
                     call s_correct_partial_densities(2, alphak, alpharhoe0k, m0k, rM, rho, TR, i, j, k, l)
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
