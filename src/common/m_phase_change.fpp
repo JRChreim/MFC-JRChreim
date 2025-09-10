@@ -1004,7 +1004,6 @@ contains
             ! auxiliry variable to avoid do loops - use Morgan's Law
             iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
 
-            print *, m0k
             ! if either the volume fraction or the partial density is negative, make them positive
             alpha0k(pack(iVar, iVar /= 0) ) = 0.0_wp
             m0k(pack(iVar, iVar /= 0) ) = 0.0_wp
