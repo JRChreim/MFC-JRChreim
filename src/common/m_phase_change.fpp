@@ -111,7 +111,7 @@ contains
                         m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
 
                         if ( ieee_is_nan( m0k(i) ) ) then
-                            ! print *, 'partial density i = ', i, 'is NaN'
+                            print *, 'partial density i = ', i, 'is NaN'
                         end if
 
                         ! calculating the total internal energy such that the energy-fraction for each of the
@@ -136,15 +136,15 @@ contains
                     ! correcting possible negative mass fraction values
                     ! at this time, TR is updated if phase change needs to be stopped
                     if (j == 3 .and. k == 38) then
-                      print *, 'before crap', m0k
+                      print *, 'before crap', alphak, alpharhoe0k, m0k, q_cons_vf(E_idx)%sf(j, k, l) - dynE
                     end if
 
                     if (j == 10 .and. k == 0) then
-                      print *, 'before crap', m0k
+                      print *, 'before crap', alphak, alpharhoe0k, m0k, q_cons_vf(E_idx)%sf(j, k, l) - dynE
                     end if
 
                     if (j == 3 .and. k == 18) then
-                      print *, 'before crap', m0k
+                      print *, 'before crap', alphak, alpharhoe0k, m0k, q_cons_vf(E_idx)%sf(j, k, l) - dynE
                     end if
 
                     call s_correct_partial_densities(2, alphak, alpharhoe0k, m0k, rM, rho, TR, i, j, k, l)
@@ -190,7 +190,6 @@ contains
                             ! 2.2. Heterogeneous pTg-equilibrium.
                             ( (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps) ) ) &
                             ) then
-                            ! then
                                 ! updating m1 and m2 AFTER correcting the partial densities. These values are 
                                 ! stored to be retrieved in case the final state is a mixture of fluids
                                 m1 = m0k(lp) ; m2 = m0k(vp)
