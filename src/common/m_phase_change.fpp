@@ -713,11 +713,11 @@ contains
             ! check if solution is out of bounds (which I believe it won`t happen given the solver is gloabally convergent.
 #ifndef MFC_OpenACC
             if ((pS <= -1.0_wp*minval(p_infpT)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
-                if (proc_rank == 0) then
+                ! if (proc_rank == 0) then
                     call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                       , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
                                       , pS, (/gp, 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
-                end if
+                ! end if
 
                 call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
                 call s_mpi_abort('Solver for the pT-relaxation failed (m_phase_change, s_infinite_pt_relaxation_k). &
