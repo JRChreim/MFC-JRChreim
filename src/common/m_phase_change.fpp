@@ -384,16 +384,14 @@ contains
                 ! checking if pS is within expected bounds
                 if ( ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) ) then
 
-                    if (proc_rank == 0) then
-                        call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                          , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
-                                          , pS, (/fp, 0.0_wp/), rhoe, Tk)
-                    end if
+                  call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                    , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                    , pS, (/fp, 0.0_wp/), rhoe, Tk)
 
-                    call s_real_to_str(pS, pSs)
-                    call s_int_to_str(ns, nss)
-                    call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_infinite_p_relaxation_k). &
-                    &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
+                  call s_real_to_str(pS, pSs)
+                  call s_int_to_str(ns, nss)
+                  call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_infinite_p_relaxation_k). &
+                  &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
 
                 end if
             end do
@@ -550,16 +548,14 @@ contains
                 ! energy constraint for the p-equilibrium
                 ! checking if pressure is within expected bounds
                 if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
-                    if (proc_rank == 0) then
-                        call s_whistleblower((/ -fp/fpp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                          , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
-                                          , pS, (/fp, 0.0_wp/), rhoe, Tk)
-                    end if
+                  call s_whistleblower((/ -fp/fpp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                    , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                    , pS, (/fp, 0.0_wp/), rhoe, Tk)
 
-                    call s_real_to_str(pS, pSs)
-                    call s_int_to_str(ns, nss)
-                    call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_old_infinite_p_relaxation_k). &
-                    &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
+                  call s_real_to_str(pS, pSs)
+                  call s_int_to_str(ns, nss)
+                  call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_old_infinite_p_relaxation_k). &
+                  &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
                 end if
 #endif
         end do
@@ -624,7 +620,6 @@ contains
         iFix = (/ (i, i=1,num_fluids) /)
         iVar = iFix
 
-        print *, 'crap', m0k
         ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction
         iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
         
@@ -655,11 +650,9 @@ contains
                 return
 #ifndef MFC_OpenACC
             else
-                if (proc_rank == 0) then
-                    call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                      , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
-                                      , 0.0_wp, (/0.0_wp, 0.0_wp/), rhoe, spread(0.0_wp, 1, num_fluids))                                      
-                end if
+                call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                  , 0.0_wp, (/0.0_wp, 0.0_wp/), rhoe, spread(0.0_wp, 1, num_fluids))                                      
 
                 call s_real_to_str(rhoe - mQ - minval(p_infpT), Econsts)
                 call s_mpi_abort('Solver for the pT-relaxation solver failed (m_phase_change, s_infinite_pt_relaxation_k) &
@@ -714,16 +707,15 @@ contains
             ! check if solution is out of bounds (which I believe it won`t happen given the solver is gloabally convergent.
 #ifndef MFC_OpenACC
             if ((pS <= -1.0_wp*minval(p_infpT)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
-                ! if (proc_rank == 0) then
-                    call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                      , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
-                                      , pS, (/gp, 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
-                ! end if
+              print *, 'crap', m0k
 
-                call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
-                call s_mpi_abort('Solver for the pT-relaxation failed (m_phase_change, s_infinite_pt_relaxation_k). &
-                &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
+              call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                , pS, (/gp, 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
 
+              call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
+              call s_mpi_abort('Solver for the pT-relaxation failed (m_phase_change, s_infinite_pt_relaxation_k). &
+              &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
             end if
 #endif
         end do
@@ -928,10 +920,8 @@ contains
 #ifndef MFC_OpenACC
           if (ieee_is_nan(NORM2(R2D)) .or. (ns > max_iter)) then
 
-            if (proc_rank == 0) then
-                call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, m0k, ns, p_infpTg &
-                                    , pS, R2D, rhoe, spread(TS, 1, num_fluids))
-            end if
+            call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, m0k, ns, p_infpTg &
+                                , pS, R2D, rhoe, spread(TS, 1, num_fluids))
             
             call s_real_to_str(R2D(1), R2D1s) ; call s_real_to_str(R2D(2), R2D2s)
             call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
