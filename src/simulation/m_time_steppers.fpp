@@ -452,6 +452,7 @@ contains
         integer :: i, j, k, l, q !< Generic loop iterator
 
         real(wp) :: start, finish
+        real(wp) :: rhoe, rhoe6E, rho, dynE
 
         ! Stage 1 of 1
         call cpu_time(start)
@@ -500,6 +501,29 @@ contains
             end do
         end do
 
+        ! do l = 0, p
+        !     do k = 0, n
+        !         do j = 0, m
+        !           rhoe6E = 0.0_wp ; rho = 0.0_wp
+        !           do i = 1, num_fluids
+        !             rhoe6E = rhoe6E + q_cons_ts(1)%vf(i + intxb - 1)%sf(j, k, l)
+        !             rho = rho + q_cons_ts(1)%vf(i + contxb - 1)%sf(j, k, l)
+        !           end do
+        !           dynE = 0.0_wp
+        !           do i = momxb, momxe
+        !             dynE = dynE + 5.0e-1_wp*q_cons_ts(1)%vf(i)%sf(j, k, l)**2 / rho
+        !           end do                    
+        !           rhoe = q_cons_ts(1)%vf(E_idx)%sf(j, k, l) - dynE
+        !           if (abs(rhoe - rhoe6E) > 2 .or. abs(rhoe - rhoe6E) / abs(rhoe) > 1E-7 ) then
+        !             ! print *, 'rhoe6E', rhoe6E
+        !             ! print *, 'rhoe', rhoe
+        !             print *, 'abs rhoe - rhoe6E', abs(rhoe6E - rhoe)
+        !             print *, 'rel rhoe - rhoe6E', abs( (rhoe - rhoe6E) / rhoe )
+        !           end if 
+        !         end do
+        !     end do
+        ! end do
+
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
             $:GPU_PARALLEL_LOOP(collapse=5)
@@ -539,8 +563,14 @@ contains
 
         if (grid_geometry == 3) call s_apply_fourier_filter(q_cons_ts(1)%vf)
 
-        if (model_eqns == 3 .and. (.not. relax)) then
-            call s_pressure_relaxation_procedure(q_cons_ts(1)%vf)
+        ! correcting the internal energies so their sum equals the total mixture
+        ! energy, which is conserved across discontinuities
+        if (model_eqns == 3) then
+          call s_correct_internal_energies(q_cons_ts(1)%vf, rhs_vf)
+          ! applying old p-relaxation subroutine
+          if (.not. relax) then
+              call s_pressure_relaxation_procedure(q_cons_ts(1)%vf)
+          end if
         end if
 
         if (adv_n) call s_comp_alpha_from_n(q_cons_ts(1)%vf)
@@ -681,8 +711,14 @@ contains
 
         if (grid_geometry == 3) call s_apply_fourier_filter(q_cons_ts(dest)%vf)
 
-        if (model_eqns == 3 .and. (.not. relax)) then
-            call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+        ! correcting the internal energies so their sum equals the total mixture
+        ! energy, which is conserved across discontinuities
+        if (model_eqns == 3) then
+          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          ! applying old p-relaxation subroutine
+          if (.not. relax) then
+              call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+          end if
         end if
 
         if (adv_n) call s_comp_alpha_from_n(q_cons_ts(dest)%vf)
@@ -774,8 +810,14 @@ contains
 
         if (grid_geometry == 3) call s_apply_fourier_filter(q_cons_ts(dest)%vf)
 
-        if (model_eqns == 3 .and. (.not. relax)) then
-            call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+        ! correcting the internal energies so their sum equals the total mixture
+        ! energy, which is conserved across discontinuities
+        if (model_eqns == 3) then
+          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          ! applying old p-relaxation subroutine
+          if (.not. relax) then
+              call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+          end if
         end if
 
         if (adv_n) call s_comp_alpha_from_n(q_cons_ts(dest)%vf)
@@ -917,8 +959,14 @@ contains
 
         if (grid_geometry == 3) call s_apply_fourier_filter(q_cons_ts(dest)%vf)
 
-        if (model_eqns == 3 .and. (.not. relax)) then
-            call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+        ! correcting the internal energies so their sum equals the total mixture
+        ! energy, which is conserved across discontinuities
+        if (model_eqns == 3) then
+          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          ! applying old p-relaxation subroutine
+          if (.not. relax) then
+              call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+          end if
         end if
 
         if (adv_n) call s_comp_alpha_from_n(q_cons_ts(dest)%vf)
@@ -1010,8 +1058,14 @@ contains
 
         if (grid_geometry == 3) call s_apply_fourier_filter(q_cons_ts(dest)%vf)
 
-        if (model_eqns == 3 .and. (.not. relax)) then
-            call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+        ! correcting the internal energies so their sum equals the total mixture
+        ! energy, which is conserved across discontinuities
+        if (model_eqns == 3) then
+          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          ! applying old p-relaxation subroutine
+          if (.not. relax) then
+              call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+          end if
         end if
 
         if (adv_n) call s_comp_alpha_from_n(q_cons_ts(dest)%vf)
@@ -1103,8 +1157,14 @@ contains
 
         if (grid_geometry == 3) call s_apply_fourier_filter(q_cons_ts(dest)%vf)
 
-        if (model_eqns == 3 .and. (.not. relax)) then
-            call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+        ! correcting the internal energies so their sum equals the total mixture
+        ! energy, which is conserved across discontinuities
+        if (model_eqns == 3) then
+          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          ! applying old p-relaxation subroutine
+          if (.not. relax) then
+              call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
+          end if
         end if
 
         call nvtxStartRange("RHS-ELASTIC")
@@ -1270,6 +1330,47 @@ contains
         $:GPU_UPDATE(device='[dt]')
 
     end subroutine s_compute_dt
+
+    !> This subroutine corrects the fluid internal energy so that their sum 
+        !! match the internal mixture energy
+    subroutine s_correct_internal_energies(q_cons_vf, rhs_vf)
+
+      type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+      type(scalar_field), dimension(sys_size), intent(in) :: rhs_vf
+      real(wp), dimension(2) :: mom, rho ! momentum and mass. (1) = time "n", and (2) = time "n+1" 
+      real(wp) :: alphakO, SoIEF ! alpha at time "n", and sum of the fluxes of the internal mixture energies
+
+      !< Generic loop iterators
+      integer :: i, j, k, l
+
+      ! for each cell:
+      do j = 0, m
+        do k = 0, n
+          do l = 0, p
+            ! zeroing and subsequentially updating the n and n+1 momenta
+            mom = 0.0_wp ;
+            do i = momxb, momxe
+              mom(1) = mom(1) + q_cons_vf(i)%sf(j, k, l) - dt*rhs_vf(i)%sf(j, k, l)
+              mom(2) = mom(2) + q_cons_vf(i)%sf(j, k, l)
+            end do
+            ! zeroing and subsequentially updating the n and n+1 densities and total mixture energy flux
+            rho = 0.0_wp ; SoIEF = 0.0_wp
+            do i = 1, num_fluids
+              rho(1) = rho(1) + q_cons_vf(i + contxb - 1)%sf(j, k, l) - dt * rhs_vf(i + contxb - 1)%sf(j, k, l)
+              rho(2) = rho(2) + q_cons_vf(i + contxb - 1)%sf(j, k, l)
+              SoIEF = SoIEF + rhs_vf(i + intxb - 1)%sf(j, k, l)
+            end do
+            ! updating the internal energy fluxes
+            do i = 1, num_fluids
+              alphakO = q_cons_vf(i + advxb - 1)%sf(j, k, l) - dt*rhs_vf(i + advxb - 1)%sf(j, k, l)
+              q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + intxb - 1)%sf(j, k, l) &
+              + alphakO * ( dt * rhs_vf(E_idx)%sf(j, k, l) - 5.0e-1_wp*( mom(2)**2/rho(2) - mom(1)**2/rho(1) ) - dt * SoIEF )
+            end do
+          end do
+        end do
+      end do
+
+    end subroutine s_correct_internal_energies
 
     !> This subroutine applies the body forces source term at each
         !! Runge-Kutta stage
