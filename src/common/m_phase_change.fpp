@@ -28,7 +28,7 @@ module m_phase_change
 
     !> @name Parameters for the first order transition phase change
     !> @{
-    integer, parameter :: max_iter = 1e8_wp             !< max # of iterations
+    integer, parameter :: max_iter = 1e4_wp             !< max # of iterations
     real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
     real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
     real(wp), parameter :: mixM = sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
@@ -140,7 +140,7 @@ contains
                         case (1) ! (old) p-equilibrium
                             call s_old_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, Tk)                            
                         case (4) ! p-equilibrium
-                            call s_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rho, rhoe, Tk)
+                            call s_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, rM, Tk)
                         case (5) ! pT-equilibrium
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
                             call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
@@ -259,25 +259,27 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
-    impure subroutine s_infinite_p_relaxation_k(j, k, l, alpha0k, me0k, m0k, pS, rho, rhoe, Tk)
+    impure subroutine s_infinite_p_relaxation_k(j, k, l, alpha0k, me0k, m0k, pS, rhoe, rM, Tk)
         !$acc routine seq
 
         ! initializing variables
-        real(wp), intent(in) :: rho, rhoe
+        real(wp), intent(in) :: rhoe, rM
         real(wp), intent(out) :: pS
         real(wp), dimension(num_fluids), intent(out) :: Tk
         real(wp), dimension(num_fluids), intent(in)  :: alpha0k, me0k, m0k
         integer, intent(in) :: j, k, l
 
         real(wp) :: fp, fpp, pO !< variables for the Newton Solver
-        real(wp) :: Econst, Om, OmI, TS !< auxiliary variables
-        real(wp), dimension(num_fluids) :: alphak, alphaik, mek, meik, mik, rhok
+        real(wp) :: Econst, Om, TS !< auxiliary variables
+        real(wp), dimension(num_fluids) :: alphak, alphaik, mek, meik, mik, rhok, p_infp
         character(20) :: nss, pSs, Econsts
         integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
 
         integer :: i, na, ns, nsL !< generic loop iterators
 
         iFix = (/ (i, i=1,num_fluids) /) 
+
+        p_infp = ps_inf
 
         ! think how to solve pK, alphak, mek, given the energy mismatches at the discontinuities 
         alphaik = alpha0k
@@ -289,21 +291,12 @@ contains
         ! distributing the partial density
         mik = m0k
 
-        ! Numerical correction of the volume fractions, partial densities, and internal energies
-        IF (mpp_lim) THEN          
-          ! auxiliry variable to avoid do loops
-          iVar = iFix
-          iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
-          ! if alpha < 0 or m < 0, set everything to 0
-          mik( pack( iVar, iVar /= 0 ) ) = 0.0_wp
-          meik( pack( iVar, iVar /= 0 ) ) = 0.0_wp
-          alphaik( pack( iVar, iVar /= 0 ) ) = 0.0_wp
-          ! if alpha > 1, set it to 1
-          alphaik( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
+        ! dismissing fluids that do not participate into p-relaxation due to the small amount of mass fraction
+        iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
 
-          ! renormalize alpha
-          alphaik = alphaik / sum(alphaik)
-        END IF
+        ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
+        ! This way, I am ensuring this value will not be selected.
+        p_infp( pack(iVar, iVar /= 0) ) = 10 * maxval( ps_inf )
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
@@ -317,23 +310,40 @@ contains
 
         ! Relaxation factor. Although this is not needed for Newton Solver for finding p, it seems to be needed to update
         ! the internal energies after finding pS.
-        OmI = 8.0e-1_wp ; Om = OmI
+        Om = under_relax
        
-        do while  (( ( abs(   sum( mek ) - sum( meik ) ) > ptgalpha_eps ) &
-               .and. ( abs( ( sum( mek ) - sum( meik ) ) / sum( meik ) ) > ptgalpha_eps ) ) &
+        do while  (( ( abs(   sum( mek ) - rhoe ) > ptgalpha_eps ) &
+               .and. ( abs( ( sum( mek ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
                .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
 
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
-            Econst = sum( (gs_min - 1.0_wp)*(mek - mik*qvs) / (gs_min*ps_inf - minval(ps_inf)) )
+            Econst = sum( (gs_min - 1.0_wp)*(mek - mik*qvs) / (gs_min*p_infp - minval(p_infp)) )
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
-            if ((minval(ps_inf) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
-                call s_real_to_str(Econst, Econsts)
-                call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
+            if ((minval(p_infp) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
+
+              print *, 'Om', Om
+              print *, 'me0k', me0k 
+              print *, 'meik', meik 
+              print *, 'mek', meik - Om * ( pS + pS ) * (alphak - alphaik) / 2
+              print *, 'New Om Crit', maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2
+              print *, 'New mek', meik - maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2 * ( pS + pS ) * (alphak - alphaik) / 2
+              print *, 'alphaik', alphaik
+              print *, 'alpha0k', alpha0k
+              print *, 'alphak', alphak
+              print *, 'ps_inf', p_infp
+              print *, 'Econst', Econst
+
+              call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, mik, nsL, ps_inf &
+                                , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, Tk)
+
+              call s_real_to_str(Econst, Econsts)
+              call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
 &                   . Please, check energy constraint. Econst ~'//Econsts//'. Aborting!')
             end if           
 #endif
@@ -354,36 +364,42 @@ contains
                 pO = pS
 
                 ! updating functions used in the Newton's solver. f(p)
-                fp = sum( (gs_min - 1.0_wp)*(mek - mik*qvs) / (pO + gs_min*ps_inf) )
+                fp = sum( (gs_min - 1.0_wp)*(mek - mik*qvs) / (pO + gs_min*p_infp) )
 
                 ! updating functions used in the Newton's solver. f'(p)
-                fpp = sum( - 1.0_wp * (gs_min - 1.0_wp)*(mek - mik*qvs) / ((pO + gs_min*ps_inf)**2) )
+                fpp = sum( - 1.0_wp * (gs_min - 1.0_wp)*(mek - mik*qvs) / ((pO + gs_min*p_infp)**2) )
 
                 ! updating the relaxed pressure
-                pS = pO + ((1.0_wp - fp)/fpp)/(1.0_wp - (1.0_wp - fp + abs(1.0_wp - fp))/(2.0_wp*fpp*(pO + minval(gs_min*ps_inf))))
+                pS = pO + ((1.0_wp - fp)/fpp)/(1.0_wp - (1.0_wp - fp + abs(1.0_wp - fp))/(2.0_wp*fpp*(pO + minval(gs_min*p_infp))))
 
                 ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
                 ! volume fractions
-                alphak = (gs_min - 1.0_wp)*(mek - mik*qvs) / (pS + gs_min*ps_inf)
+                alphak = (gs_min - 1.0_wp)*(mek - mik*qvs) / (pS + gs_min*p_infp)
 
                 ! internal energies. For this part, an underrelaxation factor is needed to update mek
                 if (Om >= maxval(pS * (alphak - alphaik) / (meik - mik * qvs))) then
                   Om = maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2
                 else
-                  Om = OmI
+                  Om = under_relax
                 end if
 
                 mek = meik - Om * ( pS + pS ) * (alphak - alphaik) / 2
 
                 ! checking if pS is within expected bounds
-                if ( ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) ) then
+                if ( ((pS <= -1.0_wp*minval(gs_min*p_infp)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) ) then
 
+                  print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
                   print *, 'Om', Om
+                  print *, 'me0k', me0k 
+                  print *, 'meik', meik 
                   print *, 'mek', meik - Om * ( pS + pS ) * (alphak - alphaik) / 2
-                  print *, 'New Om Crit', maxval(pS * (alphak - alphaik) / (meik - mik * qvs))
-                  print *, 'New mek', meik - maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) * ( pS + pS ) * (alphak - alphaik) / 2
-                  print *, 'alphak', alphak
+                  print *, 'New Om Crit', maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2
+                  print *, 'New mek', meik - maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2 * ( pS + pS ) * (alphak - alphaik) / 2
                   print *, 'alphaik', alphaik
+                  print *, 'alpha0k', alpha0k
+                  print *, 'alphak', alphak
+                  print *, 'm0k', m0k
+                  print *, 'ps_inf', p_infp
 
                   call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                     , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, mik, ns, ps_inf &
@@ -441,16 +457,13 @@ contains
         
         iFix = (/ (i, i=1,num_fluids) /)
 
-        ! initializing the partial energies
-        alphak       = alpha0k
-        mek   = me0k
-        mk           = m0k
+        ! initializing the partial energies, volume fractions, and masses
+        alphak = alpha0k ; mek = me0k ; mk = m0k
 
         ! Numerical correction of the volume fractions, partial densities, and internal energies
         if (mpp_lim) then
           ! auxiliry variable to avoid do loops
-          iVar = iFix
-          iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
+          iVar = iFix ; iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
           
           ! if alpha < 0 or m < 0, set everything to 0
           mk( pack( iVar, iVar /= 0 ) ) = 0.0_wp
@@ -467,24 +480,18 @@ contains
         pk = 0.0_wp
         
         ! auxiliry variable to avoid do loops
-        iVar = iFix
-        iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
+        iVar = iFix ; iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
 
         pk( pack( iVar, iVar /= 0 ) ) = ( ( mek( pack( iVar, iVar /= 0 ) ) &
         - mk( pack( iVar, iVar /= 0 ) ) * qvs( pack( iVar, iVar /= 0 ) ) ) /      &
         alphak( pack( iVar, iVar /= 0 ) ) - fluid_pp( pack( iVar, iVar /= 0 ) )%pi_inf ) &
         / fluid_pp( pack( iVar, iVar /= 0 ) )%gamma               
 
-        print *, 'pk1', pk
-
         ! auxiliry variable to avoid do loops
-        iVar = iFix
-        iVar( pack( iFix, .not. ( pk < -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) ) = 0
+        iVar = iFix ; iVar( pack( iFix, .not. ( pk < -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) ) = 0
 
         pk( pack( iVar, iVar /= 0 ) ) = -(1.0_wp - ptgalpha_eps)*ps_inf( pack( iVar, iVar /= 0 ) ) &
         + ptgalpha_eps
-        
-        print *, 'pk2', pk
 
         ! initial guess for the relaxed pressure
         pS = sum( alphak * pk )
@@ -496,7 +503,7 @@ contains
 
         ! Note that a solution is found when f(p) = 1
         ! keep an eye on this
-        DO WHILE (abs(fp) > ptgalpha_eps .or. (ns == 0))
+        do while (abs(fp) > ptgalpha_eps .or. (ns == 0))
             
             ! setting old pressure
             pO = pS
@@ -508,8 +515,7 @@ contains
             end if
 
             ! calulating fp and fpp
-            iVar = iFix
-            iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
+            iVar = iFix ; iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
             
             num       = gs_min * (pO + ps_inf)
             den       = num + pk - pO
@@ -538,13 +544,6 @@ contains
                 ! energy constraint for the p-equilibrium
                 ! checking if pressure is within expected bounds
                 if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
-                  
-                  print *, 'ALPHA0k', alpha0k
-                  print *, 'ALPHAk', alphak
-                  print *, 'rhok', rhok
-                  print *, 'm0k', m0k
-                  print *, 'mk', mk
-                  print *, 'pk', pk
 
                   call s_whistleblower((/ -fp/fpp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                     , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
@@ -612,14 +611,13 @@ contains
 
         ! auxiliary variables to skip index looping
         iFix = (/ (i, i=1,num_fluids) /)
-        iVar = iFix
 
         ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction
-        iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
+        iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
         
         ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
         ! This way, I am ensuring this value will not be selected.
-        p_infpT( pack(iVar, iVar /= 0) ) = 2 * MAXVAL( ps_inf )
+        p_infpT( pack(iVar, iVar /= 0) ) = 10 * maxval( ps_inf )
         
         ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
           ! sum of the total alpha*rho*cp of the system
@@ -666,7 +664,7 @@ contains
         ! arbitrary value for g(p), used for the newton solver
         gp = 0.0_wp
 
-        ! Newton solver for pT-equilibrium. 1d1 is arbitrary, and ns == 0, to the loop is entered at least once.
+        ! Newton solver for pT-equilibrium. gdi = 0.0_wp is arbitrary, and ns == 0, to the loop is entered at least once.
         ! Note that a solution is found when gp(p) = 1
         do while ( ( ( abs( gp - 1.0_wp ) > ptgalpha_eps ) ) .or. ( ns == 0 ) )
 
@@ -704,7 +702,7 @@ contains
 
               call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
-                                , pS, (/gp, 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
+                                , pS, (/abs( gp - 1.0_wp ), 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
 
               call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
               call s_mpi_abort('Solver for the pT-relaxation failed (m_phase_change, s_infinite_pt_relaxation_k). &
@@ -743,7 +741,7 @@ contains
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
-        real(wp) :: Om, OmI ! underrelaxation factor
+        real(wp) :: Om ! underrelaxation factor
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
@@ -789,10 +787,8 @@ contains
             pS = 1.0e4_wp
         end if
 
-        ! Relaxation factor. This value is rather arbitrary, with a certain level of self adjustment.
-        OmI = 8.0e-1_wp
-        ! Critical relaxation factors, for variable sub-relaxation
-        Oc = OmI;
+        ! Relaxation factor. This value is initially user-defined, with a certain level of self adjustment.
+        Oc = under_relax;
 
         R2D = 0.0_wp ; DeltamP = 0.0_wp;
         ! starting counter for the Newton solver
@@ -814,7 +810,7 @@ contains
         maxg = maxval([gk(lp),gk(vp)])
 
         ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
-        do while (((NORM2(R2D) > ptgalpha_eps) .and. (NORM2(R2D*(/maxg,rhoe/))/NORM2((/maxg,rhoe/)) > ptgalpha_eps)) &
+        do while (((norm2(R2D) > ptgalpha_eps) .and. (norm2(R2D*(/maxg,rhoe/))/norm2((/maxg,rhoe/)) > ptgalpha_eps)) &
           .or. (ns == 0))
 
             ! Updating counter for the iterative procedure
@@ -851,8 +847,6 @@ contains
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
             call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
 
-            ! print *, InvJac, Jac, TJac
-
             ! calculating correction array for Newton's method
             DeltamP = matmul(InvJac, R2D)
 
@@ -863,22 +857,22 @@ contains
             if (m0k(lp) - Om*DeltamP(1) <= 0.0_wp) then
                 Oc(1) = m0k(lp)/(2*DeltamP(1))
             else
-                Oc(1) = OmI
+                Oc(1) = under_relax
             end if
             if (m0k(vp) + Om*DeltamP(1) <= 0.0_wp) then
                 Oc(2) = -m0k(vp)/(2*DeltamP(1))
             else
-                Oc(2) = OmI
+                Oc(2) = under_relax
             end if
             if (pS + minval(p_infpTg) - Om*DeltamP(2) <= 0.0_wp) then
                 Oc(3) = (pS + minval(p_infpTg))/(2*DeltamP(2))
             else
-                Oc(3) = OmI
+                Oc(3) = under_relax
             end if
             ! choosing amonst the minimum relaxation maximum to ensure solver will not produce unphysical values
             Om = minval(Oc)
 #else
-            Om = OmI
+            Om = under_relax
 #endif
             ! updating two reacting 'masses'. Recall that inert 'masses' do not change during the phase change
             ! liquid
@@ -911,7 +905,7 @@ contains
 
                       ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
-          if (ieee_is_nan(NORM2(R2D)) .or. (ns > max_iter)) then
+          if (ieee_is_nan(norm2(R2D)) .or. (ns > max_iter)) then
 
             call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, m0k, ns, p_infpTg &
                                 , pS, R2D, rhoe, spread(TS, 1, num_fluids))
@@ -1001,15 +995,35 @@ contains
             end if
         elseif (CT == 2) then
             ! auxiliry variable to avoid do loops - use Morgan's Law
-            iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
+            if ( any((/ 1, 4 /) == relax_model ) ) then
+                ! this iVar is only valid when we use either the old or new p-relaxationS, as they are only
+                ! used with the 6-equation model. Note that they test the phisical validity of the initial conditions
+                iVar( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
+
+            else
+                ! this is used for either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
+                ! energies are not important
+                iVar( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) ) ) = 0
+            end if
 
             ! if either the volume fraction or the partial density is negative, make them positive
             alpha0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+            ! the greastes value of alpha0k must be one
+            alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
+            
             m0k(pack(iVar, iVar /= 0) ) = 0.0_wp
-            if (model_eqns .eq. 3) then
-                me0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+            ! renormalizing all variables of interest based on the volume fraction
+            ! so everything is adjusted accordingly
+
+            if (model_eqns == 3) then
+              me0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+              ! me0k = me0k / sum(alpha0k)
             end if
 
+            ! this one must be the last correction as, from this point on, sum(alpha0k) == 1
+            ! and the other variables would not benefit from the proportional adjustment
+            alpha0k = alpha0k / sum(alpha0k)
+            
             ! continue relaxation
             TR = .true.
         else
@@ -1160,7 +1174,7 @@ contains
         R2D(2) = (rhoe + pS &
                   + m0k(lp)*(qvs(vp) - qvs(lp)) - rM*qvs(vp) - mQD &
                   + (m0k(lp)*(gs_min(vp)*cvs(vp) - gs_min(lp)*cvs(lp)) &
-                     - rM*gs_min(vp)*cvs(vp) - mCPD) * TS ) / 1
+                  - rM*gs_min(vp)*cvs(vp) - mCPD) * TS ) / 1
 
     end subroutine s_compute_pTg_residual
 
@@ -1204,7 +1218,7 @@ contains
 
         !! per fluid quantities !!
         print *, 'per fluid quantities'
-        
+
         print *, 'mk', mk
 
         print *, 'rhok', rhok
@@ -1248,9 +1262,13 @@ contains
 
         print *, 'R2D', R2D
 
-        print *, 'l2(R2D)', NORM2(R2D)
+        print *, 'l2(R2D)', norm2(R2D)
 
-        print *, 'l2(R2Dr)', NORM2(R2D*(/maxg,rhoe/))/NORM2((/maxg,rhoe/)) 
+        if ( any( (/ 1, 4 /) == relax_model ) ) then
+          print *, 'l2(R2Dr)', norm2(R2D)/abs(rhoe)
+        else 
+          print *, 'l2(R2Dr)', norm2(R2D*(/maxg,rhoe/))/norm2((/maxg,rhoe/)) 
+        end if
 
         print *, 'DeltamP', DeltamP
 
@@ -1291,7 +1309,7 @@ contains
             TSat = TSIn
 
             ! underrelaxation factor
-            Om = 8d-1
+            Om = under_relax
             ! starting counter for the Newton solver
             ns = 0
 
