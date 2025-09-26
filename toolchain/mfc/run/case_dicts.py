@@ -107,6 +107,7 @@ PRE_PROCESS.update({
     'elliptic_smoothing_iters': ParamType.INT,
     'viscous': ParamType.LOG,
     'bubbles_lagrange': ParamType.LOG,
+    'under_relax': ParamType.REAL,
 })
 
 for ib_id in range(1, 10+1):
@@ -317,6 +318,7 @@ SIMULATION.update({
     'nv_uvm_out_of_core': ParamType.LOG,
     'nv_uvm_igr_temps_on_gpu': ParamType.INT,
     'nv_uvm_pref_gpu': ParamType.LOG,
+    'under_relax': ParamType.REAL,
 })
 
 for var in [ 'heatTransfer_model', 'massTransfer_model', 'pressure_corrector',

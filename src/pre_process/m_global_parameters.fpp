@@ -84,6 +84,7 @@ module m_global_parameters
     integer :: relax_model           !< Relax Model
     real(wp) :: palpha_eps           !< trigger parameter for the p relaxation procedure, phase change model
     real(wp) :: ptgalpha_eps         !< trigger parameter for the pTg relaxation procedure, phase change model
+    real(wp) :: under_relax          !< under relaxation factor for both p-relaxation and pTg-relaxation solvers, phase change model
     integer :: num_fluids            !< Number of different fluids present in the flow
     logical :: mpp_lim               !< Alpha limiter
     integer :: sys_size              !< Number of unknowns in the system of equations

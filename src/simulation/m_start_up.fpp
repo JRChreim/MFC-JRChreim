@@ -190,7 +190,7 @@ contains
             alf_factor, num_igr_iters, num_igr_warm_start_iters, &
             int_comp, ic_eps, ic_beta, nv_uvm_out_of_core, &
             nv_uvm_igr_temps_on_gpu, nv_uvm_pref_gpu, down_sample, &
-            sph_coord
+            sph_coord, under_relax
 
         ! Checking that an input file has been provided by the user. If it
         ! has, then the input file is read in, otherwise, simulation exits.
@@ -1523,7 +1523,7 @@ contains
 
         $:GPU_UPDATE(device='[relax, relax_model]')
         if (relax) then
-            $:GPU_UPDATE(device='[palpha_eps, ptgalpha_eps]')
+            $:GPU_UPDATE(device='[palpha_eps, ptgalpha_eps, under_relax]')
         end if
 
         if (ib) then

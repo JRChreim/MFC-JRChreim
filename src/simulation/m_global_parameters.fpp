@@ -225,10 +225,11 @@ module m_global_parameters
 
     logical :: relax          !< activate phase change
     integer :: relax_model    !< Relaxation model
-    real(wp) :: palpha_eps     !< trigger parameter for the p relaxation procedure, phase change model
-    real(wp) :: ptgalpha_eps   !< trigger parameter for the pTg relaxation procedure, phase change model
+    real(wp) :: palpha_eps    !< trigger parameter for the p relaxation procedure, phase change model
+    real(wp) :: ptgalpha_eps  !< trigger parameter for the pTg relaxation procedure, phase change model
+    real(wp) :: under_relax   !< under relaxation factor for both p-relaxation and pTg-relaxation solvers, phase change model
 
-    $:GPU_DECLARE(create='[relax, relax_model, palpha_eps,ptgalpha_eps]')
+    $:GPU_DECLARE(create='[relax, relax_model, palpha_eps, ptgalpha_eps, under_relax]')
 
     integer :: num_bc_patches
     logical :: bc_io
@@ -617,6 +618,7 @@ contains
         relax_model = dflt_int
         palpha_eps = dflt_real
         ptgalpha_eps = dflt_real
+        under_relax = dflt_real
         hypoelasticity = .false.
         hyperelasticity = .false.
         int_comp = .false.
@@ -1335,7 +1337,7 @@ contains
             & mul0,ss,gamma_v,mu_v,gamma_m,gamma_n,mu_n,gam]')
         $:GPU_ENTER_DATA(copyin='[dir_idx,dir_flg,dir_idx_tau]')
 
-        $:GPU_ENTER_DATA(copyin='[relax,relax_model,palpha_eps,ptgalpha_eps]')
+        $:GPU_ENTER_DATA(copyin='[relax,relax_model,palpha_eps,ptgalpha_eps,under_relax]')
 
         ! Allocating grid variables for the x-, y- and z-directions
         @:ALLOCATE(x_cb(-1 - buff_size:m + buff_size))

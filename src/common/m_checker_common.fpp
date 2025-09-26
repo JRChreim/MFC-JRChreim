@@ -170,8 +170,9 @@ contains
         @:PROHIBIT(relax .and. ( model_eqns == 2 ) .and. ( .not. any((/ 5, 6 /) == relax_model ) ), "relax_model = (5,6) for model_eqns == 2")
         @:PROHIBIT(relax .and. ( ( palpha_eps <= 0._wp ) .or. ( palpha_eps >= 1._wp ) ), "palpha_eps must be \in (0,1)")
         @:PROHIBIT(relax .and. ( ( ptgalpha_eps <= 0._wp ) .or. ( ptgalpha_eps >= 1._wp ) ), "ptgalpha_eps must be \in (0,1)")
+        @:PROHIBIT(relax .and. ( ( under_relax <= 0._wp ) .or. ( under_relax > 1._wp ) ), "under_relax must be \in (0,1]")
         @:PROHIBIT((.not. relax) .and. &
-            ((relax_model /= dflt_int) .or. (.not. f_is_default(palpha_eps)) .or. (.not. f_is_default(ptgalpha_eps))), &
+            ((relax_model /= dflt_int) .or. (.not. f_is_default(palpha_eps)) .or. (.not. f_is_default(ptgalpha_eps)) .or. (.not. f_is_default(under_relax)) ), &
             "relax is not set as true, but other phase change parameters have been modified. " // &
             "Either activate phase change or set the values to default")
     end subroutine s_check_inputs_phase_change
