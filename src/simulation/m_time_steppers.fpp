@@ -57,6 +57,9 @@ module m_time_steppers
     type(scalar_field), allocatable, dimension(:) :: rhs_vf !<
     !! Cell-average RHS variables at the current time-stage
 
+    type(scalar_field), allocatable, dimension(:) :: q_cons_AuxIn_vf !<
+    !! Cell-average primitive variables at the current time-stage
+
     type(integer_field), allocatable, dimension(:, :) :: bc_type !<
     !! Boundary condition identifiers
 
@@ -409,6 +412,23 @@ contains
             end do
         end if
 
+        ! Allocating the cell-average RHS variables
+        @:ALLOCATE(q_cons_AuxIn_vf(1:sys_size))
+        @:PREFER_GPU(q_cons_AuxIn_vf)
+
+        if (igr) then
+            do i = 1, sys_size
+                @:ALLOCATE(q_cons_AuxIn_vf(i)%sf(-1:m+1,-1:n+1,-1:p+1))
+                @:ACC_SETUP_SFs(q_cons_AuxIn_vf(i))
+                @:PREFER_GPU(q_cons_AuxIn_vf(i)%sf)
+            end do
+        else
+            do i = 1, sys_size
+                @:ALLOCATE(q_cons_AuxIn_vf(i)%sf(0:m, 0:n, 0:p))
+                @:ACC_SETUP_SFs(q_cons_AuxIn_vf(i))
+            end do
+        end if
+
         ! Opening and writing the header of the run-time information file
         if (proc_rank == 0 .and. run_time_info) then
             call s_open_run_time_information_file()
@@ -451,8 +471,8 @@ contains
 
         integer :: i, j, k, l, q !< Generic loop iterator
 
+        ! type(scalar_field), dimension(sys_size) :: q_cons_AuxIn_vf
         real(wp) :: start, finish
-        real(wp) :: rhoe, rhoe6E, rho, dynE
 
         ! Stage 1 of 1
         call cpu_time(start)
@@ -493,6 +513,8 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
+                        q_cons_ts(1)%vf(i)%sf(j, k, l)
                         q_cons_ts(1)%vf(i)%sf(j, k, l) = &
                             q_cons_ts(1)%vf(i)%sf(j, k, l) &
                             + dt*rhs_vf(i)%sf(j, k, l)
@@ -500,29 +522,6 @@ contains
                 end do
             end do
         end do
-
-        ! do l = 0, p
-        !     do k = 0, n
-        !         do j = 0, m
-        !           rhoe6E = 0.0_wp ; rho = 0.0_wp
-        !           do i = 1, num_fluids
-        !             rhoe6E = rhoe6E + q_cons_ts(1)%vf(i + intxb - 1)%sf(j, k, l)
-        !             rho = rho + q_cons_ts(1)%vf(i + contxb - 1)%sf(j, k, l)
-        !           end do
-        !           dynE = 0.0_wp
-        !           do i = momxb, momxe
-        !             dynE = dynE + 5.0e-1_wp*q_cons_ts(1)%vf(i)%sf(j, k, l)**2 / rho
-        !           end do                    
-        !           rhoe = q_cons_ts(1)%vf(E_idx)%sf(j, k, l) - dynE
-        !           if (abs(rhoe - rhoe6E) > 2 .or. abs(rhoe - rhoe6E) / abs(rhoe) > 1E-7 ) then
-        !             ! print *, 'rhoe6E', rhoe6E
-        !             ! print *, 'rhoe', rhoe
-        !             print *, 'abs rhoe - rhoe6E', abs(rhoe6E - rhoe)
-        !             print *, 'rel rhoe - rhoe6E', abs( (rhoe - rhoe6E) / rhoe )
-        !           end if 
-        !         end do
-        !     end do
-        ! end do
 
         !Evolve pb and mv for non-polytropic qbmm
         if (qbmm .and. (.not. polytropic)) then
@@ -566,7 +565,7 @@ contains
         ! correcting the internal energies so their sum equals the total mixture
         ! energy, which is conserved across discontinuities
         if (model_eqns == 3) then
-          call s_correct_internal_energies(q_cons_ts(1)%vf, rhs_vf)
+          call s_correct_internal_energies(1.0_wp, q_cons_ts(1)%vf, q_cons_AuxIn_vf, rhs_vf)
           ! applying old p-relaxation subroutine
           if (.not. relax) then
               call s_pressure_relaxation_procedure(q_cons_ts(1)%vf)
@@ -609,6 +608,7 @@ contains
         integer :: i, j, k, l, q!< Generic loop iterator
         real(wp) :: start, finish
         integer :: dest
+        real(wp) :: rhoe, rhoe6E, rho, dynE
 
         ! Stage 1 of 2
 
@@ -644,6 +644,9 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_ts(1)%vf(i)%sf(j, k, l)
+
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
                             q_cons_ts(1)%vf(i)%sf(j, k, l)
                         q_cons_ts(1)%vf(i)%sf(j, k, l) = &
@@ -661,6 +664,9 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_ts(1)%vf(i)%sf(j, k, l)
+
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
                             q_cons_ts(1)%vf(i)%sf(j, k, l) &
                             + dt*rhs_vf(i)%sf(j, k, l)
@@ -714,12 +720,35 @@ contains
         ! correcting the internal energies so their sum equals the total mixture
         ! energy, which is conserved across discontinuities
         if (model_eqns == 3) then
-          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          call s_correct_internal_energies(1.0_wp, q_cons_ts(dest)%vf, q_cons_AuxIn_vf, rhs_vf)
           ! applying old p-relaxation subroutine
           if (.not. relax) then
               call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
           end if
         end if
+
+        ! do l = 0, p
+        !     do k = 0, n
+        !         do j = 0, m
+        !           rhoe6E = 0.0_wp ; rho = 0.0_wp
+        !           do i = 1, num_fluids
+        !             rhoe6E = rhoe6E + q_cons_ts(1)%vf(i + intxb - 1)%sf(j, k, l)
+        !             rho = rho + q_cons_ts(1)%vf(i + contxb - 1)%sf(j, k, l)
+        !           end do
+        !           dynE = 0.0_wp
+        !           do i = momxb, momxe
+        !             dynE = dynE + 5.0e-1_wp*q_cons_ts(1)%vf(i)%sf(j, k, l)**2 / rho
+        !           end do                    
+        !           rhoe = q_cons_ts(1)%vf(E_idx)%sf(j, k, l) - dynE
+        !           if (abs(rhoe - rhoe6E) > 2 .or. abs(rhoe - rhoe6E) / abs(rhoe) > 1E-7 ) then
+        !             ! print *, 'rhoe6E', rhoe6E
+        !             ! print *, 'rhoe', rhoe
+        !             print *, 'abs rhoe - rhoe6E', abs(rhoe6E - rhoe)
+        !             print *, 'rel rhoe - rhoe6E', abs( (rhoe - rhoe6E) / rhoe )
+        !           end if 
+        !         end do
+        !     end do
+        ! end do
 
         if (adv_n) call s_comp_alpha_from_n(q_cons_ts(dest)%vf)
 
@@ -742,6 +771,10 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        (q_cons_ts(2)%vf(i)%sf(j, k, l) &
+                       + q_cons_ts(1)%vf(i)%sf(j, k, l))/2._wp
+
                         q_cons_ts(1)%vf(i)%sf(j, k, l) = &
                             (q_cons_ts(2)%vf(i)%sf(j, k, l) &
                              + q_cons_ts(1)%vf(i)%sf(j, k, l) &
@@ -758,6 +791,10 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                            (q_cons_ts(1)%vf(i)%sf(j, k, l) &
+                           + q_cons_ts(2)%vf(i)%sf(j, k, l))/2._wp
+                      
                         q_cons_ts(1)%vf(i)%sf(j, k, l) = &
                             (q_cons_ts(1)%vf(i)%sf(j, k, l) &
                              + q_cons_ts(2)%vf(i)%sf(j, k, l) &
@@ -813,7 +850,7 @@ contains
         ! correcting the internal energies so their sum equals the total mixture
         ! energy, which is conserved across discontinuities
         if (model_eqns == 3) then
-          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          call s_correct_internal_energies(1._wp/2._wp, q_cons_ts(dest)%vf, q_cons_AuxIn_vf, rhs_vf)
           ! applying old p-relaxation subroutine
           if (.not. relax) then
               call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
@@ -892,6 +929,9 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                            q_cons_ts(1)%vf(i)%sf(j, k, l)
+
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
                             q_cons_ts(1)%vf(i)%sf(j, k, l)
                         q_cons_ts(1)%vf(i)%sf(j, k, l) = &
@@ -909,6 +949,9 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                            q_cons_ts(1)%vf(i)%sf(j, k, l)
+
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
                             q_cons_ts(1)%vf(i)%sf(j, k, l) &
                             + dt*rhs_vf(i)%sf(j, k, l)
@@ -962,7 +1005,7 @@ contains
         ! correcting the internal energies so their sum equals the total mixture
         ! energy, which is conserved across discontinuities
         if (model_eqns == 3) then
-          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          call s_correct_internal_energies(1.0_wp, q_cons_ts(dest)%vf, q_cons_AuxIn_vf, rhs_vf)
           ! applying old p-relaxation subroutine
           if (.not. relax) then
               call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
@@ -990,6 +1033,10 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                            (3._wp*q_cons_ts(2)%vf(i)%sf(j, k, l) &
+                                 + q_cons_ts(1)%vf(i)%sf(j, k, l))/4._wp
+
                         q_cons_ts(1)%vf(i)%sf(j, k, l) = &
                             (3._wp*q_cons_ts(2)%vf(i)%sf(j, k, l) &
                              + q_cons_ts(1)%vf(i)%sf(j, k, l) &
@@ -1006,6 +1053,10 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                            (3._wp*q_cons_ts(1)%vf(i)%sf(j, k, l) &
+                                 + q_cons_ts(2)%vf(i)%sf(j, k, l))/4._wp
+
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
                             (3._wp*q_cons_ts(1)%vf(i)%sf(j, k, l) &
                              + q_cons_ts(2)%vf(i)%sf(j, k, l) &
@@ -1061,7 +1112,7 @@ contains
         ! correcting the internal energies so their sum equals the total mixture
         ! energy, which is conserved across discontinuities
         if (model_eqns == 3) then
-          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          call s_correct_internal_energies(1._wp/4._wp, q_cons_ts(dest)%vf, q_cons_AuxIn_vf, rhs_vf)
           ! applying old p-relaxation subroutine
           if (.not. relax) then
               call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
@@ -1089,6 +1140,10 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                            (q_cons_ts(2)%vf(i)%sf(j, k, l) &
+                     + 2._wp*q_cons_ts(1)%vf(i)%sf(j, k, l))/3._wp
+
                         q_cons_ts(1)%vf(i)%sf(j, k, l) = &
                             (q_cons_ts(2)%vf(i)%sf(j, k, l) &
                              + 2._wp*q_cons_ts(1)%vf(i)%sf(j, k, l) &
@@ -1105,6 +1160,10 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
+                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                            (q_cons_ts(1)%vf(i)%sf(j, k, l) &
+                     + 2._wp*q_cons_ts(2)%vf(i)%sf(j, k, l))/3._wp
+
                         q_cons_ts(1)%vf(i)%sf(j, k, l) = &
                             (q_cons_ts(1)%vf(i)%sf(j, k, l) &
                              + 2._wp*q_cons_ts(2)%vf(i)%sf(j, k, l) &
@@ -1160,7 +1219,7 @@ contains
         ! correcting the internal energies so their sum equals the total mixture
         ! energy, which is conserved across discontinuities
         if (model_eqns == 3) then
-          call s_correct_internal_energies(q_cons_ts(dest)%vf, rhs_vf)
+          call s_correct_internal_energies(2._wp/3._wp, q_cons_ts(dest)%vf, q_cons_AuxIn_vf, rhs_vf)
           ! applying old p-relaxation subroutine
           if (.not. relax) then
               call s_pressure_relaxation_procedure(q_cons_ts(dest)%vf)
@@ -1333,12 +1392,13 @@ contains
 
     !> This subroutine corrects the fluid internal energy so that their sum 
         !! match the internal mixture energy
-    subroutine s_correct_internal_energies(q_cons_vf, rhs_vf)
+    subroutine s_correct_internal_energies(fracDt, q_cons_2_vf, q_cons_1_vf, rhs_vf)
 
-      type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
-      type(scalar_field), dimension(sys_size), intent(in) :: rhs_vf
+      type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_2_vf
+      type(scalar_field), dimension(sys_size), intent(in) :: q_cons_1_vf, rhs_vf
+      real(wp), intent(in) :: fracDt ! alpha at time "n", and sum of the fluxes of the internal mixture energies
       real(wp), dimension(2) :: mom, rho ! momentum and mass. (1) = time "n", and (2) = time "n+1" 
-      real(wp) :: alphakO, SoIEF ! alpha at time "n", and sum of the fluxes of the internal mixture energies
+      real(wp) :: alphak1, SoIEF ! alpha at time "n", and sum of the fluxes of the internal mixture energies
 
       !< Generic loop iterators
       integer :: i, j, k, l
@@ -1350,21 +1410,21 @@ contains
             ! zeroing and subsequentially updating the n and n+1 momenta
             mom = 0.0_wp ;
             do i = momxb, momxe
-              mom(1) = mom(1) + q_cons_vf(i)%sf(j, k, l) - dt*rhs_vf(i)%sf(j, k, l)
-              mom(2) = mom(2) + q_cons_vf(i)%sf(j, k, l)
+              mom(1) = mom(1) + q_cons_1_vf(i)%sf(j, k, l)
+              mom(2) = mom(2) + q_cons_2_vf(i)%sf(j, k, l)
             end do
             ! zeroing and subsequentially updating the n and n+1 densities and total mixture energy flux
             rho = 0.0_wp ; SoIEF = 0.0_wp
             do i = 1, num_fluids
-              rho(1) = rho(1) + q_cons_vf(i + contxb - 1)%sf(j, k, l) - dt * rhs_vf(i + contxb - 1)%sf(j, k, l)
-              rho(2) = rho(2) + q_cons_vf(i + contxb - 1)%sf(j, k, l)
+              rho(1) = rho(1) + q_cons_1_vf(i + contxb - 1)%sf(j, k, l)
+              rho(2) = rho(2) + q_cons_2_vf(i + contxb - 1)%sf(j, k, l)
               SoIEF = SoIEF + rhs_vf(i + intxb - 1)%sf(j, k, l)
             end do
             ! updating the internal energy fluxes
             do i = 1, num_fluids
-              alphakO = q_cons_vf(i + advxb - 1)%sf(j, k, l) - dt*rhs_vf(i + advxb - 1)%sf(j, k, l)
-              q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + intxb - 1)%sf(j, k, l) &
-              + alphakO * ( dt * rhs_vf(E_idx)%sf(j, k, l) - 5.0e-1_wp*( mom(2)**2/rho(2) - mom(1)**2/rho(1) ) - dt * SoIEF )
+              alphak1 = q_cons_1_vf(i + advxb - 1)%sf(j, k, l)
+              q_cons_2_vf(i + intxb - 1)%sf(j, k, l) = q_cons_2_vf(i + intxb - 1)%sf(j, k, l) &
+              + alphak1 * ( fracDt * dt * rhs_vf(E_idx)%sf(j, k, l) - 5.0e-1_wp*( mom(2)**2/rho(2) - mom(1)**2/rho(1) ) - fracDt * dt * SoIEF )
             end do
           end do
         end do
