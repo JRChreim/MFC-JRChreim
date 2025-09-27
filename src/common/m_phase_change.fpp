@@ -312,7 +312,7 @@ contains
         ! the internal energies after finding pS.
         Om = under_relax
        
-        do while  (( ( abs(   sum( mek ) - rhoe ) > ptgalpha_eps ) &
+        do while ( ( ( abs(   sum( mek ) - rhoe ) > ptgalpha_eps ) &
                .and. ( abs( ( sum( mek ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
                .or.  ( nSL == 0 ) )
             ! increasing counter
@@ -326,6 +326,8 @@ contains
             ! energy constraint for the p-equilibrium
             if ((minval(p_infp) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
+              print *, 'abs err', abs(   sum( mek ) - rhoe )
+              print *, 'rel err', abs( ( sum( mek ) - rhoe ) / rhoe )
               print *, 'Om', Om
               print *, 'me0k', me0k 
               print *, 'meik', meik 
@@ -356,7 +358,7 @@ contains
             ! in the loosely coupled algorithm. This is different than the pT-equilibrium case, in which no energy correction is needed.
             ! A solution is found when f(p) = 1
             fp = 0.0_wp
-            do while (((abs(fp - 1.0_wp) > ptgalpha_eps)) .or. (ns <= 1))
+            do while ( ( ( abs(fp - 1.0_wp) > ptgalpha_eps ) ) .or. ( ns <= 1 ) )
                 ! increasing counter
                 ns = ns + 1
 
@@ -503,7 +505,7 @@ contains
 
         ! Note that a solution is found when f(p) = 1
         ! keep an eye on this
-        do while (abs(fp) > ptgalpha_eps .or. (ns == 0))
+        do while ( abs( fp ) > ptgalpha_eps .or. ( ns == 0 ) )
             
             ! setting old pressure
             pO = pS
@@ -810,8 +812,8 @@ contains
         maxg = maxval([gk(lp),gk(vp)])
 
         ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
-        do while (((norm2(R2D) > ptgalpha_eps) .and. (norm2(R2D*(/maxg,rhoe/))/norm2((/maxg,rhoe/)) > ptgalpha_eps)) &
-          .or. (ns == 0))
+        do while ( ( ( norm2(R2D) > ptgalpha_eps ) .and. ( norm2( R2D*(/maxg,rhoe/) ) / norm2( (/maxg,rhoe/) ) > ptgalpha_eps ) ) &
+          .or. ( ns == 0 ) )
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
@@ -1315,7 +1317,7 @@ contains
 
             ! Newton solver for finding the saturation temperature as function of pressure. ns == 0, so the loop is
             ! entered at least once.
-            do while ((abs(FT) > ptgalpha_eps) .or. (ns == 0))
+            do while ( ( abs(FT) > ptgalpha_eps ) .or. ( ns == 0 ) )
 
                 ! Updating counter for the iterative procedure
                 ns = ns + 1
