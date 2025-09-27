@@ -16,7 +16,7 @@ switch loc
         FigFolder = '/p/global/jrchreim/Figures/';
     case 'local'
         mfcPath = '/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/';
-        RelMod = {'pT', 'p'} ;
+        RelMod = {'p'} ;
         DiscLevel = {'N1E3', 'N2E3'} ;
         compliment = '';
         FigFolder = '/disk/simulations/PhaseChange/ShockTube/1D/StrongCollapse/6Eqn/Figures/';
@@ -61,10 +61,10 @@ for rm = 1:length(RelMod)
         % (focusing on the vapor region)
 
         % SETTING UP minimum and maximum values for the colorbars
-        pres(alpha2 < 1 - 1E-5) = NaN ;
-        T1(alpha2 < 1 - 1E-5) = NaN ;
-        T2(alpha2 < 1 - 1E-5) = NaN ;
-        alpha2(alpha2 < 1 - 1E-5) = NaN ;
+        pres(alpha2 < 1 - 1E-8) = NaN ;
+        T1(alpha2 < 1 - 1E-8) = NaN ;
+        T2(alpha2 < 1 - 1E-8) = NaN ;
+        alpha2(alpha2 < 1 - 1E-8) = NaN ;
         if ( dl == 1 && rm == 1)
             maxP  = max( max( pres ) ) ; minP = min( min( pres ) ) ;
             maxTv = max( max( T2 ) )  ; minTv = min( min( T2 ) ) ;
@@ -78,14 +78,14 @@ for rm = 1:length(RelMod)
 
         % PLOTTING VARIABLES
         % pressure
-        levP = floor(minP):ceil(maxP) ;
-        % levP = 5;
+        % levP = floor(minP):ceil(maxP) ;
+        levP = 8;
 
-        xC{1} = (xOL >= 0.0 & xOL <= 0.35) ;
+        xC{1} = (xOL >= 0.0 & xOL <= 7.0E-3) ;
         XM = reshape(tOtend(xC{1}), [], size(xOL, 2)) ; YM = reshape(xOL( xC{1} ), [], size(xOL, 2)) ;
         ZM = reshape(pres(xC{1}), [], size(xOL,2) ) ;
 
-        nexttile(1) ; contourf(XM, YM, ZM, levP, 'EdgeColor', 'none') ; colorbar ;
+        nexttile(1) ; contourf(XM, YM, ZM, levP) ; colorbar ;
         title( '$ p \; [Pa] $', 'interpreter', 'latex', 'Fontsize', fs);
         xtickformat('%.2f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
@@ -94,13 +94,13 @@ for rm = 1:length(RelMod)
         text(0.5, 0.25, ['p_{min}: ' num2str( min( min( pres ) ) ) ], 'FontSize', fs);
          
         % Vapor Temperature
-        levTv = floor(minTv):10:ceil(maxTv) ;
-        % levTv = 20 ;
-        xC{2} = (xOL >= 0.0 & xOL <= 0.35) ;
+        % levTv = floor(minTv):10:ceil(maxTv) ;
+        levTv = 8 ;
+        xC{2} = (xOL >= 0.0 & xOL <= 7.0E-3) ;
         XM = reshape(tOtend(xC{2}), [], size(xOL, 2)) ; YM = reshape(xOL( xC{2} ), [], size(xOL, 2)) ;
         ZM = reshape(T2(xC{2}), [], size(xOL,2) ) ;
 
-        nexttile(2) ; contourf(XM, YM, ZM, levTv, 'EdgeColor', 'none') ; colorbar ;
+        nexttile(2) ; contourf(XM, YM, ZM, levTv) ; colorbar ;
         title( '$ T_{v} \; [K] $', 'interpreter', 'latex', 'Fontsize', fs);
         xtickformat('%.1f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
@@ -110,12 +110,12 @@ for rm = 1:length(RelMod)
 
         % liquid temperature
         % levTl = floor(minTl):ceil(maxTl) ;
-        levTl = 20 ;
-        xC{3} = (xOL >= 0.0 & xOL <= 0.35) ;
+        levTl = 8 ;
+        xC{3} = (xOL >= 0.0 & xOL <= 7.0E-3) ;
         XM = reshape(tOtend(xC{3}), [], size(xOL, 2)) ; YM = reshape(xOL( xC{3} ), [], size(xOL, 2)) ;
         ZM = reshape(T1(xC{3}), [], size(xOL,2) ) ;
 
-        nexttile(3) ; contourf(XM, YM, ZM, levTl, 'EdgeColor', 'none') ; colorbar ;
+        nexttile(3) ; contourf(XM, YM, ZM, levTl) ; colorbar ;
         title( '$ T_{l} \; [K] $', 'interpreter', 'latex', 'Fontsize', fs);
         xtickformat('%.1f'); ytickformat('%.2f');
         ax = gca; ax.FontSize = fs;
@@ -123,8 +123,9 @@ for rm = 1:length(RelMod)
         text(0.5, 0.30, ['T_{max}: ' num2str( max( max( T1 ) ) ) ], 'FontSize', fs);
         text(0.5, 0.25, ['T_{min}: ' num2str( min( min( T1 ) ) ) ], 'FontSize', fs);
 
-        levTV4 = floor(minM2):ceil(maxM2) ;
-        xC{4} = (xOL >= 0.0 & xOL <= 0.35) ;
+        % levTV4 = floor(minM2):ceil(maxM2) ;
+        levTV4 = 10 ;
+        xC{4} = (xOL >= 0.0 & xOL <= 7.0E-3) ;
         XM = reshape(tOtend(xC{4}), [], size(xOL, 2)) ; YM = reshape(xOL( xC{4} ), [], size(xOL, 2)) ;
         ZM = reshape(alpha2(xC{4}), [], size(xOL,2) ) ;
 
@@ -142,10 +143,10 @@ for rm = 1:length(RelMod)
 
         clearvars alpha_rho1 alpha_rho2 mom1 vel1 E alpha_rho_e1 alpha_rho_e2 pres tCoord xCoord
 
-        savefig(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), '-v7.3' );
+        % savefig(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), '-v7.3' );
         % saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'epsc' );
-        saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'png' );
+        % saveas(fig, fullfile(FigFolder, strcat(RelMod{rm}, DiscLevel{dl} ) ), 'png' );
 
-        close
+        % close
     end
 end
