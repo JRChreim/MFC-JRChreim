@@ -471,7 +471,6 @@ contains
 
         integer :: i, j, k, l, q !< Generic loop iterator
 
-        ! type(scalar_field), dimension(sys_size) :: q_cons_AuxIn_vf
         real(wp) :: start, finish
 
         ! Stage 1 of 1
@@ -644,7 +643,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                         q_cons_ts(1)%vf(i)%sf(j, k, l)
 
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
@@ -664,7 +663,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                         q_cons_ts(1)%vf(i)%sf(j, k, l)
 
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
@@ -771,7 +770,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                         (q_cons_ts(2)%vf(i)%sf(j, k, l) &
                        + q_cons_ts(1)%vf(i)%sf(j, k, l))/2._wp
 
@@ -791,7 +790,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                             (q_cons_ts(1)%vf(i)%sf(j, k, l) &
                            + q_cons_ts(2)%vf(i)%sf(j, k, l))/2._wp
                       
@@ -929,7 +928,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                             q_cons_ts(1)%vf(i)%sf(j, k, l)
 
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
@@ -949,7 +948,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                             q_cons_ts(1)%vf(i)%sf(j, k, l)
 
                         q_cons_ts(2)%vf(i)%sf(j, k, l) = &
@@ -1033,7 +1032,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                             (3._wp*q_cons_ts(2)%vf(i)%sf(j, k, l) &
                                  + q_cons_ts(1)%vf(i)%sf(j, k, l))/4._wp
 
@@ -1053,7 +1052,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                             (3._wp*q_cons_ts(1)%vf(i)%sf(j, k, l) &
                                  + q_cons_ts(2)%vf(i)%sf(j, k, l))/4._wp
 
@@ -1140,7 +1139,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                             (q_cons_ts(2)%vf(i)%sf(j, k, l) &
                      + 2._wp*q_cons_ts(1)%vf(i)%sf(j, k, l))/3._wp
 
@@ -1160,7 +1159,7 @@ contains
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
-                        q_cons_AuxIn_vf%sf(j, k, l) = &
+                        q_cons_AuxIn_vf(i)%sf(j, k, l) = &
                             (q_cons_ts(1)%vf(i)%sf(j, k, l) &
                      + 2._wp*q_cons_ts(2)%vf(i)%sf(j, k, l))/3._wp
 
