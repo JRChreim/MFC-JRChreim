@@ -318,7 +318,7 @@ contains
             orig_prim_vf(i) = q_prim_vf(i)%sf(j, k, l)
         end do
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. icsg) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -348,7 +348,7 @@ contains
             end do
         end if
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. icsg) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -393,7 +393,7 @@ contains
             end do
         end if
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. icsg) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -412,21 +412,23 @@ contains
                 muR = R0(i)*patch_icpp(smooth_patch_id)%r0
                 muV = patch_icpp(smooth_patch_id)%v0
                 if (qbmm) then
+                    muR = muR*(bub_refs%x0/bub_refs%R0ref)
+                    muV = muV*(bub_refs%u0/bub_refs%ub0)
                     ! Initialize the moment set
                     if (dist_type == 1) then
                         q_prim_vf(bub_idx%fullmom(i, 0, 0))%sf(j, k, l) = 1._wp
-                        q_prim_vf(bub_idx%fullmom(i, 1, 0))%sf(j, k, l) = muR
-                        q_prim_vf(bub_idx%fullmom(i, 0, 1))%sf(j, k, l) = muV
-                        q_prim_vf(bub_idx%fullmom(i, 2, 0))%sf(j, k, l) = muR**2 + sigR**2
-                        q_prim_vf(bub_idx%fullmom(i, 1, 1))%sf(j, k, l) = muR*muV + rhoRV*sigR*sigV
-                        q_prim_vf(bub_idx%fullmom(i, 0, 2))%sf(j, k, l) = muV**2 + sigV**2
+                        q_prim_vf(bub_idx%fullmom(i, 1, 0))%sf(j, k, l) = muR *(bub_refs%R0ref/bub_refs%x0)
+                        q_prim_vf(bub_idx%fullmom(i, 0, 1))%sf(j, k, l) = muV *(bub_refs%ub0/bub_refs%u0)
+                        q_prim_vf(bub_idx%fullmom(i, 2, 0))%sf(j, k, l) = (muR**2 + sigR**2) *(bub_refs%R0ref/bub_refs%x0)**2._wp
+                        q_prim_vf(bub_idx%fullmom(i, 1, 1))%sf(j, k, l) = (muR*muV + rhoRV*sigR*sigV) *(bub_refs%R0ref/bub_refs%x0)*(bub_refs%ub0/bub_refs%u0)
+                        q_prim_vf(bub_idx%fullmom(i, 0, 2))%sf(j, k, l) = (muV**2 + sigV**2) *(bub_refs%ub0/bub_refs%u0)**2._wp
                     else if (dist_type == 2) then
                         q_prim_vf(bub_idx%fullmom(i, 0, 0))%sf(j, k, l) = 1._wp
-                        q_prim_vf(bub_idx%fullmom(i, 1, 0))%sf(j, k, l) = exp((sigR**2)/2._wp)*muR
-                        q_prim_vf(bub_idx%fullmom(i, 0, 1))%sf(j, k, l) = muV
-                        q_prim_vf(bub_idx%fullmom(i, 2, 0))%sf(j, k, l) = exp((sigR**2)*2._wp)*(muR**2)
-                        q_prim_vf(bub_idx%fullmom(i, 1, 1))%sf(j, k, l) = exp((sigR**2)/2._wp)*muR*muV
-                        q_prim_vf(bub_idx%fullmom(i, 0, 2))%sf(j, k, l) = muV**2 + sigV**2
+                        q_prim_vf(bub_idx%fullmom(i, 1, 0))%sf(j, k, l) = exp((sigR**2)/2._wp)*muR *(bub_refs%R0ref/bub_refs%x0)
+                        q_prim_vf(bub_idx%fullmom(i, 0, 1))%sf(j, k, l) = muV *(bub_refs%ub0/bub_refs%u0)
+                        q_prim_vf(bub_idx%fullmom(i, 2, 0))%sf(j, k, l) = exp((sigR**2)*2._wp)*(muR**2) *(bub_refs%R0ref/bub_refs%x0)**2._wp
+                        q_prim_vf(bub_idx%fullmom(i, 1, 1))%sf(j, k, l) = exp((sigR**2)/2._wp)*muR*muV *(bub_refs%R0ref/bub_refs%x0)*(bub_refs%ub0/bub_refs%u0)
+                        q_prim_vf(bub_idx%fullmom(i, 0, 2))%sf(j, k, l) = (muV**2 + sigV**2) *(bub_refs%ub0/bub_refs%u0)**2._wp
                     end if
                 else
                     q_prim_vf(bub_idx%rs(i))%sf(j, k, l) = muR
@@ -439,6 +441,13 @@ contains
             end do
 
             if (adv_n) then
+                if (icsg) then
+                    if (icsg_patch == patch_id) then
+                        q_prim_vf(alf_idx)%sf(j, k, l) = icsg_vf
+                    else
+                        q_prim_vf(alf_idx)%sf(j, k, l) = 1.e-10_wp
+                    end if
+                end if
                 ! Initialize number density
                 R3bar = 0._wp
                 do i = 1, nb
@@ -509,7 +518,7 @@ contains
                 theta = atan2(y_cc(k), x_cc(j))
                 phi = atan2(sqrt(x_cc(j)**2 + y_cc(k)**2), z_cc(l))
                 !spherical coord, assuming Rmax=1
-                xi_sph = (rcoord**3 - R0ref**3 + 1._wp)**(1._wp/3._wp)
+                xi_sph = (rcoord**3 - R0hyper**3 + 1._wp)**(1._wp/3._wp)
                 xi_cart(1) = xi_sph*sin(phi)*cos(theta)
                 xi_cart(2) = xi_sph*sin(phi)*sin(theta)
                 xi_cart(3) = xi_sph*cos(phi)
@@ -526,7 +535,7 @@ contains
             end do
         end if
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. icsg) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -555,8 +564,8 @@ contains
 
             ! \rho = (( p_l + pi_inf)/( p_ref + pi_inf))**(1/little_gam) * rhoref(1-alf)
             q_prim_vf(1)%sf(j, k, l) = &
-                (((q_prim_vf(E_idx)%sf(j, k, l) + pi_inf)/(pref + pi_inf))**(1/lit_gamma))* &
-                rhoref*(1 - q_prim_vf(alf_idx)%sf(j, k, l))
+                (((q_prim_vf(E_idx)%sf(j, k, l) + pi_inf)/(1._wp + pi_inf))**(1._wp/lit_gamma))* &
+                (1._wp - q_prim_vf(alf_idx)%sf(j, k, l))
         end if
 
         ! Density and the specific heat ratio and liquid stiffness functions
@@ -619,21 +628,23 @@ contains
                 muR = R0(i)*patch_icpp(patch_id)%r0
                 muV = patch_icpp(patch_id)%v0
                 if (qbmm) then
+                    muR = muR*(bub_refs%x0/bub_refs%R0ref)
+                    muV = muV*(bub_refs%u0/bub_refs%ub0)
                     ! Initialize the moment set
                     if (dist_type == 1) then
                         q_prim_vf(bub_idx%fullmom(i, 0, 0))%sf(j, k, l) = 1._wp
-                        q_prim_vf(bub_idx%fullmom(i, 1, 0))%sf(j, k, l) = muR
-                        q_prim_vf(bub_idx%fullmom(i, 0, 1))%sf(j, k, l) = muV
-                        q_prim_vf(bub_idx%fullmom(i, 2, 0))%sf(j, k, l) = muR**2 + sigR**2
-                        q_prim_vf(bub_idx%fullmom(i, 1, 1))%sf(j, k, l) = muR*muV + rhoRV*sigR*sigV
-                        q_prim_vf(bub_idx%fullmom(i, 0, 2))%sf(j, k, l) = muV**2 + sigV**2
+                        q_prim_vf(bub_idx%fullmom(i, 1, 0))%sf(j, k, l) = muR *(bub_refs%R0ref/bub_refs%x0)
+                        q_prim_vf(bub_idx%fullmom(i, 0, 1))%sf(j, k, l) = muV *(bub_refs%ub0/bub_refs%u0)
+                        q_prim_vf(bub_idx%fullmom(i, 2, 0))%sf(j, k, l) = (muR**2 + sigR**2) *(bub_refs%R0ref/bub_refs%x0)**2._wp
+                        q_prim_vf(bub_idx%fullmom(i, 1, 1))%sf(j, k, l) = (muR*muV + rhoRV*sigR*sigV) *(bub_refs%R0ref/bub_refs%x0)*(bub_refs%ub0/bub_refs%u0)
+                        q_prim_vf(bub_idx%fullmom(i, 0, 2))%sf(j, k, l) = (muV**2 + sigV**2) *(bub_refs%ub0/bub_refs%u0)**2._wp
                     else if (dist_type == 2) then
                         q_prim_vf(bub_idx%fullmom(i, 0, 0))%sf(j, k, l) = 1._wp
-                        q_prim_vf(bub_idx%fullmom(i, 1, 0))%sf(j, k, l) = exp((sigR**2)/2._wp)*muR
-                        q_prim_vf(bub_idx%fullmom(i, 0, 1))%sf(j, k, l) = muV
-                        q_prim_vf(bub_idx%fullmom(i, 2, 0))%sf(j, k, l) = exp((sigR**2)*2._wp)*(muR**2)
-                        q_prim_vf(bub_idx%fullmom(i, 1, 1))%sf(j, k, l) = exp((sigR**2)/2._wp)*muR*muV
-                        q_prim_vf(bub_idx%fullmom(i, 0, 2))%sf(j, k, l) = muV**2 + sigV**2
+                        q_prim_vf(bub_idx%fullmom(i, 1, 0))%sf(j, k, l) = exp((sigR**2)/2._wp)*muR *(bub_refs%R0ref/bub_refs%x0)
+                        q_prim_vf(bub_idx%fullmom(i, 0, 1))%sf(j, k, l) = muV *(bub_refs%ub0/bub_refs%u0)
+                        q_prim_vf(bub_idx%fullmom(i, 2, 0))%sf(j, k, l) = exp((sigR**2)*2._wp)*(muR**2) *(bub_refs%R0ref/bub_refs%x0)**2._wp
+                        q_prim_vf(bub_idx%fullmom(i, 1, 1))%sf(j, k, l) = exp((sigR**2)/2._wp)*muR*muV *(bub_refs%R0ref/bub_refs%x0)*(bub_refs%ub0/bub_refs%u0)
+                        q_prim_vf(bub_idx%fullmom(i, 0, 2))%sf(j, k, l) = (muV**2 + sigV**2) *(bub_refs%ub0/bub_refs%u0)**2._wp
                     end if
                 else
                     q_prim_vf(bub_idx%rs(i))%sf(j, k, l) = muR
@@ -643,11 +654,17 @@ contains
                         q_prim_vf(bub_idx%ps(i))%sf(j, k, l) = patch_icpp(patch_id)%p0
                         q_prim_vf(bub_idx%ms(i))%sf(j, k, l) = patch_icpp(patch_id)%m0
                     end if
-
                 end if
             end do
 
             if (adv_n) then
+                if (icsg) then
+                    if (icsg_patch == patch_id) then
+                        q_prim_vf(alf_idx)%sf(j, k, l) = icsg_vf
+                    else
+                        q_prim_vf(alf_idx)%sf(j, k, l) = 1.e-10_wp
+                    end if
+                end if
                 ! Initialize number density
                 R3bar = 0._wp
                 do i = 1, nb
@@ -657,7 +674,7 @@ contains
             end if
         end if
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. icsg) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1

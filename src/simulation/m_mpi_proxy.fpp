@@ -99,7 +99,7 @@ contains
             & 'bc_y%beg', 'bc_y%end', 'bc_z%beg', 'bc_z%end',  'fd_order',     &
             & 'num_probes', 'num_integrals', 'bubble_model', 'thermal',        &
             & 'num_source', 'relax_model', 'num_ibs', 'n_start',    &
-            & 'num_bc_patches', 'num_igr_iters', 'num_igr_warm_start_iters', &
+            & 'num_bc_patches', 'num_igr_iters', 'num_igr_warm_start_iters',   &
             & 'adap_dt_max_iters' ]
             call MPI_BCAST(${VAR}$, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         #:endfor
@@ -116,7 +116,7 @@ contains
             & 'bc_z%grcbc_in', 'bc_z%grcbc_out', 'bc_z%grcbc_vel_out',          &
             & 'cfl_adap_dt', 'cfl_const_dt', 'cfl_dt', 'surface_tension',       &
             & 'shear_stress', 'bulk_stress', 'bubbles_lagrange',                &
-            & 'hyperelasticity', 'down_sample', 'int_comp', 'sph_coord' ]
+            & 'hyperelasticity', 'down_sample', 'int_comp', 'icsg', 'sph_coord' ]
             call MPI_BCAST(${VAR}$, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 
@@ -130,6 +130,12 @@ contains
             #:endfor
         end if
 
+        if (bubbles_euler .or. bubbles_lagrange) then
+            #:for VAR in [ 'rho0','x0', 'u0', 'p0', 'T0', 'Tw', 'rhol0', 'R0ref', 'ub0', 'p0eq']
+                call MPI_BCAST(bub_refs%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
+            #:endfor
+        end if
+        
         if (bubbles_lagrange) then
             #:for VAR in [ 'heatTransfer_model', 'massTransfer_model', 'pressure_corrector', &
                 & 'write_bubbles', 'write_bubbles_stats']
@@ -140,13 +146,12 @@ contains
                 call MPI_BCAST(lag_params%${VAR}$, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
             #:endfor
 
-            #:for VAR in [ 'c0', 'rho0', 'T0', 'x0', 'diffcoefvap', 'epsilonb','charwidth', &
-                & 'valmaxvoid', 'Thost']
+            #:for VAR in [ 'epsilonb','charwidth', 'valmaxvoid']
                 call MPI_BCAST(lag_params%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
         end if
 
-        #:for VAR in [ 'dt','weno_eps','teno_CT','pref','rhoref','R0ref','Web','Ca', 'sigma', &
+        #:for VAR in [ 'dt','weno_eps','teno_CT','Web','Ca','sigma', &
             & 'Re_inv', 'poly_sigma', 'palpha_eps', 'ptgalpha_eps', 'pi_fac',    &
             & 'bc_x%vb1','bc_x%vb2','bc_x%vb3','bc_x%ve1','bc_x%ve2','bc_x%ve2', &
             & 'bc_y%vb1','bc_y%vb2','bc_y%vb3','bc_y%ve1','bc_y%ve2','bc_y%ve3', &
@@ -189,7 +194,7 @@ contains
 
         do i = 1, num_fluids_max
             #:for VAR in [ 'gamma','pi_inf','mul0','ss','pv','gamma_v','M_v',  &
-                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp' ]
+                & 'mu_v','k_v', 'cp_v','G', 'cv', 'qv', 'qvp', 'D' ]
                 call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
             call MPI_BCAST(fluid_pp(i)%Re(1), 2, mpi_p, 0, MPI_COMM_WORLD, ierr)

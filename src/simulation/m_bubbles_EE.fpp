@@ -167,6 +167,10 @@ contains
         real(wp), dimension(num_fluids) :: myalpha, myalpha_rho
         real(wp) :: nbub !< Bubble number density
 
+        real(wp) :: fpbdot, fCp, fCpbw
+        real(wp) :: fRho, fR, fV, fR0, fC
+        real(wp) :: tmp1, tmp2, cdot_star, f_rddot_KM1
+
         integer :: i, j, k, l, q, ii !< Loop variables
 
         integer :: adap_dt_stop_max, adap_dt_stop !< Fail-safe exit if max iteration count reached
@@ -231,84 +235,18 @@ contains
                     $:GPU_LOOP(parallelism='[seq]')
                     do q = 1, nb
 
-                        $:GPU_LOOP(parallelism='[seq]')
-                        do ii = 1, num_fluids
-                            myalpha_rho(ii) = q_cons_vf(ii)%sf(j, k, l)
-                            myalpha(ii) = q_cons_vf(advxb + ii - 1)%sf(j, k, l)
-                        end do
-
-                        myRho = 0._wp
-                        n_tait = 0._wp
-                        B_tait = 0._wp
-
-                        if (mpp_lim .and. (num_fluids > 2)) then
-                            $:GPU_LOOP(parallelism='[seq]')
-                            do ii = 1, num_fluids
-                                myRho = myRho + myalpha_rho(ii)
-                                n_tait = n_tait + myalpha(ii)*gammas(ii)
-                                B_tait = B_tait + myalpha(ii)*pi_infs(ii)
-                            end do
-                        else if (num_fluids > 2) then
-                            $:GPU_LOOP(parallelism='[seq]')
-                            do ii = 1, num_fluids - 1
-                                myRho = myRho + myalpha_rho(ii)
-                                n_tait = n_tait + myalpha(ii)*gammas(ii)
-                                B_tait = B_tait + myalpha(ii)*pi_infs(ii)
-                            end do
-                        else
-                            myRho = myalpha_rho(1)
-                            n_tait = gammas(1)
-                            B_tait = pi_infs(1)/pi_fac
-                        end if
-
+                        n_tait = gammas(1)
+                        B_tait = pi_infs(1)/pi_fac
                         n_tait = 1._wp/n_tait + 1._wp !make this the usual little 'gamma'
                         B_tait = B_tait*(n_tait - 1)/n_tait ! make this the usual pi_inf
 
-                        myRho = q_prim_vf(1)%sf(j, k, l)
+                        myRho = max(q_prim_vf(1)%sf(j, k, l), sgm_eps)
                         myP = q_prim_vf(E_idx)%sf(j, k, l)
                         alf = q_prim_vf(alf_idx)%sf(j, k, l)
                         myR = q_prim_vf(rs(q))%sf(j, k, l)
                         myV = q_prim_vf(vs(q))%sf(j, k, l)
 
-                        if (.not. polytropic) then
-                            pb_local = q_prim_vf(ps(q))%sf(j, k, l)
-                            mv_local = q_prim_vf(ms(q))%sf(j, k, l)
-                            call s_bwproperty(pb_local, q, chi_vw, k_mw, rho_mw)
-                            call s_vflux(myR, myV, pb_local, mv_local, q, vflux)
-                            pbdot = f_bpres_dot(vflux, myR, myV, pb_local, mv_local, q)
-
-                            bub_p_src(j, k, l, q) = nbub*pbdot
-                            bub_m_src(j, k, l, q) = nbub*vflux*4._wp*pi*(myR**2._wp)
-                        else
-                            pb_local = 0._wp; mv_local = 0._wp; vflux = 0._wp; pbdot = 0._wp
-                        end if
-
-                        ! Adaptive time stepping
-                        adap_dt_stop = 0
-
-                        if (adap_dt) then
-
-                            call s_advance_step(myRho, myP, myR, myV, R0(q), &
-                                                pb_local, pbdot, alf, n_tait, B_tait, &
-                                                bub_adv_src(j, k, l), divu_in%sf(j, k, l), &
-                                                dmBub_id, dmMass_v, dmMass_n, dmBeta_c, &
-                                                dmBeta_t, dmCson, adap_dt_stop)
-
-                            q_cons_vf(rs(q))%sf(j, k, l) = nbub*myR
-                            q_cons_vf(vs(q))%sf(j, k, l) = nbub*myV
-
-                        else
-                            rddot = f_rddot(myRho, myP, myR, myV, R0(q), &
-                                            pb_local, pbdot, alf, n_tait, B_tait, &
-                                            bub_adv_src(j, k, l), divu_in%sf(j, k, l), &
-                                            dmCson)
-                            bub_v_src(j, k, l, q) = nbub*rddot
-                            bub_r_src(j, k, l, q) = q_cons_vf(vs(q))%sf(j, k, l)
-                        end if
-
-                        adap_dt_stop_max = max(adap_dt_stop_max, adap_dt_stop)
-
-                        if (alf < 1.e-11_wp) then
+                        if (alf < small_alf) then
                             bub_adv_src(j, k, l) = 0._wp
                             bub_r_src(j, k, l, q) = 0._wp
                             bub_v_src(j, k, l, q) = 0._wp
@@ -316,8 +254,49 @@ contains
                                 bub_p_src(j, k, l, q) = 0._wp
                                 bub_m_src(j, k, l, q) = 0._wp
                             end if
+                        else
+                            if (.not. polytropic) then
+                                pb_local = q_prim_vf(ps(q))%sf(j, k, l)
+                                mv_local = q_prim_vf(ms(q))%sf(j, k, l)
+                                call s_bwproperty(pb_local, q, chi_vw, k_mw, rho_mw)
+                                call s_vflux(myR, myV, pb_local, mv_local, q, vflux)
+                                pbdot = f_bpres_dot(vflux, myR, myV, pb_local, mv_local, q)
+
+                                bub_p_src(j, k, l, q) = nbub*pbdot
+                                bub_m_src(j, k, l, q) = nbub*vflux*4._wp*pi*(myR**2._wp)
+                            else
+                                pb_local = 0._wp; mv_local = 0._wp; vflux = 0._wp; pbdot = 0._wp
+                            end if
+
+                            ! Adaptive time stepping
+                            adap_dt_stop = 0
+
+                            if (adap_dt) then
+
+                                call s_advance_step(myRho, myP, myR, myV, R0(q), &
+                                                    pb_local, pbdot, alf, n_tait, B_tait, &
+                                                    bub_adv_src(j, k, l), divu_in%sf(j, k, l), &
+                                                    dmBub_id, dmMass_v, dmMass_n, dmBeta_c, &
+                                                    dmBeta_t, dmCson, adap_dt_stop)
+
+                                q_cons_vf(rs(q))%sf(j, k, l) = nbub*myR
+                                q_cons_vf(vs(q))%sf(j, k, l) = nbub*myV
+
+                            else
+                                rddot = f_rddot(myRho, myP, myR, myV, R0(q), &
+                                                pb_local, pbdot, alf, n_tait, B_tait, &
+                                                bub_adv_src(j, k, l), divu_in%sf(j, k, l), &
+                                                dmCson)
+                                bub_v_src(j, k, l, q) = nbub*rddot
+                                bub_r_src(j, k, l, q) = q_cons_vf(vs(q))%sf(j, k, l)
+                            end if
+
+                            adap_dt_stop_max = max(adap_dt_stop_max, adap_dt_stop)
                         end if
                     end do
+                    if (icsg) then
+                        bub_adv_src(j, k, l) = 0._wp
+                    end if
                 end do
             end do
         end do
@@ -330,7 +309,7 @@ contains
                 do q = 0, n
                     do i = 0, m
                         rhs_vf(alf_idx)%sf(i, q, l) = rhs_vf(alf_idx)%sf(i, q, l) + bub_adv_src(i, q, l)
-                        if (num_fluids > 1) rhs_vf(advxb)%sf(i, q, l) = &
+                        if (num_fluids > 1 .and. .not. icsg) rhs_vf(advxb)%sf(i, q, l) = &
                             rhs_vf(advxb)%sf(i, q, l) - bub_adv_src(i, q, l)
                         $:GPU_LOOP(parallelism='[seq]')
                         do k = 1, nb

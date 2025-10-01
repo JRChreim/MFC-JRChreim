@@ -80,6 +80,9 @@ module m_global_parameters
 
     ! Simulation Algorithm Parameters
     integer :: model_eqns            !< Multicomponent flow model
+    logical :: icsg
+    real(wp) :: icsg_vf
+    integer :: icsg_patch
     logical :: relax                 !< activate phase change
     integer :: relax_model           !< Relax Model
     real(wp) :: palpha_eps           !< trigger parameter for the p relaxation procedure, phase change model
@@ -105,6 +108,7 @@ module m_global_parameters
     logical :: igr                   !< Use information geometric regularization
     integer :: igr_order             !< IGR reconstruction order
     logical, parameter :: chemistry = .${chemistry}$. !< Chemistry modeling
+    real(wp) :: R0hyper
 
     ! Annotations of the structure, i.e. the organization, of the state vectors
     type(int_bounds_info) :: cont_idx              !< Indexes of first & last continuity eqns.
@@ -215,19 +219,18 @@ module m_global_parameters
     !! in the flow. These include the stiffened gas equation of state parameters,
     !! the Reynolds numbers and the Weber numbers.
 
-    real(wp) :: rhoref, pref !< Reference parameters for Tait EOS
-
     !> @name Bubble modeling
     !> @{
     integer :: nb
-    real(wp) :: R0ref
-    real(wp) :: Ca, Web, Re_inv
+    real(wp) :: Eu, Ca, Web, Re_inv
     real(wp), dimension(:), allocatable :: weight, R0
+    logical :: bub_ss, bub_visc
     logical :: bubbles_euler
     logical :: qbmm      !< Quadrature moment method
     integer :: nmom  !< Number of carried moments
     real(wp) :: sigR, sigV, rhoRV !< standard deviations in R/V
     logical :: adv_n !< Solve the number density equation and compute alpha from number density
+    type(bubbles_ref_scales) :: bub_refs     !< Bubble reference scales
     !> @}
 
     !> @name Immersed Boundaries
@@ -253,7 +256,7 @@ module m_global_parameters
     integer :: thermal  !1 = adiabatic, 2 = isotherm, 3 = transfer
     real(wp) :: R_n, R_v, phi_vn, phi_nv, Pe_c, Tw, pv, M_n, M_v
     real(wp), dimension(:), allocatable :: k_n, k_v, pb0, mass_n0, mass_v0, Pe_T
-    real(wp), dimension(:), allocatable :: Re_trans_T, Re_trans_c, Im_trans_T, Im_trans_c, omegaN
+    real(wp), dimension(:), allocatable :: Re_trans_T, Re_trans_c, Im_trans_T, Im_trans_c
     real(wp) :: mul0, ss, gamma_v, mu_v
     real(wp) :: gamma_m, gamma_n, mu_n
     real(wp) :: poly_sigma
@@ -346,6 +349,9 @@ contains
 
         ! Simulation algorithm parameters
         model_eqns = dflt_int
+        icsg = .false.
+        icsg_vf = dflt_real
+        icsg_patch = dflt_int
         relax = .false.
         relax_model = dflt_int
         palpha_eps = dflt_real
@@ -364,6 +370,7 @@ contains
         b_size = dflt_int
         tensor_size = dflt_int
         cont_damage = .false.
+        R0hyper = dflt_real
 
         mhd = .false.
         relativity = .false.
@@ -476,22 +483,32 @@ contains
             patch_bc(i)%radius = dflt_real
         end do
 
-        ! Tait EOS
-        rhoref = dflt_real
-        pref = dflt_real
-
         ! Bubble modeling
         bubbles_euler = .false.
         polytropic = .true.
         polydisperse = .false.
 
+        bub_refs%rho0 = dflt_real
+        bub_refs%x0 = dflt_real
+        bub_refs%u0 = dflt_real
+        bub_refs%p0 = dflt_real
+        bub_refs%T0 = dflt_real
+        bub_refs%Tw = dflt_real
+        bub_refs%R0ref = dflt_real
+        bub_refs%ub0 = dflt_real
+        bub_refs%p0eq = dflt_real
+        bub_refs%rescale = .false.
+
         thermal = dflt_int
-        R0ref = dflt_real
         nb = dflt_int
 
+        Eu = dflt_real
         Ca = dflt_real
         Re_inv = dflt_real
         Web = dflt_real
+        bub_ss = .true.
+        bub_visc = .true.
+
         poly_sigma = dflt_real
         surface_tension = .false.
 
@@ -558,6 +575,7 @@ contains
             fluid_pp(i)%cv = 0._wp
             fluid_pp(i)%qv = 0._wp
             fluid_pp(i)%qvp = 0._wp
+            fluid_pp(i)%D = dflt_real
             fluid_pp(i)%G = 0._wp
         end do
 
@@ -632,7 +650,12 @@ contains
             sys_size = adv_idx%end
 
             if (bubbles_euler) then
-                alf_idx = adv_idx%end
+                if (icsg) then
+                    alf_idx = adv_idx%end + 1
+                    sys_size = sys_size + 1
+                else
+                    alf_idx = adv_idx%end
+                end if
             else
                 alf_idx = 1
             end if
@@ -702,27 +725,6 @@ contains
                 else if (nb < 1) then
                     stop 'Invalid value of nb'
                 end if
-
-                !Initialize pref,rhoref for polytropic qbmm (done in s_initialize_nonpoly for non-polytropic)
-                if (.not. qbmm) then
-                    if (polytropic) then
-                        rhoref = 1._wp
-                        pref = 1._wp
-                    end if
-                end if
-
-                !Initialize pb0,pv,pref,rhoref for polytropic qbmm (done in s_initialize_nonpoly for non-polytropic)
-                if (qbmm) then
-                    if (polytropic) then
-                        allocate (pb0(nb))
-                        if ((f_is_default(Web))) then
-                            pb0 = pref
-                            pb0 = pb0/pref
-                            pref = 1._wp
-                        end if
-                        rhoref = 1._wp
-                    end if
-                end if
             end if
 
             if (mhd) then
@@ -791,19 +793,6 @@ contains
                         bub_idx%ms(i) = bub_idx%ps(i) + 1
                     end if
                 end do
-
-                if (nb == 1) then
-                    weight(:) = 1._wp
-                    R0(:) = 1._wp
-                else if (nb < 1) then
-                    stop 'Invalid value of nb'
-                end if
-
-                if (polytropic) then
-                    rhoref = 1._wp
-                    pref = 1._wp
-                end if
-
             end if
         end if
 

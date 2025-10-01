@@ -143,53 +143,9 @@ contains
         if (adap_dt .and. f_is_default(adap_dt_tol)) adap_dt_tol = dflt_adap_dt_tol
 
         ! Starting bubbles
-        call s_start_lagrange_inputs()
         call s_read_input_bubbles(q_cons_vf)
 
     end subroutine s_initialize_bubbles_EL_module
-
-    !> The purpose of this procedure is to start lagrange bubble parameters applying nondimensionalization if needed
-    impure subroutine s_start_lagrange_inputs()
-
-        integer :: id_bubbles, id_host
-        real(wp) :: rho0, c0, T0, x0, p0
-
-        id_bubbles = num_fluids
-        id_host = num_fluids - 1
-
-        !Reference values
-        rho0 = lag_params%rho0
-        c0 = lag_params%c0
-        T0 = lag_params%T0
-        x0 = lag_params%x0
-        p0 = rho0*c0*c0
-
-        !Update inputs
-        Tw = lag_params%Thost/T0
-        pv = fluid_pp(id_host)%pv/p0
-        gamma_v = fluid_pp(id_bubbles)%gamma_v
-        gamma_n = fluid_pp(id_host)%gamma_v
-        k_vl = fluid_pp(id_bubbles)%k_v*(T0/(x0*rho0*c0*c0*c0))
-        k_nl = fluid_pp(id_host)%k_v*(T0/(x0*rho0*c0*c0*c0))
-        cp_v = fluid_pp(id_bubbles)%cp_v*(T0/(c0*c0))
-        cp_n = fluid_pp(id_host)%cp_v*(T0/(c0*c0))
-        R_v = (R_uni/fluid_pp(id_bubbles)%M_v)*(T0/(c0*c0))
-        R_n = (R_uni/fluid_pp(id_host)%M_v)*(T0/(c0*c0))
-        lag_params%diffcoefvap = lag_params%diffcoefvap/(x0*c0)
-        ss = fluid_pp(id_host)%ss/(rho0*x0*c0*c0)
-        mul0 = fluid_pp(id_host)%mul0/(rho0*x0*c0)
-
-        ! Parameters used in bubble_model
-        Web = 1._wp/ss
-        Re_inv = mul0
-
-        ! Need improvements to accept polytropic gas compression, isothermal and adiabatic thermal models, and
-        ! the Gilmore and RP bubble models.
-        polytropic = .false.    ! Forcing no polytropic model
-        thermal = 3             ! Forcing constant transfer coefficient model based on Preston et al., 2007
-        ! If Keller-Miksis model is not selected, then no radial motion
-
-    end subroutine s_start_lagrange_inputs
 
     !> The purpose of this procedure is to obtain the initial bubbles' information
         !! @param q_cons_vf Conservative variables
@@ -357,7 +313,7 @@ contains
         gas_p(bub_id, 1) = pliq + 2._wp*(1._wp/Web)/bub_R0(bub_id)
         if (.not. f_approx_equal((1._wp/Web), 0._wp)) then
             pcrit = pv - 4._wp*(1._wp/Web)/(3._wp*sqrt(3._wp*gas_p(bub_id, 1)*bub_R0(bub_id)**3._wp/(2._wp*(1._wp/Web))))
-            pref = gas_p(bub_id, 1)
+            ! pref = gas_p(bub_id, 1)
         else
             pcrit = 0._wp
         end if
@@ -387,9 +343,10 @@ contains
         call s_transcoeff(1._wp, PeT, Re_trans, Im_trans)
         gas_betaT(bub_id) = Re_trans*(heatflag)*kparticle
 
-        PeG = bub_R0(bub_id)**2._wp*omegaN_local/lag_params%diffcoefvap
+        PeG = bub_R0(bub_id)**2._wp*omegaN_local*Pe_c
+
         call s_transcoeff(1._wp, PeG, Re_trans, Im_trans)
-        gas_betaC(bub_id) = Re_trans*(massflag)*lag_params%diffcoefvap
+        gas_betaC(bub_id) = Re_trans*(massflag)/Pe_c
 
         if (gas_mg(bub_id) <= 0._wp) then
             call s_mpi_abort("Negative gas mass in the bubble, check if the bubble is in the domain.")

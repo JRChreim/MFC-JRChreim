@@ -123,7 +123,6 @@ contains
             dimension(sys_size), &
             intent(inout) :: q_cons_vf
 
-
         if (.not. parallel_io) then
             call s_read_serial_data_files(q_cons_vf)
         else
@@ -163,15 +162,14 @@ contains
             fd_order, probe, num_probes, t_step_old, &
             alt_soundspeed, mixture_err, weno_Re_flux, &
             null_weights, precision, parallel_io, cyl_coord, &
-            rhoref, pref, bubbles_euler, bubble_model, &
-            R0ref, chem_params, &
+            bubbles_euler, bubble_model, bub_ss, bub_visc, &
+            chem_params, &
 #:if not MFC_CASE_OPTIMIZATION
             nb, mapped_weno, wenoz, teno, wenoz_q, weno_order, &
             num_fluids, mhd, relativity, igr_order, viscous, &
             igr_iter_solver, igr, igr_pres_lim, &
             recon_type, muscl_order, muscl_lim, &
 #:endif
-            Ca, Web, Re_inv, &
             acoustic_source, acoustic, num_source, &
             polytropic, thermal, &
             integral, integral_wrt, num_integrals, &
@@ -184,12 +182,12 @@ contains
             k_x, k_y, k_z, w_x, w_y, w_z, p_x, p_y, p_z, &
             g_x, g_y, g_z, n_start, t_save, t_stop, &
             cfl_adap_dt, cfl_const_dt, cfl_target, &
-            surface_tension, bubbles_lagrange, lag_params, &
-            hyperelasticity, R0ref, num_bc_patches, Bx0, powell, &
+            surface_tension, bubbles_lagrange, lag_params, bub_refs, &
+            hyperelasticity, num_bc_patches, Bx0, powell, &
             cont_damage, tau_star, cont_damage_s, alpha_bar, &
             alf_factor, num_igr_iters, num_igr_warm_start_iters, &
             int_comp, ic_eps, ic_beta, nv_uvm_out_of_core, &
-            nv_uvm_igr_temps_on_gpu, nv_uvm_pref_gpu, down_sample, &
+            nv_uvm_igr_temps_on_gpu, nv_uvm_pref_gpu, down_sample, icsg, &
             sph_coord, under_relax
 
         ! Checking that an input file has been provided by the user. If it
@@ -1119,7 +1117,8 @@ contains
                     wall_time
                     
                     if (relax) then
-                      !$acc update host(max_iter_pc_ts)
+                      $:GPU_UPDATE(device='[max_iter_pc_ts]')
+                      ! !$acc update host(max_iter_pc_ts)
                       print *, 'maximum # iterations for phase-change', max_iter_pc_ts
                 end if
             end if
@@ -1133,7 +1132,8 @@ contains
                     wall_time_avg, &
                     wall_time
                     if (relax) then
-                      !$acc update host(max_iter_pc_ts)
+                      $:GPU_UPDATE(device='[max_iter_pc_ts]')
+                      ! !$acc update host(max_iter_pc_ts)
                       print *, 'maximum # iterations for phase-change', max_iter_pc_ts
                     end if
             end if
@@ -1310,21 +1310,9 @@ contains
         real(wp) :: temp1, temp2, temp3, temp4
 
         call s_initialize_global_parameters_module()
-        !Quadrature weights and nodes for polydisperse simulations
-        if (bubbles_euler .and. nb > 1) then
-            call s_simpson(weight, R0)
+        if (bubbles_euler .or. bubbles_lagrange) then
+          call s_initialize_bubbles_model()
         end if
-        !Initialize variables for non-polytropic (Preston) model
-        if (bubbles_euler .and. .not. polytropic) then
-            call s_initialize_nonpoly()
-        end if
-        !Initialize pb based on surface tension for qbmm (polytropic)
-        if (qbmm .and. polytropic .and. (.not. f_is_default(Web))) then
-            pb0(:) = pref + 2._wp*fluid_pp(1)%ss/(R0(:)*R0ref)
-            pb0 = pb0/pref
-            pref = 1._wp
-        end if
-
         call s_initialize_mpi_common_module()
         call s_initialize_mpi_proxy_module()
         call s_initialize_variables_conversion_module()
@@ -1502,13 +1490,13 @@ contains
 
         $:GPU_UPDATE(device='[chem_params]')
         
-        $:GPU_UPDATE(device='[nb,R0ref,Ca,Web,Re_inv,weight,R0, &
+        $:GPU_UPDATE(device='[nb,Eu,Ca,Web,Re_inv,weight,R0, &
             & bubbles_euler,polytropic,polydisperse,qbmm, &
             & ptil,bubble_model,thermal,poly_sigma,adv_n,adap_dt, &
             & adap_dt_tol,adap_dt_max_iters,n_idx,pi_fac,low_Mach]')
         $:GPU_UPDATE(device='[R_n,R_v,phi_vn,phi_nv,Pe_c,Tw,pv,M_n, &
             & M_v,k_n,k_v,pb0,mass_n0,mass_v0,Pe_T,Re_trans_T, &
-            & Re_trans_c,Im_trans_T,Im_trans_c,omegaN,mul0,ss, &
+            & Re_trans_c,Im_trans_T,Im_trans_c,mul0,ss, &
             & gamma_v,mu_v,gamma_m,gamma_n,mu_n,gam]')
 
         $:GPU_UPDATE(device='[acoustic_source, num_source]')

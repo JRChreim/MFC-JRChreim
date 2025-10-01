@@ -38,6 +38,7 @@ contains
         ! Run by all three stages
         call s_check_inputs_simulation_domain
         call s_check_inputs_model_eqns_and_num_fluids
+        call s_check_inputs_bubbles_general
         if (igr) then
             call s_check_inputs_igr
         else
@@ -114,13 +115,12 @@ contains
         @:PROHIBIT(bubbles_euler .and. nb < 1, "The Ensemble-Averaged Bubble Model requires nb >= 1")
         @:PROHIBIT(bubbles_euler .and. polydisperse .and. (nb == 1), "Polydisperse bubble dynamics requires nb > 1")
         @:PROHIBIT(bubbles_euler .and. polydisperse .and. (mod(nb, 2) == 0), "nb must be odd")
-        @:PROHIBIT(bubbles_euler .and. (.not. polytropic) .and. f_is_default(R0ref), "R0ref must be set if using bubbles_euler with polytropic = .false.")
         @:PROHIBIT(bubbles_euler .and. nb == dflt_int, "nb must be set if using bubbles_euler")
         @:PROHIBIT(bubbles_euler .and. thermal > 3)
         @:PROHIBIT(bubbles_euler .and. model_eqns == 3, "Bubble models untested with 6-equation model (model_eqns = 3)")
         @:PROHIBIT(bubbles_euler .and. model_eqns == 1, "Bubble models untested with pi-gamma model (model_eqns = 1)")
-        @:PROHIBIT(bubbles_euler .and. model_eqns == 4 .and. f_is_default(rhoref), "rhoref must be set if using bubbles_euler with model_eqns = 4")
-        @:PROHIBIT(bubbles_euler .and. model_eqns == 4 .and. f_is_default(pref), "pref must be set if using bubbles_euler with model_eqns = 4")
+        ! @:PROHIBIT(bubbles_euler .and. model_eqns == 4 .and. f_is_default(rhoref), "rhoref must be set if using bubbles_euler with model_eqns = 4")
+        ! @:PROHIBIT(bubbles_euler .and. model_eqns == 4 .and. f_is_default(pref), "pref must be set if using bubbles_euler with model_eqns = 4")
         @:PROHIBIT(bubbles_euler .and. model_eqns == 4 .and. num_fluids /= 1, "4-equation model (model_eqns = 4) is single-component and requires num_fluids = 1")
         @:PROHIBIT(bubbles_euler .and. cyl_coord, "Bubble models untested in cylindrical coordinates")
     end subroutine s_check_inputs_bubbles_euler
@@ -133,15 +133,21 @@ contains
         @:PROHIBIT(polydisperse .and. poly_sigma <= 0)
         @:PROHIBIT(qbmm .and. (.not. bubbles_euler), "QBMM requires the bubbles_euler flag to be set")
         @:PROHIBIT(qbmm .and. nnode /= 4)
+        @:PROHIBIT(qbmm .and. (.not. bub_ss))
+        @:PROHIBIT(qbmm .and. (.not. bub_visc))
     end subroutine s_check_inputs_qbmm_and_polydisperse
 
     !> Checks constraints on the adv_n flag.
         !! Called by s_check_inputs_common for pre-processing and simulation
     impure subroutine s_check_inputs_adv_n
         @:PROHIBIT(adv_n .and. (.not. bubbles_euler))
-        @:PROHIBIT(adv_n .and. num_fluids /= 1)
         @:PROHIBIT(adv_n .and. qbmm)
     end subroutine s_check_inputs_adv_n
+
+    impure subroutine s_check_inputs_icsg
+        @:PROHIBIT(icsg .and. .not. adv_n)
+        @:PROHIBIT(icsg .and. num_fluids /= 2)
+    end subroutine s_check_inputs_icsg
 
     !> Checks constraints on the hypoelasticity parameters.
         !! Called by s_check_inputs_common for pre-processing and simulation
@@ -186,6 +192,26 @@ contains
     end subroutine s_check_inputs_ibm
 
 #endif
+
+    !> Checks constraints on the reference scale parameters for sub-grid bubble models.
+        !! Called by s_check_inputs_common for all three stages
+    impure subroutine s_check_inputs_bubbles_general
+        @:PROHIBIT((bubbles_euler .or. bubbles_lagrange) .and. f_is_default(bub_refs%rho0), &
+                    "bub_refs%rho0 must be set for sub-grid bubble models")
+        @:PROHIBIT((bubbles_euler .or. bubbles_lagrange) .and. f_is_default(bub_refs%x0), &
+                    "bub_refs%x0 must be set for sub-grid bubble models")
+        @:PROHIBIT((bubbles_euler .or. bubbles_lagrange) .and. &
+                    ((f_is_default(bub_refs%u0) .and. f_is_default(bub_refs%p0)) .or. &
+                    (.not. f_is_default(bub_refs%u0) .and. .not. f_is_default(bub_refs%p0))), &
+                    "Only one of bub_refs%u0 or bub_refs%p0 must be set for sub-grid bubble models")
+        @:PROHIBIT(bubbles_euler .and. &
+                    ((f_is_default(bub_refs%ub0) .and. f_is_default(bub_refs%p0eq)) .or. & 
+                    (.not. f_is_default(bub_refs%ub0) .and. .not. f_is_default(bub_refs%p0eq))), & 
+                    "Only one of bub_refs%ub0 or bub_refs%p0eq must be set for sub-grid bubble models")
+        @:PROHIBIT((bubbles_euler .or. bubbles_lagrange) .and. &
+                    (.not. polytropic .and. f_is_default(bub_refs%T0)), &
+                    "For non-polytropic, bub_refs%T0 must be set.")
+    end subroutine s_check_inputs_bubbles_general
 
     !> Checks constraints on dimensionality and the number of cells for the grid.
         !! Called by s_check_inputs_common for all three stages

@@ -246,6 +246,12 @@ contains
                         idwbuff(2)%beg:idwbuff(2)%end, &
                         idwbuff(3)%beg:idwbuff(3)%end))
                     @:ACC_SETUP_SFs(q_prim_vf(n_idx))
+                    if (icsg) then
+                        @:ALLOCATE(q_prim_vf(alf_idx)%sf(idwbuff(1)%beg:idwbuff(1)%end, &
+                            idwbuff(2)%beg:idwbuff(2)%end, &
+                            idwbuff(3)%beg:idwbuff(3)%end))
+                        @:ACC_SETUP_SFs(q_prim_vf(alf_idx))
+                    end if
                 end if
             end if
 
@@ -1298,8 +1304,6 @@ contains
     impure subroutine s_adaptive_dt_bubble(stage)
 
         integer, intent(in) :: stage
-
-        type(vector_field) :: gm_alpha_qp
 
         call s_convert_conservative_to_primitive_variables( &
             q_cons_ts(1)%vf, &

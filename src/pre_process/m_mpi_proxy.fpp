@@ -47,7 +47,7 @@ contains
             & 'perturb_sph_fluid', 'num_patches', 'thermal', 'nb', 'dist_type',&
             & 'relax_model', 'num_ibs', 'n_start', 'elliptic_smoothing_iters', &
             & 'num_bc_patches', 'mixlayer_perturb_nk', 'recon_type',           &
-            & 'muscl_order', 'igr_order' ]
+            & 'muscl_order', 'igr_order', 'icsg_patch' ]
             call MPI_BCAST(${VAR}$, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         #:endfor
 
@@ -59,7 +59,7 @@ contains
             & 'cfl_const_dt', 'cfl_dt', 'surface_tension',                     &
             & 'hyperelasticity', 'pre_stress', 'elliptic_smoothing', 'viscous',&
             & 'bubbles_lagrange', 'bc_io', 'mhd', 'relativity', 'cont_damage', &
-            & 'igr', 'down_sample', 'sph_coord']
+            & 'igr', 'down_sample', 'icsg', 'sph_coord']
             call MPI_BCAST(${VAR}$, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
         #:endfor
         call MPI_BCAST(fluid_rho(1), num_fluids_max, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
@@ -68,12 +68,18 @@ contains
             & 'y_domain%end', 'z_domain%beg', 'z_domain%end', 'a_x', 'a_y',    &
             & 'a_z', 'x_a', 'x_b', 'y_a', 'y_b', 'z_a', 'z_b', 'bc_x%beg',     &
             & 'bc_x%end', 'bc_y%beg', 'bc_y%end', 'bc_z%beg', 'bc_z%end',      &
-            & 'perturb_flow_mag', 'pref', 'rhoref', 'poly_sigma', 'R0ref',     &
+            & 'perturb_flow_mag', 'poly_sigma', 'R0hyper',                     &
             & 'Web', 'Ca', 'Re_inv', 'sigR', 'sigV', 'rhoRV', 'palpha_eps',    &
             & 'ptgalpha_eps', 'sigma', 'pi_fac', 'mixlayer_vel_coef', 'Bx0',   &
-            & 'mixlayer_perturb_k0', 'under_relax']
+            & 'mixlayer_perturb_k0', 'icsg_vf', 'under_relax']
             call MPI_BCAST(${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
         #:endfor
+
+        if (bubbles_euler .or. bubbles_lagrange) then
+            #:for VAR in [ 'rho0','x0', 'u0', 'p0', 'T0', 'Tw', 'R0ref', 'ub0', 'p0eq']
+                call MPI_BCAST(bub_refs%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
+            #:endfor
+        end if
 
         do i = 1, num_bc_patches_max
             #:for VAR in ['geometry', 'type', 'dir', 'loc']
@@ -140,7 +146,7 @@ contains
         ! Fluids physical parameters
         do i = 1, num_fluids_max
             #:for VAR in [ 'gamma','pi_inf','mul0','ss','pv','gamma_v','M_v',  &
-                & 'mu_v','k_v', 'G', 'cv', 'qv', 'qvp' ]
+                & 'mu_v','k_v', 'G', 'cv', 'qv', 'qvp', 'D' ]
                 call MPI_BCAST(fluid_pp(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
         end do

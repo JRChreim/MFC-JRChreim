@@ -17,6 +17,7 @@ module m_helper
     private; 
     public :: s_comp_n_from_prim, &
               s_comp_n_from_cons, &
+              s_initialize_bubbles_model, &
               s_initialize_nonpoly, &
               s_simpson, &
               s_transcoeff, &
@@ -105,110 +106,221 @@ contains
 
     end subroutine s_print_2D_array
 
-    !> Initializes non-polydisperse bubble modeling
-    impure subroutine s_initialize_nonpoly
+    !> 
+          !! bubbles_euler + polytropic
+          !! bubbles_euler + non-polytropic
+          !! bubbles_lagrange + non-polytropic
+    impure subroutine s_initialize_bubbles_model()
 
+        ! Allocate memory for non-polytropic EE bubbles
+        if (bubbles_euler) then
+          if (.not. polytropic) then
+            @:ALLOCATE(pb0(nb), Pe_T(nb))
+            @:ALLOCATE(k_n(nb), k_v(nb), mass_n0(nb), mass_v0(nb))
+            @:ALLOCATE(Re_trans_T(nb), Re_trans_c(nb), Im_trans_T(nb), Im_trans_c(nb))
+          else if (polytropic .and. qbmm) then
+            @:ALLOCATE(pb0(nb))
+          end if
+
+          ! Compute quadrature weights and nodes for polydisperse simulations
+          if (nb > 1) then
+              call s_simpson(weight, R0)
+          else if (nb == 1) then
+              R0 = 1._wp
+              weight = 1._wp
+          else
+              stop 'Invalid value of nb'
+          end if
+          R0 = R0*(bub_refs%R0ref/bub_refs%x0)
+
+        ! Restrictions on Lagrange bubbles
+        else if (bubbles_lagrange) then
+            ! Need improvements to accept polytropic gas compression, isothermal 
+            ! and adiabatic thermal models, and the Gilmore and RP bubble models.
+            ! If Keller-Miksis model is not selected, then no radial motion
+            polytropic = .false.    ! Forcing no polytropic model
+            thermal = 3             ! Forcing constant transfer coefficient model based on Preston et al., 2007
+        end if
+
+        ! Initialize bubble variables
+        call s_initialize_bubble_refs()
+        call s_initialize_bubble_vars()
+
+    end subroutine s_initialize_bubbles_model
+
+    !>
+    impure subroutine s_initialize_bubble_refs()
+
+      if (.not. f_is_default(bub_refs%rho0) .and. f_is_default(bub_refs%rhol0)) then
+          bub_refs%rhol0 = bub_refs%rho0
+      end if
+
+      if (.not. f_is_default(bub_refs%x0) .and. f_is_default(bub_refs%R0ref)) then
+          bub_refs%R0ref = bub_refs%x0
+      end if
+
+      if (f_is_default(bub_refs%u0)) then
+          bub_refs%u0 = sqrt(bub_refs%p0/bub_refs%rho0)
+      else if (f_is_default(bub_refs%p0)) then
+          bub_refs%p0 = bub_refs%rho0*bub_refs%u0*bub_refs%u0
+      end if
+
+      if (f_is_default(bub_refs%ub0)) then
+          bub_refs%ub0 = sqrt(bub_refs%p0eq/bub_refs%rhol0)
+      else if (f_is_default(bub_refs%p0eq)) then
+          bub_refs%p0eq = bub_refs%rhol0*bub_refs%ub0*bub_refs%ub0
+      end if
+
+      if (.not. f_is_default(bub_refs%T0) .and. f_is_default(bub_refs%Tw)) then
+          bub_refs%Tw = bub_refs%T0
+      end if
+
+    end subroutine s_initialize_bubble_refs
+
+
+    !> 
+    impure subroutine s_initialize_bubble_vars()
+        integer :: id_bubbles, id_host
+        real(wp) :: rho0, u0, T0, x0, p0, rhol0, p0eq, ub0, R0ref
+
+        ! Specify host and bubble components
+        if (bubbles_euler) then
+          id_host = 1
+          if (num_fluids == 1) then
+            id_bubbles = num_fluids + 1
+          else
+            id_bubbles = num_fluids
+          end if
+        else if (bubbles_lagrange) then
+          id_bubbles = num_fluids
+          id_host = num_fluids - 1
+        end if
+
+        ! Reference values
+        rho0 = bub_refs%rho0
+        x0 = bub_refs%x0
+        p0 = bub_refs%p0
+        u0 = bub_refs%u0
+        T0 = bub_refs%T0
+        rhol0 = bub_refs%rhol0
+        p0eq = bub_refs%p0eq
+        R0ref = bub_refs%R0ref
+        ub0 = bub_refs%ub0
+
+        ! Input quantities
+        pv = fluid_pp(id_host)%pv / p0
+        if (bub_ss) ss = fluid_pp(id_host)%ss
+        if (bub_visc) mul0 = fluid_pp(id_host)%mul0
+        if (.not. polytropic) Tw = bub_refs%Tw/T0
+        if (bubbles_euler .and. (.not. polytropic)) then
+          ! Viscosity
+          mu_v = fluid_pp(id_host)%mu_v
+          mu_n = fluid_pp(id_bubbles)%mu_v
+          ! Specific heat ratio
+          gamma_v = fluid_pp(id_host)%gamma_v
+          gamma_n = fluid_pp(id_bubbles)%gamma_v
+          if (thermal == 2) then
+            gamma_m = 1._wp
+          else
+            gamma_m = gamma_n
+          end if
+          ! Thermal conductivity
+          k_v(:) = fluid_pp(id_host)%k_v*(T0/(x0*rho0*u0*u0*u0))
+          k_n(:) = fluid_pp(id_bubbles)%k_v*(T0/(x0*rho0*u0*u0*u0))
+          ! Molecular weight
+          M_v = fluid_pp(id_host)%M_v
+          M_n = fluid_pp(id_bubbles)%M_v
+          ! Gas constant
+          R_v = R_uni/M_v*(rho0*T0/p0)
+          R_n = R_uni/M_n*(rho0*T0/p0)
+        end if
+
+#ifdef MFC_SIMULATION
+        if (bubbles_lagrange) then
+          ! Gas constant
+          R_v = (R_uni/fluid_pp(id_bubbles)%M_v)*(T0/(u0*u0))
+          R_n = (R_uni/fluid_pp(id_host)%M_v)*(T0/(u0*u0))
+          ! Specific heat ratio
+          gamma_v = fluid_pp(id_bubbles)%gamma_v
+          gamma_n = fluid_pp(id_host)%gamma_v
+          ! Thermal conductivity
+          k_vl = fluid_pp(id_bubbles)%k_v*(T0/(x0*rho0*u0*u0*u0))
+          k_nl = fluid_pp(id_host)%k_v*(T0/(x0*rho0*u0*u0*u0))
+          ! Specific heat capacity
+          cp_v = fluid_pp(id_bubbles)%cp_v*(T0/(u0*u0))
+          cp_n = fluid_pp(id_host)%cp_v*(T0/(u0*u0))
+        end if
+#endif
+
+        ! Nondimensional numbers
+        Eu = p0eq/p0
+        Ca = Eu - pv
+        if (bub_ss) Web = (rho0*x0*u0*u0)/ss
+        if (bub_visc) Re_inv = mul0/(rho0*x0*u0)
+        if (.not. polytropic) Pe_c = (u0*x0)/fluid_pp(id_host)%D
+
+        if (bubbles_euler) then
+          ! Initialize variables for non-polytropic (Preston) model
+          if (.not. polytropic) then
+              call s_initialize_nonpoly()
+          end if
+          ! Initialize pb based on surface tension for qbmm (polytropic)
+          if (qbmm .and. polytropic) then
+              pb0 = Eu
+              if (bub_ss) then
+                pb0 = pb0 + 2._wp/Web/R0
+              end if
+          end if
+        end if
+
+    end subroutine s_initialize_bubble_vars
+
+    !> Initializes non-polydisperse bubble modeling
+    impure subroutine s_initialize_nonpoly()
         integer :: ir
-        real(wp) :: rhol0, pl0, uu, D_m, temp, omega_ref
-        real(wp), dimension(Nb) :: chi_vw0, cp_m0, k_m0, rho_m0, x_vw
+        real(wp), dimension(nb) :: chi_vw0, cp_m0, k_m0, rho_m0, x_vw, omegaN, rhol0
 
         real(wp), parameter :: k_poly = 1._wp !<
             !! polytropic index used to compute isothermal natural frequency
 
-        real(wp), parameter :: Ru = 8314._wp !<
-            !! universal gas constant
-
-        rhol0 = rhoref
-        pl0 = pref
-#ifdef MFC_SIMULATION
-        @:ALLOCATE(pb0(nb), mass_n0(nb), mass_v0(nb), Pe_T(nb))
-        @:ALLOCATE(k_n(nb), k_v(nb), omegaN(nb))
-        @:ALLOCATE(Re_trans_T(nb), Re_trans_c(nb), Im_trans_T(nb), Im_trans_c(nb))
-#else
-        @:ALLOCATE(pb0(nb), mass_n0(nb), mass_v0(nb), Pe_T(nb))
-        @:ALLOCATE(k_n(nb), k_v(nb), omegaN(nb))
-        @:ALLOCATE(Re_trans_T(nb), Re_trans_c(nb), Im_trans_T(nb), Im_trans_c(nb))
-#endif
-
-        pb0(:) = dflt_real
-        mass_n0(:) = dflt_real
-        mass_v0(:) = dflt_real
-        Pe_T(:) = dflt_real
-        omegaN(:) = dflt_real
-
-        mul0 = fluid_pp(1)%mul0
-        ss = fluid_pp(1)%ss
-        pv = fluid_pp(1)%pv
-        gamma_v = fluid_pp(1)%gamma_v
-        M_v = fluid_pp(1)%M_v
-        mu_v = fluid_pp(1)%mu_v
-        k_v(:) = fluid_pp(1)%k_v
-
-        gamma_n = fluid_pp(2)%gamma_v
-        M_n = fluid_pp(2)%M_v
-        mu_n = fluid_pp(2)%mu_v
-        k_n(:) = fluid_pp(2)%k_v
-
-        gamma_m = gamma_n
-        if (thermal == 2) gamma_m = 1._wp
-
-        temp = 293.15_wp
-        D_m = 0.242e-4_wp
-        uu = sqrt(pl0/rhol0)
-
-        omega_ref = 3._wp*k_poly*Ca + 2._wp*(3._wp*k_poly - 1._wp)/Web
-
-            !!! thermal properties !!!
-        ! gas constants
-        R_n = Ru/M_n
-        R_v = Ru/M_v
-        ! phi_vn & phi_nv (phi_nn = phi_vv = 1)
+        ! phi_vn & phi_nv (phi_nn = phi_vv = 1) (Eq. 2.22 in Ando 2010)
         phi_vn = (1._wp + sqrt(mu_v/mu_n)*(M_n/M_v)**(0.25_wp))**2 &
                  /(sqrt(8._wp)*sqrt(1._wp + M_v/M_n))
         phi_nv = (1._wp + sqrt(mu_n/mu_v)*(M_v/M_n)**(0.25_wp))**2 &
                  /(sqrt(8._wp)*sqrt(1._wp + M_n/M_v))
-        ! internal bubble pressure
-        pb0(:) = pl0 + 2._wp*ss/(R0ref*R0(:))
 
-        ! mass fraction of vapor
+        ! internal bubble pressure 
+        pb0 = Eu + 2._wp/Web/R0
+
+        ! mass fraction of vapor (Eq. 2.19 in Ando 2010)
         chi_vw0 = 1._wp/(1._wp + R_v/R_n*(pb0/pv - 1._wp))
-        ! specific heat for gas/vapor mixture
+
+        ! specific heat for gas/vapor mixture 
         cp_m0 = chi_vw0*R_v*gamma_v/(gamma_v - 1._wp) &
                 + (1._wp - chi_vw0)*R_n*gamma_n/(gamma_n - 1._wp)
-        ! mole fraction of vapor
+
+        ! mole fraction of vapor (Eq. 2.23 in Ando 2010)
         x_vw = M_n*chi_vw0/(M_v + (M_n - M_v)*chi_vw0)
-        ! thermal conductivity for gas/vapor mixture
+
+        ! thermal conductivity for gas/vapor mixture (Eq. 2.21 in Ando 2010)
         k_m0 = x_vw*k_v/(x_vw + (1._wp - x_vw)*phi_vn) &
                + (1._wp - x_vw)*k_n/(x_vw*phi_nv + 1._wp - x_vw)
-        ! mixture density
-        rho_m0 = pv/(chi_vw0*R_v*temp)
-
-        ! mass of gas/vapor computed using dimensional quantities
-        mass_n0(:) = 4._wp*(pb0(:) - pv)*pi/(3._wp*R_n*temp*rhol0)*R0(:)**3
-        mass_v0(:) = 4._wp*pv*pi/(3._wp*R_v*temp*rhol0)*R0(:)**3
-        ! Peclet numbers
-        Pe_T(:) = rho_m0*cp_m0(:)*uu*R0ref/k_m0(:)
-        Pe_c = uu*R0ref/D_m
-
-        Tw = temp
-
-        ! nondimensional properties
-        !if(.not. qbmm) then
-        R_n = rhol0*R_n*temp/pl0
-        R_v = rhol0*R_v*temp/pl0
         k_n(:) = k_n(:)/k_m0(:)
         k_v(:) = k_v(:)/k_m0(:)
-        pb0 = pb0/pl0
-        pv = pv/pl0
-        Tw = 1._wp
-        pl0 = 1._wp
 
-        rhoref = 1._wp
-        pref = 1._wp
-        !end if
+        ! mixture density (Eq. 2.20 in Ando 2010)
+        rho_m0 = pv/(chi_vw0*R_v*Tw)
 
-        ! natural frequencies
-        omegaN(:) = sqrt(3._wp*k_poly*Ca + 2._wp*(3._wp*k_poly - 1._wp)/(Web*R0))/R0
+        ! mass of gas/vapor
+        mass_n0(:) = (4._wp*pi/3._wp)*(pb0(:) - pv)/(R_n*Tw)*R0(:)**3
+        mass_v0(:) = (4._wp*pi/3._wp)*pv/(R_v*Tw)*R0(:)**3
+        
+        ! Peclet numbers (u0 = x0 = 1, effectively, as others are already nondimensionalized using u0 and x0)
+        Pe_T(:) = rho_m0*cp_m0(:)/k_m0(:)
+        
+        ! natural frequencies (Eq. B.1)
+        rhol0 = bub_refs%rhol0/bub_refs%rho0
+        omegaN(:) = sqrt(3._wp*k_poly*Ca + 2._wp*(3._wp*k_poly - 1._wp)/(Web*R0))/R0/sqrt(rhol0)
         do ir = 1, Nb
             call s_transcoeff(omegaN(ir)*R0(ir), Pe_T(ir)*R0(ir), &
                               Re_trans_T(ir), Im_trans_T(ir))

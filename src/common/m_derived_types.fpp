@@ -336,6 +336,7 @@ module m_derived_types
         real(wp) :: M_v     !< Bubble constants (see Preston (2007), Ando (2010))
         real(wp) :: mu_v    !< Bubble constants (see Preston (2007), Ando (2010))
         real(wp) :: k_v     !< Bubble constants (see Preston (2007), Ando (2010))
+        real(wp) :: D       !< Binary diffusion coefficient
         real(wp) :: cp_v
         real(wp) :: G
     end type physical_parameters
@@ -420,6 +421,29 @@ module m_derived_types
         integer :: gamma_method
     end type chemistry_parameters
 
+    !> Reference bubble scales of subgrid bubbles
+    type bubbles_ref_scales
+
+        !! Primary reference scales of the host fluid
+        real(wp) :: rho0        !< [kg/m3] Reference density
+        real(wp) :: x0          !< [m] Reference length
+        real(wp) :: u0          !< [m/s] Reference velocity
+        real(wp) :: p0          !< [N/m2] Reference pressure
+        real(wp) :: T0          !< [K] Reference temperature
+
+        !! Bubble reference scales 
+        !! Density and temperature scales are assumed to be the same with those of primary scale
+        real(wp) :: rhol0       !< [kg/m3] Reference density
+        real(wp) :: R0ref       !< [m] Reference bubble radius
+        real(wp) :: ub0         !< [m/s] Characteristic bubble velocity
+        real(wp) :: p0eq        !< [N/m2] Pressure at equilibrium
+        real(wp) :: Tw          !< [K] Bubble wall temperature
+
+        !! If true, rescale bubble variables with bubble reference scales in post_process
+        logical :: rescale
+        
+    end type bubbles_ref_scales
+
     !> Lagrangian bubble parameters
     type bubbles_lagrange_parameters
 
@@ -435,11 +459,6 @@ module m_derived_types
         real(wp) :: epsilonb         !< Standard deviation scaling for the gaussian function
         real(wp) :: charwidth        !< Domain virtual depth (z direction, for 2D simulations)
         real(wp) :: valmaxvoid       !< Maximum void fraction permitted
-        real(wp) :: c0               !< Reference speed
-        real(wp) :: rho0             !< Reference density
-        real(wp) :: T0, Thost        !< Reference temperature and host temperature
-        real(wp) :: x0               !< Reference length
-        real(wp) :: diffcoefvap      !< Vapor diffusivity in the gas
 
     end type bubbles_lagrange_parameters
 
