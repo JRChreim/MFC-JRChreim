@@ -30,24 +30,21 @@ COMMON = {
     'pref': ParamType.REAL,
     'p': ParamType.INT,
     'parallel_io': ParamType.LOG,
-    'Web': ParamType.REAL,
     'poly_sigma': ParamType.REAL,
     'case_dir': ParamType.STR,
     'thermal': ParamType.INT,
     'polytropic': ParamType.LOG,
     'm': ParamType.INT,
     'mpp_lim': ParamType.LOG,
-    'R0ref': ParamType.REAL,
+    'R0hyper': ParamType.REAL,
     'num_fluids': ParamType.INT,
     'model_eqns': ParamType.INT,
     'nb': ParamType.REAL,
     'weno_order': ParamType.INT,
     'rhoref': ParamType.REAL,
     'bubbles_euler': ParamType.LOG,
-    'Re_inv': ParamType.REAL,
     'n': ParamType.INT,
     'precision': ParamType.INT,
-    'Ca': ParamType.REAL,
     'polydisperse': ParamType.LOG,
     'file_per_process': ParamType.LOG,
     'relax': ParamType.LOG,
@@ -67,7 +64,11 @@ COMMON = {
     'down_sample': ParamType.LOG,
     'recon_type': ParamType.INT,
     'muscl_order': ParamType.INT,
+    'icsg': ParamType.LOG,
 }
+
+for var in [ 'u0', 'rho0', 'T0', 'x0', 'p0', 'Tw', 'rhol0', 'p0eq', 'ub0', 'R0ref' ]:
+    COMMON[f'bub_refs%{var}'] = ParamType.REAL
 
 PRE_PROCESS = COMMON.copy()
 PRE_PROCESS.update({
@@ -107,6 +108,8 @@ PRE_PROCESS.update({
     'elliptic_smoothing_iters': ParamType.INT,
     'viscous': ParamType.LOG,
     'bubbles_lagrange': ParamType.LOG,
+    'icsg_vf': ParamType.REAL,
+    'icsg_patch': ParamType.INT,
     'under_relax': ParamType.REAL,
 })
 
@@ -145,7 +148,7 @@ for f_id in range(1, 10+1):
     PRE_PROCESS[f'fluid_rho({f_id})'] = ParamType.REAL
 
     for real_attr in ["gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
-                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp" ]:
+                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "D" ]:
         PRE_PROCESS[f"fluid_pp({f_id})%{real_attr}"] = ParamType.REAL
 
 for bc_p_id in range(1, 10+1):
@@ -277,6 +280,8 @@ SIMULATION.update({
     'num_probes': ParamType.INT,
     'probe_wrt': ParamType.LOG,
     'bubble_model': ParamType.INT,
+    'bub_ss': ParamType.LOG,
+    'bub_visc': ParamType.LOG,
     'acoustic_source': ParamType.LOG,
     'num_source': ParamType.INT,
     'qbmm': ParamType.LOG,
@@ -328,8 +333,7 @@ for var in [ 'heatTransfer_model', 'massTransfer_model', 'pressure_corrector',
 for var in [ 'solver_approach', 'cluster_type', 'smooth_type', 'nBubs_glb']:
     SIMULATION[f'lag_params%{var}'] = ParamType.INT
 
-for var in [ 'epsilonb', 'valmaxvoid', 'charwidth', 'diffcoefvap',
-            'c0', 'rho0', 'T0', 'x0', 'Thost' ]:
+for var in [ 'epsilonb', 'valmaxvoid', 'charwidth' ]:
     SIMULATION[f'lag_params%{var}'] = ParamType.REAL
 
 for var in [ 'diffusion', 'reactions' ]:
@@ -387,7 +391,7 @@ for probe_id in range(1,10+1):
 
 for f_id in range(1,10+1):
     for real_attr in ["gamma", "pi_inf", "mul0", "ss", "pv", "gamma_v", "M_v",
-                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp" ]:
+                      "mu_v", "k_v", "cp_v", "G", "cv", "qv", "qvp", "D" ]:
         SIMULATION[f"fluid_pp({f_id})%{real_attr}"] = ParamType.REAL
 
     for re_id in [1, 2]:
@@ -488,7 +492,7 @@ for fl_id in range(1,10+1):
         POST_PROCESS[f'{append}({fl_id})'] = ty
 
     for real_attr in ["gamma", "pi_inf", "ss", "pv", "gamma_v", "M_v", "mu_v", "k_v", "cp_v",
-                      "G", "mul0", "cv", "qv", "qvp" ]:
+                      "G", "mul0", "cv", "qv", "qvp", "D" ]:
         POST_PROCESS[f"fluid_pp({fl_id})%{real_attr}"] = ParamType.REAL
 
 IGNORE = ["cantera_file", "chemistry"]
