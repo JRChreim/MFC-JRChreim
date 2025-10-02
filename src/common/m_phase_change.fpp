@@ -388,8 +388,15 @@ contains
                 mek = meik - Om * ( pS + pS ) * (alphak - alphaik) / 2
 
                 ! checking if pS is within expected bounds
-                if ( ((pS <= -1.0_wp*minval(gs_min*p_infp)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) ) then
+                if ( ((pS <= -1.0_wp*minval(gs_min*p_infp)) .or. (ieee_is_nan(pS))) ) then
 
+                  ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*p_infp) due to the
+                  ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
+                  ! keep an eye on this, as it has not been tested
+                  pS = pO
+                  print *, 'pressure restarted. ns = ', ns
+                else if (ns > max_iter) then
+                  
                   print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
                   print *, 'Om', Om
                   print *, 'me0k', me0k 
@@ -411,7 +418,6 @@ contains
                   call s_int_to_str(ns, nss)
                   call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_infinite_p_relaxation_k). &
                   &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
-
                 end if
             end do
         end do
