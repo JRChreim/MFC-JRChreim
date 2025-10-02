@@ -356,6 +356,7 @@ contains
         relax_model = dflt_int
         palpha_eps = dflt_real
         ptgalpha_eps = dflt_real
+        under_relax = dflt_real
         num_fluids = dflt_int
         recon_type = WENO_TYPE
         weno_order = dflt_int
