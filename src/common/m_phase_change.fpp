@@ -28,7 +28,7 @@ module m_phase_change
 
     !> @name Parameters for the first order transition phase change
     !> @{
-    integer, parameter :: max_iter = 1e4_wp             !< max # of iterations
+    integer, parameter :: max_iter = 1e3_wp             !< max # of iterations
     real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
     real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
     real(wp), parameter :: mixM = sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
@@ -275,6 +275,7 @@ contains
         character(20) :: nss, pSs, Econsts
         integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
 
+        integer :: mF !< multiplying factor for the tolerance of the solver
         integer :: i, na, ns, nsL !< generic loop iterators
 
         iFix = (/ (i, i=1,num_fluids) /) 
@@ -350,15 +351,14 @@ contains
             end if           
 #endif
 
-            ! if the energy constraint is satisfied, we start the newton solver
-            ! counter
-            ns = 0
+            ! if the energy constraint is satisfied, we start the newton solver counter, and the multiplier
+            ns = 0 ; mF = 1
 
             ! Newton solver for p-equilibrium. ns <= 1, is to ensure the internal energy correction happens at least once.
             ! in the loosely coupled algorithm. This is different than the pT-equilibrium case, in which no energy correction is needed.
             ! A solution is found when f(p) = 1
             fp = 0.0_wp
-            do while ( ( ( abs(fp - 1.0_wp) > ptgalpha_eps ) ) .or. ( ns <= 1 ) )
+            do while ( ( ( abs(fp - 1.0_wp) > mF * ptgalpha_eps ) ) .or. ( ns <= 1 ) )
                 ! increasing counter
                 ns = ns + 1
 
@@ -395,29 +395,41 @@ contains
                   ! keep an eye on this, as it has not been tested
                   pS = pO
                   print *, 'pressure restarted. ns = ', ns
+
                 else if (ns > max_iter) then
                   
-                  print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
-                  print *, 'Om', Om
-                  print *, 'me0k', me0k 
-                  print *, 'meik', meik 
-                  print *, 'mek', meik - Om * ( pS + pS ) * (alphak - alphaik) / 2
-                  print *, 'New Om Crit', maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2
-                  print *, 'New mek', meik - maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2 * ( pS + pS ) * (alphak - alphaik) / 2
-                  print *, 'alphaik', alphaik
-                  print *, 'alpha0k', alpha0k
-                  print *, 'alphak', alphak
-                  print *, 'm0k', m0k
-                  print *, 'ps_inf', p_infp
+                    ! restarting solver by increasing the tolerance. This is completely ad hoc
+                    if ( (abs(fp - 1.0_wp) < 10 * mF * ptgalpha_eps) .and. (abs(fp - 1.0_wp) > mF * ptgalpha_eps) ) then
 
-                  call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                    , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, mik, ns, ps_inf &
-                                    , pS, (/fp - 1.0_wp, 0.0_wp/), rhoe, Tk)
+                      ns = 0 ; mF = mF + 1
 
-                  call s_real_to_str(pS, pSs)
-                  call s_int_to_str(ns, nss)
-                  call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_infinite_p_relaxation_k). &
-                  &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
+                      print *, 'tolerance increased from ptgalpha_eps = ', (mF - 1) * ptgalpha_eps, ' to ', mF * ptgalpha_eps, &
+                      '. Newton solver restarted'
+                    
+                    else
+
+                      print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
+                      print *, 'Om', Om
+                      print *, 'me0k', me0k 
+                      print *, 'meik', meik 
+                      print *, 'mek', meik - Om * ( pS + pS ) * (alphak - alphaik) / 2
+                      print *, 'New Om Crit', maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2
+                      print *, 'New mek', meik - maxval(pS * (alphak - alphaik) / (meik - mik * qvs)) / 2 * ( pS + pS ) * (alphak - alphaik) / 2
+                      print *, 'alphaik', alphaik
+                      print *, 'alpha0k', alpha0k
+                      print *, 'alphak', alphak
+                      print *, 'm0k', m0k
+                      print *, 'ps_inf', p_infp
+
+                      call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                        , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, mik, ns, ps_inf &
+                                        , pS, (/fp - 1.0_wp, 0.0_wp/), rhoe, Tk)
+
+                      call s_real_to_str(pS, pSs)
+                      call s_int_to_str(ns, nss)
+                      call s_mpi_abort('Solver for the p-relaxation failed (m_phase_change, s_infinite_p_relaxation_k). &
+                      &   pS ~'//pSs//'. ns = '//nss//'. Aborting!')
+                    end if
                 end if
             end do
         end do
