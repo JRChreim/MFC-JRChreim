@@ -403,7 +403,7 @@ contains
 
                       ns = 0 ; mF = mF + 1
 
-                      print *, 'tolerance increased from ptgalpha_eps = ', (mF - 1) * ptgalpha_eps, ' to ', mF * ptgalpha_eps, &
+                      print *, 'ptgalpha_eps increased from ', (mF - 1) * ptgalpha_eps, ' to ', mF * ptgalpha_eps, &
                       '. Newton solver restarted'
                     
                     else
