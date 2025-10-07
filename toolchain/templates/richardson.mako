@@ -24,11 +24,7 @@
 
 ${helpers.template_prologue()}
 
-ok ":) Loading modules:\n"
-cd "${MFC_ROOTDIR}"
-. ./mfc.sh load -c r -m ${'g' if gpu else 'c'}
-cd - > /dev/null
-echo
+ok "modules for MFC need not be loaded\n"
 
 % for target in targets:
     ${helpers.run_prologue(target)}
