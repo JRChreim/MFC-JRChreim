@@ -637,7 +637,11 @@ contains
         do i = 1, num_fluids
             gammas(i) = fluid_pp(i)%gamma
             gs_min(i) = 1.0_wp/gammas(i) + 1.0_wp
-            pi_infs(i) = fluid_pp(i)%pi_inf
+            if (bubbles_euler .or. bubbles_lagrange) then
+              pi_infs(i) = fluid_pp(i)%pi_inf / bub_refs%p0eq
+            else
+              pi_infs(i) = fluid_pp(i)%pi_inf
+            end if
             Gs(i) = fluid_pp(i)%G
             ps_inf(i) = pi_infs(i)/(1.0_wp + gammas(i))
             cvs(i) = fluid_pp(i)%cv
