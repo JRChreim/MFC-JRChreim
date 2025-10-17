@@ -283,40 +283,37 @@ contains
 
         if (model_eqns == 4) then
             rho = q_vf(1)%sf(j, k, l)
-            gamma = fluid_pp(1)%gamma    !qK_vf(gamma_idx)%sf(i,j,k)
-            pi_inf = fluid_pp(1)%pi_inf   !qK_vf(pi_inf_idx)%sf(i,j,k)
-            qv = fluid_pp(1)%qv
+            gamma = gammas(1)    !qK_vf(gamma_idx)%sf(i,j,k)
+            pi_inf = pi_infs(1)   !qK_vf(pi_inf_idx)%sf(i,j,k)
+            qv = qvs(1)
         else if ((model_eqns == 2) .and. bubbles_euler) then
             rho = 0._wp; gamma = 0._wp; pi_inf = 0._wp; qv = 0._wp
 
             if (mpp_lim .and. (num_fluids > 2)) then
                 do i = 1, num_fluids
                     rho = rho + q_vf(i)%sf(j, k, l)
-                    gamma = gamma + q_vf(i + E_idx)%sf(j, k, l)*fluid_pp(i)%gamma
-                    pi_inf = pi_inf + q_vf(i + E_idx)%sf(j, k, l)*fluid_pp(i)%pi_inf
-                    qv = qv + q_vf(i)%sf(j, k, l)*fluid_pp(i)%qv
+                    gamma = gamma + q_vf(i + E_idx)%sf(j, k, l)*gammas(i)
+                    pi_inf = pi_inf + q_vf(i + E_idx)%sf(j, k, l)*pi_infs(i)
+                    qv = qv + q_vf(i)%sf(j, k, l)*qvs(i)
                 end do
             else if (num_fluids == 2) then
                 rho = q_vf(1)%sf(j, k, l)
-                gamma = fluid_pp(1)%gamma
-                pi_inf = fluid_pp(1)%pi_inf
-                qv = fluid_pp(1)%qv
+                gamma = gammas(1)
+                pi_inf = pi_infs(1)
+                qv = qvs(1)
             else if (num_fluids > 2) then
                 !TODO: This may need fixing for hypo + bubbles_euler
                 do i = 1, num_fluids - 1 !leave out bubble part of mixture
                     rho = rho + q_vf(i)%sf(j, k, l)
-                    gamma = gamma + q_vf(i + E_idx)%sf(j, k, l)*fluid_pp(i)%gamma
-                    pi_inf = pi_inf + q_vf(i + E_idx)%sf(j, k, l)*fluid_pp(i)%pi_inf
-                    qv = qv + q_vf(i)%sf(j, k, l)*fluid_pp(i)%qv
+                    gamma = gamma + q_vf(i + E_idx)%sf(j, k, l)*gammas(i)
+                    pi_inf = pi_inf + q_vf(i + E_idx)%sf(j, k, l)*pi_infs(i)
+                    qv = qv + q_vf(i)%sf(j, k, l)*qvs(i)
                 end do
-                ! rho    = qK_vf(1)%sf(j,k,l)
-                ! gamma_K  = fluid_pp(1)%gamma
-                ! pi_inf_K = fluid_pp(1)%pi_inf
             else
                 rho = q_vf(1)%sf(j, k, l)
-                gamma = fluid_pp(1)%gamma
-                pi_inf = fluid_pp(1)%pi_inf
-                qv = fluid_pp(1)%qv
+                gamma = gammas(1)
+                pi_inf = pi_infs(1)
+                qv = qvs(1)
             end if
         end if
 
@@ -635,18 +632,21 @@ contains
 #endif
 
         do i = 1, num_fluids
-            gammas(i) = fluid_pp(i)%gamma
-            gs_min(i) = 1.0_wp/gammas(i) + 1.0_wp
             if (bubbles_euler .or. bubbles_lagrange) then
               pi_infs(i) = fluid_pp(i)%pi_inf / bub_refs%p0eq
+              cvs(i) = fluid_pp(i)%cv
+              qvs(i) = fluid_pp(i)%qv / bub_refs%p0eq
+              qvps(i) = fluid_pp(i)%qvp
             else
               pi_infs(i) = fluid_pp(i)%pi_inf
+              cvs(i) = fluid_pp(i)%cv
+              qvs(i) = fluid_pp(i)%qv
+              qvps(i) = fluid_pp(i)%qvp
             end if
+            gammas(i) = fluid_pp(i)%gamma
+            gs_min(i) = 1.0_wp/gammas(i) + 1.0_wp
             Gs(i) = fluid_pp(i)%G
             ps_inf(i) = pi_infs(i)/(1.0_wp + gammas(i))
-            cvs(i) = fluid_pp(i)%cv
-            qvs(i) = fluid_pp(i)%qv
-            qvps(i) = fluid_pp(i)%qvp
         end do
         $:GPU_UPDATE(device='[gammas,gs_min,pi_infs,ps_inf,cvs,qvs,qvps,Gs]')
 
@@ -1336,17 +1336,16 @@ contains
                         elseif ((model_eqns /= 4) .and. (bubbles_euler .neqv. .true.)) then
                             ! E = Gamma*P + \rho u u /2 + \pi_inf + (\alpha\rho qv)
                             q_cons_vf(E_idx)%sf(j, k, l) = &
-                                gamma*q_prim_vf(E_idx)%sf(j, k, l) + dyn_pres + pi_inf &
-                                + qv
+                                gamma*q_prim_vf(E_idx)%sf(j, k, l) + dyn_pres + pi_inf + qv
                         else if ((model_eqns /= 4) .and. (bubbles_euler) .and. .not. icsg) then
                             ! \tilde{E} = dyn_pres + (1-\alf)(\Gamma p_l + \Pi_inf)
                             q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + &
                                                            (1._wp - q_prim_vf(alf_idx)%sf(j, k, l))* &
-                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf)
+                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf + qv)
                         else if ((model_eqns /= 4) .and. (bubbles_euler) .and. icsg) then
                             ! \tilde{E} = dyn_pres + (\Gamma p_l + \Pi_inf)
                             q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + &
-                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf)
+                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf + qv)
                         else
                             !Tait EOS, no conserved energy variable
                             q_cons_vf(E_idx)%sf(j, k, l) = 0._wp
@@ -1359,9 +1358,9 @@ contains
                             ! internal energy calculation for each of the fluids
                             q_cons_vf(i + internalEnergies_idx%beg - 1)%sf(j, k, l) = &
                                 q_cons_vf(i + adv_idx%beg - 1)%sf(j, k, l)* &
-                                (fluid_pp(i)%gamma*q_prim_vf(E_idx)%sf(j, k, l) + &
-                                 fluid_pp(i)%pi_inf) + &
-                                q_cons_vf(i + cont_idx%beg - 1)%sf(j, k, l)*fluid_pp(i)%qv
+                                (gammas(i)*q_prim_vf(E_idx)%sf(j, k, l) + &
+                                 pi_infs(i)) + &
+                                q_cons_vf(i + cont_idx%beg - 1)%sf(j, k, l)*qvs(i)
                         end do
                     end if
 

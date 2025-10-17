@@ -36,7 +36,7 @@ contains
         @:ALLOCATE(gamma_min(1:num_fluids), pres_inf(1:num_fluids))
 
         do i = 1, num_fluids
-            gamma_min(i) = 1._wp/fluid_pp(i)%gamma + 1._wp
+            gamma_min(i) = gs_min(i)
             pres_inf(i) = fluid_pp(i)%pi_inf/(1._wp + fluid_pp(i)%gamma)
         end do
         $:GPU_UPDATE(device='[gamma_min, pres_inf]')

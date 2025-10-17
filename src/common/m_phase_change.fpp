@@ -507,8 +507,8 @@ contains
 
         pk( pack( iVar, iVar /= 0 ) ) = ( ( mek( pack( iVar, iVar /= 0 ) ) &
         - mk( pack( iVar, iVar /= 0 ) ) * qvs( pack( iVar, iVar /= 0 ) ) ) /      &
-        alphak( pack( iVar, iVar /= 0 ) ) - fluid_pp( pack( iVar, iVar /= 0 ) )%pi_inf ) &
-        / fluid_pp( pack( iVar, iVar /= 0 ) )%gamma               
+        alphak( pack( iVar, iVar /= 0 ) ) - pi_infs( pack( iVar, iVar /= 0 ) ) ) &
+        / gammas( pack( iVar, iVar /= 0 ) )               
 
         ! auxiliry variable to avoid do loops
         iVar = iFix ; iVar( pack( iFix, .not. ( pk < -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) ) = 0
