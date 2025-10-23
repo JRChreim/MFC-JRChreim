@@ -1652,7 +1652,6 @@ contains
         real(wp), intent(out) :: c
 
         real(wp) :: blkmod1, blkmod2
-        real(wp) :: Tolerance
 
         integer :: q
 

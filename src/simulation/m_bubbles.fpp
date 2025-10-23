@@ -514,6 +514,10 @@ contains
                                        bub_id, fmass_v, fmass_n, fbeta_c, &
                                        fbeta_t, fCson, h, &
                                        myR_tmp1, myV_tmp1, myPb_tmp1, myMv_tmp1)
+                if (err(1) > adap_dt_tol) then
+                  h = 0.25_wp*h
+                  cycle
+                end if
 
                 ! Advance one sub-step by advancing two half steps
                 call s_advance_substep(err(2), &
@@ -522,6 +526,10 @@ contains
                                        bub_id, fmass_v, fmass_n, fbeta_c, &
                                        fbeta_t, fCson, 0.5_wp*h, &
                                        myR_tmp2, myV_tmp2, myPb_tmp2, myMv_tmp2)
+                if (err(2) > adap_dt_tol) then
+                  h = 0.25_wp*h
+                  cycle
+                end if
 
                 fR2 = myR_tmp2(4); fV2 = myV_tmp2(4)
                 fpb2 = myPb_tmp2(4); fmass_v2 = myMv_tmp2(4)
@@ -532,6 +540,10 @@ contains
                                        bub_id, fmass_v2, fmass_n, fbeta_c, &
                                        fbeta_t, fCson, 0.5_wp*h, &
                                        myR_tmp2, myV_tmp2, myPb_tmp2, myMv_tmp2)
+                if (err(3) > adap_dt_tol) then
+                  h = 0.5_wp*h
+                  cycle
+                end if
 
                 err(4) = abs((myR_tmp1(4) - myR_tmp2(4))/myR_tmp1(4))
                 err(5) = abs((myV_tmp1(4) - myV_tmp2(4))/myV_tmp1(4))
@@ -718,6 +730,9 @@ contains
 
         ! Stage 1
         myR_tmp(2) = myR_tmp(1) + h*myV_tmp(1)
+        if (myR_tmp(2) < 0._wp) then
+            err = adap_dt_tol + 1._wp; return
+        end if
         myV_tmp(2) = myV_tmp(1) + h*myA_tmp(1)
         if (bubbles_lagrange) then
             myPb_tmp(2) = myPb_tmp(1) + h*mydPbdt_tmp(1)
@@ -732,6 +747,9 @@ contains
 
         ! Stage 2
         myR_tmp(3) = myR_tmp(1) + (h/4._wp)*(myV_tmp(1) + myV_tmp(2))
+        if (myR_tmp(3) < 0._wp) then
+            err = adap_dt_tol + 1._wp; return
+        end if
         myV_tmp(3) = myV_tmp(1) + (h/4._wp)*(myA_tmp(1) + myA_tmp(2))
         if (bubbles_lagrange) then
             myPb_tmp(3) = myPb_tmp(1) + (h/4._wp)*(mydPbdt_tmp(1) + mydPbdt_tmp(2))
@@ -746,6 +764,9 @@ contains
 
         ! Stage 3
         myR_tmp(4) = myR_tmp(1) + (h/6._wp)*(myV_tmp(1) + myV_tmp(2) + 4._wp*myV_tmp(3))
+        if (myR_tmp(4) < 0._wp) then
+            err = adap_dt_tol + 1._wp; return
+        end if
         myV_tmp(4) = myV_tmp(1) + (h/6._wp)*(myA_tmp(1) + myA_tmp(2) + 4._wp*myA_tmp(3))
         if (bubbles_lagrange) then
             myPb_tmp(4) = myPb_tmp(1) + (h/6._wp)*(mydPbdt_tmp(1) + mydPbdt_tmp(2) + 4._wp*mydPbdt_tmp(3))
@@ -764,6 +785,9 @@ contains
         err_V = (-5._wp*h/24._wp)*(myA_tmp(2) + myA_tmp(3) - 2._wp*myA_tmp(4)) &
                 /max(abs(myV_tmp(1)), abs(myV_tmp(4)))
         ! Error correction for non-oscillating bubbles
+        if (f_approx_equal(myV_tmp(1), 0._wp) .and. f_approx_equal(myV_tmp(4), 0._wp)) then
+            err_V = 0._wp
+        end if
         if (bubbles_lagrange .and. f_approx_equal(myA_tmp(1), 0._wp) .and. f_approx_equal(myA_tmp(2), 0._wp) .and. &
             f_approx_equal(myA_tmp(3), 0._wp) .and. f_approx_equal(myA_tmp(4), 0._wp)) then
             err_V = 0._wp

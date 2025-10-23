@@ -187,7 +187,7 @@ contains
             cont_damage, tau_star, cont_damage_s, alpha_bar, &
             alf_factor, num_igr_iters, num_igr_warm_start_iters, &
             int_comp, ic_eps, ic_beta, nv_uvm_out_of_core, &
-            nv_uvm_igr_temps_on_gpu, nv_uvm_pref_gpu, down_sample, fft_wrt, &
+            nv_uvm_igr_temps_on_gpu, nv_uvm_pref_gpu, down_sample, fft_wrt, icsg, &
             icsg, sph_coord, under_relax
 
         ! Checking that an input file has been provided by the user. If it
@@ -1480,9 +1480,7 @@ contains
         if (chemistry) then
             $:GPU_UPDATE(device='[q_T_sf%sf]')
         end if
-
         $:GPU_UPDATE(device='[chem_params]')
-        
         $:GPU_UPDATE(device='[nb,Eu,Ca,Web,Re_inv,weight,R0, &
             & bubbles_euler,polytropic,polydisperse,qbmm, &
             & ptil,bubble_model,thermal,poly_sigma,adv_n,adap_dt, &
