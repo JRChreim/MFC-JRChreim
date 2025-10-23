@@ -148,7 +148,9 @@ contains
             else if ((model_eqns /= 4) .and. bubbles_euler .and. icsg) then
                 pres = (energy - dyn_p)/gamma - pi_inf/gamma - qv/gamma
             else
-                pres = (1._wp + pi_inf)*(energy/((1._wp - alf)) &
+                pres = (1._wp + pi_inf)* &
+                       (energy/ &
+                        ((1._wp - alf)) &
                         )**(1._wp/gamma + 1._wp) - pi_inf
             end if
 
@@ -1655,7 +1657,7 @@ contains
         integer :: q
 
         if (chemistry) then
-            if (avg_state == 1 .and. abs(c_c) > Tolerance) then
+            if (avg_state == 1 .and. abs(c_c) > verysmall) then
                 c = sqrt(c_c - (gamma - 1.0_wp)*(vel_sum - H))
             else
                 c = sqrt((1.0_wp + 1.0_wp/gamma)*pres/rho)
