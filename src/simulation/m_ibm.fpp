@@ -22,6 +22,10 @@ module m_ibm
 
     use m_constants
 
+    use m_compute_levelset
+
+    use m_ib_patches
+
     implicit none
 
     private :: s_compute_image_points, &
@@ -34,6 +38,7 @@ module m_ibm
  s_ibm_correct_state, &
  s_finalize_ibm_module
 
+    integer, allocatable, dimension(:, :, :) :: patch_id_fp
     type(integer_field), public :: ib_markers
     type(levelset_field), public :: levelset
     type(levelset_norm_field), public :: levelset_norm
@@ -46,6 +51,8 @@ module m_ibm
     integer :: num_gps !< Number of ghost points
     integer :: num_inner_gps !< Number of ghost points
     $:GPU_DECLARE(create='[gp_layers,num_gps,num_inner_gps]')
+
+    logical :: moving_immersed_boundary_flag
 
 contains
 
@@ -81,6 +88,21 @@ contains
     impure subroutine s_ibm_setup()
 
         integer :: i, j, k
+        integer :: max_num_gps, max_num_inner_gps
+
+        moving_immersed_boundary_flag = .false.
+        do i = 1, num_ibs
+            if (patch_ib(i)%moving_ibm /= 0) then
+                moving_immersed_boundary_flag = .true.
+
+            end if
+            call s_update_ib_rotation_matrix(i)
+        end do
+
+        $:GPU_ENTER_DATA(copyin='[patch_ib]')
+
+        ! Allocating the patch identities bookkeeping variable
+        allocate (patch_id_fp(0:m, 0:n, 0:p))
 
         $:GPU_UPDATE(device='[ib_markers%sf]')
         $:GPU_UPDATE(device='[levelset%sf]')
@@ -91,11 +113,14 @@ contains
 
         $:GPU_UPDATE(host='[ib_markers%sf]')
 
+        ! find the number of ghost points and set them to be the maximum total across ranks
         call s_find_num_ghost_points(num_gps, num_inner_gps)
+        call s_mpi_allreduce_integer_sum(num_gps, max_num_gps)
+        call s_mpi_allreduce_integer_sum(num_inner_gps, max_num_inner_gps)
 
         $:GPU_UPDATE(device='[num_gps, num_inner_gps]')
-        @:ALLOCATE(ghost_points(1:num_gps))
-        @:ALLOCATE(inner_points(1:num_inner_gps))
+        @:ALLOCATE(ghost_points(1:int(max_num_gps * 2.0)))
+        @:ALLOCATE(inner_points(1:int(max_num_inner_gps * 2.0)))
 
         $:GPU_ENTER_DATA(copyin='[ghost_points,inner_points]')
 
@@ -127,7 +152,7 @@ contains
         !!  @param q_prim_vf Primitive variables
         !!  @param pb Internal bubble pressure
         !!  @param mv Mass of vapor in bubble
-    pure subroutine s_ibm_correct_state(q_cons_vf, q_prim_vf, pb_in, mv_in)
+    subroutine s_ibm_correct_state(q_cons_vf, q_prim_vf, pb_in, mv_in)
 
         type(scalar_field), &
             dimension(sys_size), &
@@ -160,6 +185,8 @@ contains
         real(wp), dimension(3) :: norm !< Normal vector from GP to IP
         real(wp), dimension(3) :: physical_loc !< Physical loc of GP
         real(wp), dimension(3) :: vel_g !< Velocity of GP
+        real(wp), dimension(3) :: radial_vector !< vector from centroid to ghost point
+        real(wp), dimension(3) :: rotation_velocity !< speed of the ghost point due to rotation
 
         real(wp) :: nbub
         real(wp) :: buf
@@ -169,8 +196,8 @@ contains
         $:GPU_PARALLEL_LOOP(private='[physical_loc,dyn_pres,alpha_rho_IP, &
             & alpha_IP,pres_IP,vel_IP,vel_g,vel_norm_IP,r_IP, &
             & v_IP,pb_IP,mv_IP,nmom_IP,presb_IP,massv_IP,rho, &
-            & gamma,pi_inf,Re_K,G_K,Gs,gp,innerp,norm,buf, &
-            & j,k,l,q]')
+            & gamma,pi_inf,Re_K,G_K,Gs,gp,innerp,norm,buf, radial_vector, &
+            & rotation_velocity, j,k,l,q]')
         do i = 1, num_gps
 
             gp = ghost_points(i)
@@ -239,7 +266,21 @@ contains
                 vel_norm_IP = sum(vel_IP*norm)*norm
                 vel_g = vel_IP - vel_norm_IP
             else
-                vel_g = 0._wp
+                if (patch_ib(patch_id)%moving_ibm == 0) then
+                    ! we know the object is not moving if moving_ibm is 0 (false)
+                    vel_g = 0._wp
+                else
+                    ! get the vector that points from the centroid to the ghost
+                    radial_vector = physical_loc - [patch_ib(patch_id)%x_centroid, &
+                                                    patch_ib(patch_id)%y_centroid, patch_ib(patch_id)%z_centroid]
+                    ! convert the angular velocity from the inertial reference frame to the fluids frame, then convert to linear velocity
+                    rotation_velocity = cross_product(matmul(patch_ib(patch_id)%rotation_matrix, patch_ib(patch_id)%angular_vel), radial_vector)
+                    do q = 1, 3
+                        ! if mibm is 1 or 2, then the boundary may be moving
+                        vel_g(q) = patch_ib(patch_id)%vel(q) ! add the linear velocity
+                        vel_g(q) = vel_g(q) + rotation_velocity(q) ! add the rotational velocity
+                    end do
+                end if
             end if
 
             ! Set momentum
@@ -351,7 +392,7 @@ contains
         type(ghost_point) :: gp
 
         integer :: q, dim !< Iterator variables
-        integer :: i, j, k !< Location indexes
+        integer :: i, j, k, l !< Location indexes
         integer :: patch_id !< IB Patch ID
         integer :: dir
         integer :: index
@@ -391,6 +432,7 @@ contains
                 end if
 
                 if (f_approx_equal(norm(dim), 0._wp)) then
+                    ! if the ghost point is almost equal to a cell location, we set it equal and continue
                     ghost_points_in(q)%ip_grid(dim) = ghost_points_in(q)%loc(dim)
                 else
                     if (norm(dim) > 0) then
@@ -405,6 +447,7 @@ contains
                                .or. temp_loc > s_cc(index + 1)))
                         index = index + dir
                         if (index < -buff_size .or. index > bound) then
+                            print *, "temp_loc=", temp_loc, " s_cc(index)=", s_cc(index), " s_cc(index+1)=", s_cc(index + 1)
                             print *, "Increase buff_size further in m_helper_basic (currently set to a minimum of 10)"
                             error stop "Increase buff_size"
                         end if
@@ -471,7 +514,7 @@ contains
     end subroutine s_find_num_ghost_points
 
     !> Function that finds the ghost points
-    pure subroutine s_find_ghost_points(ghost_points_in, inner_points_in)
+    subroutine s_find_ghost_points(ghost_points_in, inner_points_in)
 
         type(ghost_point), dimension(num_gps), intent(INOUT) :: ghost_points_in
         type(ghost_point), dimension(num_inner_gps), intent(INOUT) :: inner_points_in
@@ -489,6 +532,7 @@ contains
         do i = 0, m
             do j = 0, n
                 if (p == 0) then
+                    ! 2D
                     if (ib_markers%sf(i, j, 0) /= 0) then
                         subsection_2D = ib_markers%sf( &
                                         i - gp_layers:i + gp_layers, &
@@ -498,6 +542,7 @@ contains
                             patch_id = ib_markers%sf(i, j, 0)
                             ghost_points_in(count)%ib_patch_id = &
                                 patch_id
+
                             ghost_points_in(count)%slip = patch_ib(patch_id)%slip
                             ! ghost_points(count)%rank = proc_rank
 
@@ -530,6 +575,7 @@ contains
                         end if
                     end if
                 else
+                    ! 3D
                     do k = 0, p
                         if (ib_markers%sf(i, j, k) /= 0) then
                             subsection_3D = ib_markers%sf( &
@@ -860,6 +906,48 @@ contains
 
     end subroutine s_interpolate_image_point
 
+    !> Resets the current indexes of immersed boundaries and replaces them after updating
+    !> the position of each moving immersed boundary
+    impure subroutine s_update_mib(num_ibs, levelset, levelset_norm)
+
+        integer, intent(in) :: num_ibs
+        type(levelset_field), intent(inout) :: levelset
+        type(levelset_norm_field), intent(inout) :: levelset_norm
+
+        integer :: i, ierr
+
+        ! Clears the existing immersed boundary indices
+        ib_markers%sf = 0
+
+        ! recalulcate the rotation matrix based upon the new angles
+        do i = 1, num_ibs
+            if (patch_ib(i)%moving_ibm /= 0) then
+                call s_update_ib_rotation_matrix(i)
+            end if
+        end do
+
+        $:GPU_UPDATE(device='[patch_ib]')
+
+        ! recompute the new ib_patch locations and broadcast them.
+        call s_apply_ib_patches(ib_markers%sf(0:m, 0:n, 0:p), levelset, levelset_norm)
+        call s_populate_ib_buffers() ! transmits the new IB markers via MPI
+        $:GPU_UPDATE(device='[ib_markers%sf, levelset%sf, levelset_norm%sf]')
+
+        ! recalculate the ghost point locations and coefficients
+        call s_find_num_ghost_points(num_gps, num_inner_gps)
+        $:GPU_UPDATE(device='[num_gps, num_inner_gps]')
+
+        call s_find_ghost_points(ghost_points, inner_points)
+        $:GPU_UPDATE(device='[ghost_points, inner_points]')
+
+        call s_compute_image_points(ghost_points, levelset, levelset_norm)
+        $:GPU_UPDATE(device='[ghost_points]')
+
+        call s_compute_interpolation_coeffs(ghost_points)
+        $:GPU_UPDATE(device='[ghost_points]')
+
+    end subroutine s_update_mib
+
     !> Subroutine to deallocate memory reserved for the IBM module
     impure subroutine s_finalize_ibm_module()
 
@@ -868,5 +956,15 @@ contains
         @:DEALLOCATE(levelset_norm%sf)
 
     end subroutine s_finalize_ibm_module
+
+    function cross_product(a, b) result(c)
+        implicit none
+        real(wp), intent(in) :: a(3), b(3)
+        real(wp) :: c(3)
+
+        c(1) = a(2)*b(3) - a(3)*b(2)
+        c(2) = a(3)*b(1) - a(1)*b(3)
+        c(3) = a(1)*b(2) - a(2)*b(1)
+    end function cross_product
 
 end module m_ibm

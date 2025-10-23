@@ -27,7 +27,9 @@ module m_initial_condition
     use m_variables_conversion  ! Subroutines to change the state variables from
     ! one form to another
 
-    use m_patches
+    use m_ib_patches
+
+    use m_icpp_patches
 
     use m_assign_variables
 
@@ -178,6 +180,8 @@ contains
         !!              primitive variables are converted to conservative ones.
     impure subroutine s_generate_initial_condition
 
+        integer :: i
+
         ! Converting the conservative variables to the primitive ones given
         ! preexisting initial condition data files were read in on start-up
         if (old_ic) then
@@ -188,10 +192,12 @@ contains
         end if
 
         if (ib) then
-            call s_apply_domain_patches(patch_id_fp, q_prim_vf, ib_markers%sf, levelset, levelset_norm)
-        else
-            call s_apply_domain_patches(patch_id_fp, q_prim_vf)
+            do i = 1, num_ibs
+                call s_update_ib_rotation_matrix(i)
+            end do
+            call s_apply_ib_patches(ib_markers%sf, levelset, levelset_norm)
         end if
+        call s_apply_icpp_patches(patch_id_fp, q_prim_vf)
 
         if (num_bc_patches > 0) call s_apply_boundary_patches(q_prim_vf, bc_type)
 

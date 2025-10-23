@@ -28,7 +28,9 @@ module m_start_up
 
     use m_compile_specific      !< Compile-specific procedures
 
-    use m_patches
+    use m_ib_patches
+
+    use m_icpp_patches
 
     use m_assign_variables
 
@@ -150,8 +152,8 @@ contains
             elliptic_smoothing, elliptic_smoothing_iters, &
             viscous, bubbles_lagrange, bc_x, bc_y, bc_z, num_bc_patches, &
             patch_bc, Bx0, relativity, cont_damage, igr, igr_order, &
-            down_sample, recon_type, muscl_order, icsg, icsg_vf, icsg_patch, &
-            sph_coord, under_relax
+            down_sample, recon_type, muscl_order, fft_wrt, icsg, icsg_vf, &
+            icsg_patch, sph_coord, under_relax
 
         ! Inquiring the status of the pre_process.inp file
         file_loc = 'pre_process.inp'
