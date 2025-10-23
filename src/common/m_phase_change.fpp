@@ -287,6 +287,7 @@ contains
         meik = me0k * rhoe / sum(me0k)
 
         ! dismissing fluids that do not participate into p-relaxation due to the small amount of mass fraction
+        ! iVar \neq 0, fluid should be dismissed. Conversely, if iVar == 0, the fluid should be considered
         iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
 
         ! this value is rather arbitrary, as I am interested in MINVAL( gs_min * ps_inf ) for the solver.
@@ -295,7 +296,7 @@ contains
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
-        pS = (rhoe - sum( alpha0k * pi_infs ) - sum( m0k * qvs ) ) / sum( alpha0k * gammas )
+        pS = (rhoe - sum( alpha0k * p_infp ) - sum( m0k * qvs ) ) / sum( alpha0k * gammas )
 
         ! internal energies - first estimate
         mek = meik + sgm_eps
@@ -378,7 +379,7 @@ contains
 
                 ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
                 ! volume fractions
-                alphak = (gs_min - 1.0_wp)*(mek - m0k*qvs) / (pS + gs_min*p_infp)
+                alphak = ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( pS + gs_min * p_infp )
 
                 ! checking if pS is within expected bounds
                 if ( ((pS <= -1.0_wp*minval(gs_min*p_infp)) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
@@ -386,14 +387,22 @@ contains
                   ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*p_infp) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
-                  print *, pS
-                  print *, minval(gs_min*p_infp)
-                  print *, p_infp
-                  print *, gs_min
-                  print *, alphak
-                  print *, m0k
+                  print *, 'pS, pO', pS, pO
+                  print *, 'pS + gs_min*p_infp', pS + gs_min * p_infp
+                  print *, 'pO + gs_min*p_infp', pO + gs_min * p_infp
+                  print *, 'initial estimate for pS', (rhoe - sum( alpha0k * pi_infs ) - sum( m0k * qvs ) ) / sum( alpha0k * gammas )
+                  print *, 'minval(gs_min*p_infp)', minval(gs_min*p_infp)
+                  print *, 'p_infp', p_infp
+                  print *, 'gs_min', gs_min
+                  print *, 'alphak', alphak
+                  print *, 'alpha0k', alpha0k
+                  print *, 'm0k', m0k
+                  print *, 'rhoe', rhoe
+                  print *, 'sum( alphak * pi_infs )', sum( alpha0k * pi_infs )
+                  print *, 'sum( m0k * qvs )', sum( m0k * qvs )
+                  print *, 'sum( alpha0k * gammas )', sum( alpha0k * gammas )
 
-                  pS = pO
+                  pS = pS + minval( gs_min * p_infp ) + ptgalpha_eps
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
@@ -436,7 +445,7 @@ contains
         ! correcting nonphysical temperatures due to alphak/m0k = 0/0 division. Note that the state for these fluids
         ! need not be determined, as alpha = alpharho = alpharhoe = 0 (state components for the q array). They cannot only
         ! be either 0 or NaN for the sake of the algorithm
-        Tk( pack(iVar, iVar /= 0) ) = (pS + p_infp( pack(iVar, iVar /= 0) )) &
+        Tk( pack(iVar, iVar /= 0) ) = (pS + p_infp( pack(iVar, iVar /= 0) ) ) &
         / ( (gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp) * cvs( pack(iVar, iVar /= 0) ) )
 
         ! updating maximum number of iterations
