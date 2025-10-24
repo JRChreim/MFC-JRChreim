@@ -98,16 +98,6 @@ contains
 
 #ifdef MFC_MPI
         integer :: ierr !< Generic flag used to identify and report MPI errors
-#endif
-
-#ifndef MFC_MPI
-
-        ! Serial run only has 1 processor
-        num_procs = 1
-        ! Local processor rank is 0
-        proc_rank = 0
-
-#else
 
         ! Initializing the MPI environment
         call MPI_INIT(ierr)
@@ -123,7 +113,11 @@ contains
 
         ! Querying the rank of the local processor
         call MPI_COMM_RANK(MPI_COMM_WORLD, proc_rank, ierr)
-
+#else
+        ! Serial run only has 1 processor
+        num_procs = 1
+        ! Local processor rank is 0
+        proc_rank = 0
 #endif
 
     end subroutine s_mpi_initialize
@@ -168,27 +162,20 @@ contains
         end if
 
         !Additional variables pb and mv for non-polytropic qbmm
-#ifdef MFC_PRE_PROCESS
         if (qbmm .and. .not. polytropic) then
             do i = 1, nb
                 do j = 1, nnode
+#ifdef MFC_PRE_PROCESS
                     MPI_IO_DATA%var(sys_size + (i - 1)*nnode + j)%sf => pb%sf(0:m, 0:n, 0:p, j, i)
                     MPI_IO_DATA%var(sys_size + (i - 1)*nnode + j + nb*nnode)%sf => mv%sf(0:m, 0:n, 0:p, j, i)
-                end do
-            end do
-        end if
-#endif
-
-#ifdef MFC_SIMULATION
-        if (qbmm .and. .not. polytropic) then
-            do i = 1, nb
-                do j = 1, nnode
+#elif defined (MFC_SIMULATION)
                     MPI_IO_DATA%var(sys_size + (i - 1)*nnode + j)%sf => pb_ts(1)%sf(0:m, 0:n, 0:p, j, i)
                     MPI_IO_DATA%var(sys_size + (i - 1)*nnode + j + nb*nnode)%sf => mv_ts(1)%sf(0:m, 0:n, 0:p, j, i)
+#endif
                 end do
             end do
         end if
-#endif
+
         ! Define global(g) and local(l) sizes for flow variables
         sizes_glb(1) = m_glb + 1; sizes_loc(1) = m + 1
         if (n > 0) then
@@ -484,6 +471,30 @@ contains
 #endif
 
     end subroutine s_mpi_allreduce_sum
+
+    !>  The following subroutine takes the input local variable
+        !!      from all processors and reduces to the sum of all
+        !!      values. The reduced variable is recorded back onto the
+        !!      original local variable on each processor.
+        !!  @param var_loc Some variable containing the local value which should be
+        !!  reduced amongst all the processors in the communicator.
+        !!  @param var_glb The globally reduced value
+    impure subroutine s_mpi_allreduce_integer_sum(var_loc, var_glb)
+
+        integer, intent(in) :: var_loc
+        integer, intent(out) :: var_glb
+
+#ifdef MFC_MPI
+        integer :: ierr !< Generic flag used to identify and report MPI errors
+
+        ! Performing the reduction procedure
+        call MPI_ALLREDUCE(var_loc, var_glb, 1, MPI_INTEGER, &
+                           MPI_SUM, MPI_COMM_WORLD, ierr)
+#else
+        var_glb = var_loc
+#endif
+
+    end subroutine s_mpi_allreduce_integer_sum
 
     !>  The following subroutine takes the input local variable
         !!      from all processors and reduces to the minimum of all
@@ -1163,55 +1174,7 @@ contains
         if (n > 0) then
 
             if (p > 0) then
-
-                if (cyl_coord .and. p > 0) then
-                    ! Implement pencil processor blocking if using cylindrical coordinates so
-                    ! that all cells in azimuthal direction are stored on a single processor.
-                    ! This is necessary for efficient application of Fourier filter near axis.
-
-                    ! Initial values of the processor factorization optimization
-                    num_procs_x = 1
-                    num_procs_y = num_procs
-                    num_procs_z = 1
-                    ierr = -1
-
-                    ! Computing minimization variable for these initial values
-                    tmp_num_procs_x = num_procs_x
-                    tmp_num_procs_y = num_procs_y
-                    tmp_num_procs_z = num_procs_z
-                    fct_min = 10._wp*abs((m + 1)/tmp_num_procs_x &
-                                         - (n + 1)/tmp_num_procs_y)
-
-                    ! Searching for optimal computational domain distribution
-                    do i = 1, num_procs
-
-                        if (mod(num_procs, i) == 0 &
-                            .and. &
-                            (m + 1)/i >= num_stcls_min*recon_order) then
-
-                            tmp_num_procs_x = i
-                            tmp_num_procs_y = num_procs/i
-
-                            if (fct_min >= abs((m + 1)/tmp_num_procs_x &
-                                               - (n + 1)/tmp_num_procs_y) &
-                                .and. &
-                                (n + 1)/tmp_num_procs_y &
-                                >= &
-                                num_stcls_min*recon_order) then
-
-                                num_procs_x = i
-                                num_procs_y = num_procs/i
-                                fct_min = abs((m + 1)/tmp_num_procs_x &
-                                              - (n + 1)/tmp_num_procs_y)
-                                ierr = 0
-
-                            end if
-
-                        end if
-
-                    end do
-
-                else
+                if (fft_wrt) then
 
                     ! Initial estimate of optimal processor topology
                     num_procs_x = 1
@@ -1220,60 +1183,152 @@ contains
                     ierr = -1
 
                     ! Benchmarking the quality of this initial guess
-                    tmp_num_procs_x = num_procs_x
                     tmp_num_procs_y = num_procs_y
                     tmp_num_procs_z = num_procs_z
-                    fct_min = 10._wp*abs((m + 1)/tmp_num_procs_x &
-                                         - (n + 1)/tmp_num_procs_y) &
-                              + 10._wp*abs((n + 1)/tmp_num_procs_y &
-                                           - (p + 1)/tmp_num_procs_z)
+                    fct_min = 10._wp*abs((n + 1)/tmp_num_procs_y &
+                                         - (p + 1)/tmp_num_procs_z)
 
                     ! Optimization of the initial processor topology
                     do i = 1, num_procs
 
                         if (mod(num_procs, i) == 0 &
                             .and. &
-                            (m + 1)/i >= num_stcls_min*recon_order) then
+                            (n + 1)/i >= num_stcls_min*recon_order) then
 
-                            do j = 1, num_procs/i
+                            tmp_num_procs_y = i
+                            tmp_num_procs_z = num_procs/i
 
-                                if (mod(num_procs/i, j) == 0 &
-                                    .and. &
-                                    (n + 1)/j >= num_stcls_min*recon_order) then
+                            if (fct_min >= abs((n + 1)/tmp_num_procs_y &
+                                               - (p + 1)/tmp_num_procs_z) &
+                                .and. &
+                                (p + 1)/tmp_num_procs_z &
+                                >= &
+                                num_stcls_min*recon_order) then
 
-                                    tmp_num_procs_x = i
-                                    tmp_num_procs_y = j
-                                    tmp_num_procs_z = num_procs/(i*j)
+                                num_procs_y = i
+                                num_procs_z = num_procs/i
+                                fct_min = abs((n + 1)/tmp_num_procs_y &
+                                              - (p + 1)/tmp_num_procs_z)
+                                ierr = 0
 
-                                    if (fct_min >= abs((m + 1)/tmp_num_procs_x &
-                                                       - (n + 1)/tmp_num_procs_y) &
-                                        + abs((n + 1)/tmp_num_procs_y &
-                                              - (p + 1)/tmp_num_procs_z) &
-                                        .and. &
-                                        (p + 1)/tmp_num_procs_z &
-                                        >= &
-                                        num_stcls_min*recon_order) &
-                                        then
-
-                                        num_procs_x = i
-                                        num_procs_y = j
-                                        num_procs_z = num_procs/(i*j)
-                                        fct_min = abs((m + 1)/tmp_num_procs_x &
-                                                      - (n + 1)/tmp_num_procs_y) &
-                                                  + abs((n + 1)/tmp_num_procs_y &
-                                                        - (p + 1)/tmp_num_procs_z)
-                                        ierr = 0
-
-                                    end if
-
-                                end if
-
-                            end do
+                            end if
 
                         end if
 
                     end do
+                else
 
+                    if (cyl_coord .and. p > 0) then
+                        ! Implement pencil processor blocking if using cylindrical coordinates so
+                        ! that all cells in azimuthal direction are stored on a single processor.
+                        ! This is necessary for efficient application of Fourier filter near axis.
+
+                        ! Initial values of the processor factorization optimization
+                        num_procs_x = 1
+                        num_procs_y = num_procs
+                        num_procs_z = 1
+                        ierr = -1
+
+                        ! Computing minimization variable for these initial values
+                        tmp_num_procs_x = num_procs_x
+                        tmp_num_procs_y = num_procs_y
+                        tmp_num_procs_z = num_procs_z
+                        fct_min = 10._wp*abs((m + 1)/tmp_num_procs_x &
+                                             - (n + 1)/tmp_num_procs_y)
+
+                        ! Searching for optimal computational domain distribution
+                        do i = 1, num_procs
+
+                            if (mod(num_procs, i) == 0 &
+                                .and. &
+                                (m + 1)/i >= num_stcls_min*recon_order) then
+
+                                tmp_num_procs_x = i
+                                tmp_num_procs_y = num_procs/i
+
+                                if (fct_min >= abs((m + 1)/tmp_num_procs_x &
+                                                   - (n + 1)/tmp_num_procs_y) &
+                                    .and. &
+                                    (n + 1)/tmp_num_procs_y &
+                                    >= &
+                                    num_stcls_min*recon_order) then
+
+                                    num_procs_x = i
+                                    num_procs_y = num_procs/i
+                                    fct_min = abs((m + 1)/tmp_num_procs_x &
+                                                  - (n + 1)/tmp_num_procs_y)
+                                    ierr = 0
+
+                                end if
+
+                            end if
+
+                        end do
+
+                    else
+
+                        ! Initial estimate of optimal processor topology
+                        num_procs_x = 1
+                        num_procs_y = 1
+                        num_procs_z = num_procs
+                        ierr = -1
+
+                        ! Benchmarking the quality of this initial guess
+                        tmp_num_procs_x = num_procs_x
+                        tmp_num_procs_y = num_procs_y
+                        tmp_num_procs_z = num_procs_z
+                        fct_min = 10._wp*abs((m + 1)/tmp_num_procs_x &
+                                             - (n + 1)/tmp_num_procs_y) &
+                                  + 10._wp*abs((n + 1)/tmp_num_procs_y &
+                                               - (p + 1)/tmp_num_procs_z)
+
+                        ! Optimization of the initial processor topology
+                        do i = 1, num_procs
+
+                            if (mod(num_procs, i) == 0 &
+                                .and. &
+                                (m + 1)/i >= num_stcls_min*recon_order) then
+
+                                do j = 1, num_procs/i
+
+                                    if (mod(num_procs/i, j) == 0 &
+                                        .and. &
+                                        (n + 1)/j >= num_stcls_min*recon_order) then
+
+                                        tmp_num_procs_x = i
+                                        tmp_num_procs_y = j
+                                        tmp_num_procs_z = num_procs/(i*j)
+
+                                        if (fct_min >= abs((m + 1)/tmp_num_procs_x &
+                                                           - (n + 1)/tmp_num_procs_y) &
+                                            + abs((n + 1)/tmp_num_procs_y &
+                                                  - (p + 1)/tmp_num_procs_z) &
+                                            .and. &
+                                            (p + 1)/tmp_num_procs_z &
+                                            >= &
+                                            num_stcls_min*recon_order) &
+                                            then
+
+                                            num_procs_x = i
+                                            num_procs_y = j
+                                            num_procs_z = num_procs/(i*j)
+                                            fct_min = abs((m + 1)/tmp_num_procs_x &
+                                                          - (n + 1)/tmp_num_procs_y) &
+                                                      + abs((n + 1)/tmp_num_procs_y &
+                                                            - (p + 1)/tmp_num_procs_z)
+                                            ierr = 0
+
+                                        end if
+
+                                    end if
+
+                                end do
+
+                            end if
+
+                        end do
+
+                    end if
                 end if
 
                 ! Verifying that a valid decomposition of the computational
@@ -1559,14 +1614,14 @@ contains
 
 #ifdef MFC_POST_PROCESS
         ! Ghost zone at the beginning
-        if (proc_coords(1) > 0 .and. format == 1 .and. n > 0) then
+        if (proc_coords(1) > 0 .and. format == 1) then
             offset_x%beg = 2
         else
             offset_x%beg = 0
         end if
 
         ! Ghost zone at the end
-        if (proc_coords(1) < num_procs_x - 1 .and. format == 1 .and. n > 0) then
+        if (proc_coords(1) < num_procs_x - 1 .and. format == 1) then
             offset_x%end = 2
         else
             offset_x%end = 0

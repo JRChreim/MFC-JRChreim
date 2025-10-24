@@ -108,14 +108,21 @@ PRE_PROCESS.update({
     'viscous': ParamType.LOG,
     'bubbles_lagrange': ParamType.LOG,
     'under_relax': ParamType.REAL,
+    'fft_wrt': ParamType.LOG,
 })
 
 for ib_id in range(1, 10+1):
     for real_attr, ty in [("geometry", ParamType.INT), ("radius", ParamType.REAL),
                           ("theta", ParamType.REAL), ("slip", ParamType.LOG),
                           ("c", ParamType.REAL), ("p", ParamType.REAL),
-                          ("t", ParamType.REAL), ("m", ParamType.REAL)]:
+                          ("t", ParamType.REAL), ("m", ParamType.REAL),
+                          ("moving_ibm", ParamType.INT)]:
         PRE_PROCESS[f"patch_ib({ib_id})%{real_attr}"] = ty
+
+    for dir_id in range(1, 4):
+        PRE_PROCESS[f"patch_ib({ib_id})%vel({dir_id})"] = ParamType.REAL
+        PRE_PROCESS[f"patch_ib({ib_id})%angles({dir_id})"] = ParamType.REAL
+        PRE_PROCESS[f"patch_ib({ib_id})%angular_vel({dir_id})"] = ParamType.REAL
 
     for cmp_id, cmp in enumerate(["x", "y", "z"]):
         cmp_id += 1
@@ -318,7 +325,7 @@ SIMULATION.update({
     'nv_uvm_out_of_core': ParamType.LOG,
     'nv_uvm_igr_temps_on_gpu': ParamType.INT,
     'nv_uvm_pref_gpu': ParamType.LOG,
-    'under_relax': ParamType.REAL,
+    'fft_wrt': ParamType.LOG,
 })
 
 for var in [ 'heatTransfer_model', 'massTransfer_model', 'pressure_corrector',
@@ -342,8 +349,14 @@ for ib_id in range(1, 10+1):
     for real_attr, ty in [("geometry", ParamType.INT), ("radius", ParamType.REAL),
                           ("theta", ParamType.REAL), ("slip", ParamType.LOG),
                           ("c", ParamType.REAL), ("p", ParamType.REAL),
-                          ("t", ParamType.REAL), ("m", ParamType.REAL)]:
+                          ("t", ParamType.REAL), ("m", ParamType.REAL),
+                          ("moving_ibm", ParamType.INT)]:
         SIMULATION[f"patch_ib({ib_id})%{real_attr}"] = ty
+
+    for dir_id in range(1, 4):
+        SIMULATION[f"patch_ib({ib_id})%vel({dir_id})"] = ParamType.REAL
+        SIMULATION[f"patch_ib({ib_id})%angles({dir_id})"] = ParamType.REAL
+        SIMULATION[f"patch_ib({ib_id})%angular_vel({dir_id})"] = ParamType.REAL
 
     for cmp_id, cmp in enumerate(["x", "y", "z"]):
         cmp_id += 1
@@ -434,6 +447,7 @@ POST_PROCESS.update({
     'flux_lim': ParamType.INT,
     'flux_wrt': ParamType.LOG,
     'E_wrt': ParamType.LOG,
+    'fft_wrt': ParamType.LOG,
     'pres_wrt': ParamType.LOG,
     'alpha_wrt': ParamType.LOG,
     'kappa_wrt': ParamType.LOG,
@@ -459,6 +473,24 @@ POST_PROCESS.update({
     'surface_tension': ParamType.LOG,
     'output_partial_domain': ParamType.LOG,
     'bubbles_lagrange': ParamType.LOG,
+    'lag_header': ParamType.LOG,
+    'lag_txt_wrt': ParamType.LOG,
+    'lag_db_wrt': ParamType.LOG,
+    'lag_id_wrt': ParamType.LOG,
+    'lag_pos_wrt': ParamType.LOG,
+    'lag_pos_prev_wrt': ParamType.LOG,
+    'lag_vel_wrt': ParamType.LOG,
+    'lag_rad_wrt': ParamType.LOG,
+    'lag_rvel_wrt': ParamType.LOG,
+    'lag_r0_wrt': ParamType.LOG,
+    'lag_rmax_wrt': ParamType.LOG,
+    'lag_rmin_wrt': ParamType.LOG,
+    'lag_dphidt_wrt': ParamType.LOG,
+    'lag_pres_wrt': ParamType.LOG,
+    'lag_mv_wrt': ParamType.LOG,
+    'lag_mg_wrt': ParamType.LOG,
+    'lag_betaT_wrt': ParamType.LOG,
+    'lag_betaC_wrt': ParamType.LOG,
 })
 
 for cmp in ["x", "y", "z"]:
