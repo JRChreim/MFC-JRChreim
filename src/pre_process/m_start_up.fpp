@@ -40,8 +40,6 @@ module m_start_up
 
     use m_helper
 
-    use m_normalize             !< Functions to (de)normalize state variables
-
 #ifdef MFC_MPI
     use mpi                     !< Message passing interface (MPI) module
 #endif

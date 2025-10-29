@@ -39,8 +39,6 @@ module m_initial_condition
 
     use m_boundary_conditions
 
-    use m_normalize             !< Functions to (de)normalize state variables
-
     implicit none
 
     ! NOTE: The abstract interface allows for the declaration of a pointer to
