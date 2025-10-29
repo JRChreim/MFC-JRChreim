@@ -305,15 +305,12 @@ contains
         - ( sum( m0k * qvs ) - sum( m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) ) ) &
         / ( sum( alpha0k * gammas ) - sum( alpha0k( pack(iVar, iVar /= 0) ) * gammas( pack(iVar, iVar /= 0) ) ) ) 
 
-        ! if ( iVar == 0 ) then
-        ! print *, iVar == 0
-        ! end if
-
         ! internal energies - first estimate
-        mek = meik * ( 1 + sgm_eps )
+        mek( pack(iVar, iVar /= 0) ) = meik( pack(iVar, iVar /= 0) ) * ( 1 + sgm_eps )
         
         ! volume fractions - first estimate
-        alphak = ( alpha0k + sgm_eps ) / sum( alpha0k + sgm_eps ) 
+        alphak( pack(iVar, iVar /= 0) ) = ( alpha0k( pack(iVar, iVar /= 0) ) + sgm_eps ) &
+        / sum( alpha0k( pack(iVar, iVar /= 0) ) + sgm_eps ) 
 
         ! counter for the outer loop
         nsL = 0
@@ -322,8 +319,8 @@ contains
         ! the internal energies after finding pS.
         Om = under_relax
        
-        do while ( ( ( abs(   sum( mek ) - rhoe ) > ptgalpha_eps ) &
-               .and. ( abs( ( sum( mek ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
+        do while ( ( ( abs(   sum( mek( pack(iVar, iVar /= 0) ) ) - rhoe ) > ptgalpha_eps ) &
+               .and. ( abs( ( sum( mek( pack(iVar, iVar /= 0) ) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
                .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
@@ -334,7 +331,9 @@ contains
 
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
-            Econst = sum( (gs_min - 1.0_wp)*(mek - m0k*qvs) / (gs_min*p_infp - minval(p_infp)) )
+            Econst = sum( (gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp) &
+            * ( mek( pack(iVar, iVar /= 0) ) - m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) &
+            / ( gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) - minval(p_infp) ) )
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
@@ -397,14 +396,17 @@ contains
                   Om = under_relax
                 end if
 
-                mek = meik - Om * ( pS + pS ) * (alphak - alpha0k) / 2
+                mek( pack(iVar, iVar /= 0) ) = meik( pack(iVar, iVar /= 0) ) &
+                - Om * ( pS + pS ) * ( alphak( pack(iVar, iVar /= 0) ) - alpha0k( pack(iVar, iVar /= 0) ) ) / 2
 
                 ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
                 ! volume fractions
-                alphak = (gs_min - 1.0_wp)*(mek - m0k*qvs) / (pS + gs_min*p_infp)
+                alphak( pack(iVar, iVar /= 0) ) = ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) &
+                * ( mek( pack(iVar, iVar /= 0) ) - m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) &
+                / (pS + gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) )
 
                 ! checking if pS is within expected bounds
-                if ( ((pS <= -1.0_wp*minval(gs_min*p_infp)) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
+                if ( ((pS <= -1.0_wp*minval( gs_min * p_infp ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
 
                   ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*p_infp) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
