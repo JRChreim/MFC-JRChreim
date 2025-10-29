@@ -290,19 +290,27 @@ contains
         ! soon
         meik = me0k * rhoe / sum(me0k)
 
-        ! dismissing fluids that do not participate into p-relaxation due to the small amount of mass fraction
+        ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction.
+        ! ie if abs( mk ) > sgm_eps + rM * mixM, the fluid is considered. Note that fluids withe negative mass should 
+        ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
         iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
 
         ! this value is rather arbitrary, as I am interested in MINVAL( gs_min * ps_inf ) for the solver.
         ! This way, I am ensuring this value will not be selected.
-        p_infp( pack(iVar, iVar /= 0) ) = 2 * maxval(gs_min * ps_inf )
+        p_infp( pack(iVar, iVar /= 0) ) = 2 * maxval( gs_min * ps_inf )
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
-        pS = (rhoe - sum( alpha0k * pi_infs ) - sum( m0k * qvs ) ) / sum( alpha0k * gammas )
+        pS = (rhoe - ( sum( alpha0k * pi_infs ) - sum( alpha0k( pack(iVar, iVar /= 0) ) * pi_infs( pack(iVar, iVar /= 0) ) ) ) &
+        - ( sum( m0k * qvs ) - sum( m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) ) ) &
+        / ( sum( alpha0k * gammas ) - sum( alpha0k( pack(iVar, iVar /= 0) ) * gammas( pack(iVar, iVar /= 0) ) ) ) 
+
+        ! if ( iVar == 0 ) then
+        ! print *, iVar == 0
+        ! end if
 
         ! internal energies - first estimate
-        mek = meik + sgm_eps
+        mek = meik * ( 1 + sgm_eps )
         
         ! volume fractions - first estimate
         alphak = ( alpha0k + sgm_eps ) / sum( alpha0k + sgm_eps ) 
@@ -319,6 +327,10 @@ contains
                .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
+
+            ! if ( ( abs(   sum( me0k ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( me0k ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) then
+            !   print *, 'energy correction. Abs, Rel', abs(   sum( me0k ) - rhoe ), abs( ( sum( me0k ) - rhoe ) / rhoe )
+            ! end if
 
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
@@ -363,13 +375,20 @@ contains
                 pO = pS
 
                 ! updating functions used in the Newton's solver. f(p)
-                fp = sum( (gs_min - 1.0_wp)*(mek - m0k*qvs) / (pO + gs_min*p_infp) )
+                fp = sum( ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( pO + gs_min * p_infp ) ) &
+                   - sum( ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) * ( mek( pack(iVar, iVar /= 0) ) &
+                   - m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) &
+                   / ( pO + gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) ) )
 
                 ! updating functions used in the Newton's solver. f'(p)
-                fpp = sum( - 1.0_wp * (gs_min - 1.0_wp)*(mek - m0k*qvs) / ((pO + gs_min*p_infp)**2) )
+                fpp = sum( -1.0_wp * ( gs_min - 1.0_wp ) * ( mek - m0k*qvs ) / ( ( pO + gs_min * p_infp ) ** 2 ) ) &
+                    - sum( -1.0_wp * ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) &
+                    * ( mek( pack(iVar, iVar /= 0) ) - m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) &
+                    / ( ( pO + gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) ) ** 2 ) )
 
                 ! updating the relaxed pressure
-                pS = pO + ((1.0_wp - fp)/fpp)/(1.0_wp - (1.0_wp - fp + abs(1.0_wp - fp))/(2.0_wp*fpp*(pO + minval(gs_min*p_infp))))
+                pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) &
+                   / ( 2.0_wp * fpp * ( pO + minval( gs_min * p_infp ) ) ) )
 
                 ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
                 if ( Om >= maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) ) ) then
@@ -485,7 +504,7 @@ contains
 
         ! Numerical correction of the volume fractions, partial densities, and internal energies
         if (mpp_lim) then
-          ! auxiliry variable to avoid do loops
+          ! auxiliry variable to avoid do loops. Correting only variables for fluids whose alpha < 0 OR m < 0
           iVar = iFix ; iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
           
           ! if alpha < 0 or m < 0, set everything to 0
@@ -502,7 +521,7 @@ contains
         ! Initial state
         pk = 0.0_wp
         
-        ! auxiliry variable to avoid do loops
+        ! auxiliry variable to avoid do loops. Disregarding variables when alpha <= sgm_eps
         iVar = iFix ; iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
 
         pk( pack( iVar, iVar /= 0 ) ) = ( ( mek( pack( iVar, iVar /= 0 ) ) &
@@ -510,7 +529,7 @@ contains
         alphak( pack( iVar, iVar /= 0 ) ) - fluid_pp( pack( iVar, iVar /= 0 ) )%pi_inf ) &
         / fluid_pp( pack( iVar, iVar /= 0 ) )%gamma               
 
-        ! auxiliry variable to avoid do loops
+        ! auxiliry variable to avoid do loops. Disregarding pressures that are not physical
         iVar = iFix ; iVar( pack( iFix, .not. ( pk < -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) ) = 0
 
         pk( pack( iVar, iVar /= 0 ) ) = -(1.0_wp - ptgalpha_eps)*ps_inf( pack( iVar, iVar /= 0 ) ) &
@@ -537,7 +556,7 @@ contains
               pO = minval(-(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps)
             end if
 
-            ! calulating fp and fpp
+            ! calulating fp and fpp. Disregarding fluids for alpha < sgm_eps
             iVar = iFix ; iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
             
             num       = gs_min * (pO + ps_inf)
@@ -635,7 +654,9 @@ contains
         ! auxiliary variables to skip index looping
         iFix = (/ (i, i=1,num_fluids) /)
 
-        ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction
+        ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction.
+        ! ie if abs( mk ) > sgm_eps + rM * mixM, the fluid is considered. Note that fluids withe negative mass should 
+        ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
         iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
         
         ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
