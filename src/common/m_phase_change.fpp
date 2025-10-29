@@ -416,6 +416,17 @@ contains
                   print *, alphak
                   print *, m0k
 
+                  print *, 'abs err', abs(   sum( mek ) - rhoe )
+                  print *, 'rel err', abs( ( sum( mek ) - rhoe ) / rhoe )
+                  print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
+
+                  print *, 'Om', Om
+                  print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
+                  print *, 'me0k', me0k 
+                  print *, 'meik', meik 
+                  print *, 'rhoe', rhoe
+                  print *, 'alpha0k', alpha0k
+
                   pS = pO
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
