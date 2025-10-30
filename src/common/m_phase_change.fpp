@@ -396,14 +396,19 @@ contains
                   Om = under_relax
                 end if
 
-                mek( pack(iVar, iVar /= 0) ) = meik( pack(iVar, iVar /= 0) ) &
-                - Om * ( pS + pS ) * ( alphak( pack(iVar, iVar /= 0) ) - alpha0k( pack(iVar, iVar /= 0) ) ) / 2
+                ! updating phase variables, together with the relaxed pressure, in a loosely coupled procedure
+                ! internal energies
+                mek = meik - Om * ( pS + pS ) * ( alphak - alpha0k ) / 2
 
-                ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
                 ! volume fractions
-                alphak( pack(iVar, iVar /= 0) ) = ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) &
-                * ( mek( pack(iVar, iVar /= 0) ) - m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) &
-                / (pS + gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) )
+                alphak = ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / (pS + gs_min * p_infp )
+
+                ! returning zero-mass phases to their original values
+                ! internal energies
+                mek( pack(iVar, iVar /= 0) ) = meik( pack(iVar, iVar /= 0) )
+
+                ! volume fractions
+                alphak( pack(iVar, iVar /= 0) ) = alpha0k( pack(iVar, iVar /= 0) )
 
                 ! checking if pS is within expected bounds
                 if ( ((pS <= -1.0_wp*minval( gs_min * p_infp ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
