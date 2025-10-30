@@ -276,7 +276,7 @@ contains
         real(wp) :: Econst, Om, TS !< auxiliary variables
         real(wp), dimension(num_fluids) :: alphak, mek, meik, p_infp
         character(20) :: nss, pSs, Econsts
-        integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(num_fluids) :: iFix, iZP, iNZP !< auxiliary index for choosing appropiate values for conditional sums
 
         integer :: mF !< multiplying factor for the tolerance of the solver
         integer :: i, na, ns, nsL !< generic loop iterators
@@ -290,27 +290,30 @@ contains
         ! soon
         meik = me0k * rhoe / sum(me0k)
 
-        ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction.
+        ! dismissing fluids that do not participate into p-relaxation due to the small amount of mass fraction (iZP /= 0).
         ! ie if abs( mk ) > sgm_eps + rM * mixM, the fluid is considered. Note that fluids withe negative mass should 
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
-        iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iZP = iFix ; iZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iNZP = iFix ; iNZP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+
+        print *, 'iZP', iZP
+        print *, 'iNZP', iNZP
 
         ! this value is rather arbitrary, as I am interested in MINVAL( gs_min * ps_inf ) for the solver.
         ! This way, I am ensuring this value will not be selected.
-        p_infp( pack(iVar, iVar /= 0) ) = 2 * maxval( gs_min * ps_inf )
+        p_infp( pack(iZP, iZP /= 0) ) = 2 * maxval( gs_min * ps_inf )
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
-        pS = (rhoe - ( sum( alpha0k * pi_infs ) - sum( alpha0k( pack(iVar, iVar /= 0) ) * pi_infs( pack(iVar, iVar /= 0) ) ) ) &
-        - ( sum( m0k * qvs ) - sum( m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) ) ) &
-        / ( sum( alpha0k * gammas ) - sum( alpha0k( pack(iVar, iVar /= 0) ) * gammas( pack(iVar, iVar /= 0) ) ) ) 
+        pS = (rhoe - ( sum( alpha0k * pi_infs ) - sum( alpha0k( pack(iZP, iZP /= 0) ) * pi_infs( pack(iZP, iZP /= 0) ) ) ) &
+        - ( sum( m0k * qvs ) - sum( m0k( pack(iZP, iZP /= 0) ) * qvs( pack(iZP, iZP /= 0) ) ) ) ) &
+        / ( sum( alpha0k * gammas ) - sum( alpha0k( pack(iZP, iVar /= 0) ) * gammas( pack(iVar, iVar /= 0) ) ) ) 
 
         ! internal energies - first estimate
-        mek( pack(iVar, iVar /= 0) ) = meik( pack(iVar, iVar /= 0) ) * ( 1 + sgm_eps )
+        mek = meik * ( 1 + ptgalpha_eps )
         
         ! volume fractions - first estimate
-        alphak( pack(iVar, iVar /= 0) ) = ( alpha0k( pack(iVar, iVar /= 0) ) + sgm_eps ) &
-        / sum( alpha0k( pack(iVar, iVar /= 0) ) + sgm_eps ) 
+        alphak = alpha0k * ( 1 + ptgalpha_eps ) / sum( alpha0k * ( 1 + ptgalpha_eps ) )
 
         ! counter for the outer loop
         nsL = 0
@@ -319,8 +322,7 @@ contains
         ! the internal energies after finding pS.
         Om = under_relax
        
-        do while ( ( ( abs(   sum( mek( pack(iVar, iVar /= 0) ) ) - rhoe ) > ptgalpha_eps ) &
-               .and. ( abs( ( sum( mek( pack(iVar, iVar /= 0) ) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
+        do while ( ( ( abs(   sum( mek ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
                .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
@@ -331,9 +333,9 @@ contains
 
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
-            Econst = sum( (gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp) &
-            * ( mek( pack(iVar, iVar /= 0) ) - m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) &
-            / ( gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) - minval(p_infp) ) )
+            Econst = sum( ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( gs_min * p_infp - minval(p_infp) ) ) &
+            - sum( (gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp) * ( mek( pack(iVar, iVar /= 0) ) - m0k( pack(iVar, iVar /= 0) ) &
+            * qvs( pack(iVar, iVar /= 0) ) ) / ( gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) - minval(p_infp) ) )
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
