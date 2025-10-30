@@ -282,6 +282,7 @@ contains
         integer :: mF !< multiplying factor for the tolerance of the solver
         integer :: i, na, ns, nsL !< generic loop iterators
 
+        ! indices for all the fluids/phases
         iFix = (/ (i, i=1,num_fluids) /) 
 
         ! indices for zero-mass phases (negligible amount of partial density). Fluids with negative partial densities should 
@@ -326,15 +327,33 @@ contains
             ! energy constraint for the p-equilibrium
             if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
-              print *, 'abs err', abs(   sum( mek ) - rhoe )
-              print *, 'rel err', abs( ( sum( mek ) - rhoe ) / rhoe )
-              print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
+              print *, 'pS', pS
+              print *, 'minval(gs_min*ps_inf)', minval(gs_min(iSP)*ps_inf(iSP))
+              print *, 'ps_inf', ps_inf
+              print *, 'gs_min', gs_min
+
+              print *, 'abs err', abs(   sum( mek(iSP) ) - rhoe )
+              print *, 'rel err', abs( ( sum( mek(iSP) ) - rhoe ) / rhoe )
+              print *, 'deltas in energies', abs(rhoe - sum(me0k(iSP))), abs(rhoe - sum(me0k(iSP))) / rhoe 
 
               print *, 'Om', Om
-              print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
+              print *, 'Om Crit', maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) )
+              
+              print *, 'mek', mek 
               print *, 'me0k', me0k 
               print *, 'meik', meik 
+              print *, 'rhoe', rhoe
+
+              print *, 'm0k', m0k
+              
               print *, 'alpha0k', alpha0k
+              print *, 'alphak', alphak
+
+              print *, 'iSP', iSP
+              print *, 'iZP', iZP
+
+              print *, 'fp', fp
+              print *, 'fpp', fpp
 
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
@@ -361,16 +380,13 @@ contains
                 pO = pS
 
                 ! updating functions used in the Newton's solver. f(p)
-                fp = sum( ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) &
-                   / ( pO + gs_min(iSP) * ps_inf(iSP) ) )
+                fp = sum( ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pO + gs_min(iSP) * ps_inf(iSP) ) )
 
                 ! updating functions used in the Newton's solver. f'(p)
-                fpp = sum( -1.0_wp * ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) &
-                    / ( ( pO + gs_min(iSP) * ps_inf(iSP) ) ** 2 ) )
+                fpp = sum( -1.0_wp * ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( ( pO + gs_min(iSP) * ps_inf(iSP) ) ** 2 ) )
 
                 ! updating the relaxed pressure
-                pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) &
-                   / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
+                pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
 
                 ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
                 if ( Om >= maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) ) then
@@ -401,15 +417,15 @@ contains
                   ! keep an eye on this, as it has not been tested
                   print *, 'pS', pS
                   print *, 'minval(gs_min*ps_inf)', minval(gs_min(iSP)*ps_inf(iSP))
-                  print *, 'ps_inf', ps_inf
-                  print *, 'gs_min', gs_min
+                  print *, 'ps_inf', ps_inf(iSP)
+                  print *, 'gs_min', gs_min(iSP)
 
-                  print *, 'abs err', abs(   sum( mek ) - rhoe )
-                  print *, 'rel err', abs( ( sum( mek ) - rhoe ) / rhoe )
-                  print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
+                  print *, 'abs err', abs(   sum( mek(iSP) ) - rhoe )
+                  print *, 'rel err', abs( ( sum( mek(iSP) ) - rhoe ) / rhoe )
+                  print *, 'deltas in energies', abs(rhoe - sum(me0k(iSP))), abs(rhoe - sum(me0k(iSP))) / rhoe 
 
                   print *, 'Om', Om
-                  print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
+                  print *, 'Om Crit', maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) )
                   
                   print *, 'mek', mek 
                   print *, 'me0k', me0k 
