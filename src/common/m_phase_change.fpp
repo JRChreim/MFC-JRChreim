@@ -298,6 +298,7 @@ contains
 
         test = pack(iNZP, iNZP /= 0)
 
+        PRINT *, 'iNZP', iNZP
         print *, 'test', test
 
         ! indices for phases that do not have zero mass
@@ -338,7 +339,7 @@ contains
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
-            if ((minval(p_infp) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
+            if ((minval( ps_inf( pack(iNZP, iNZP /= 0) ) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
               print *, 'abs err', abs(   sum( mek ) - rhoe )
               print *, 'rel err', abs( ( sum( mek ) - rhoe ) / rhoe )
@@ -376,9 +377,9 @@ contains
 
                 ! updating functions used in the Newton's solver. f(p)
                 fp = sum( ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( pO + gs_min * p_infp ) ) &
-                   - sum( ( gs_min( pack(iZP, iZP /= 0) ) - 1.0_wp ) * ( mek( pack(iZP, iZP /= 0) ) &
-                   - m0k( pack(iZP, iZP /= 0) ) * qvs( pack(iZP, iZP /= 0) ) ) &
-                   / ( pO + gs_min( pack(iZP, iZP /= 0) ) * p_infp( pack(iZP, iZP /= 0) ) ) )
+                   - sum( ( gs_min( pack(iNZP, iNZP /= 0) ) - 1.0_wp ) * ( mek( pack(iNZP, iNZP /= 0) ) &
+                   - m0k( pack(iNZP, iNZP /= 0) ) * qvs( pack(iNZP, iNZP /= 0) ) ) &
+                   / ( pO + gs_min( pack(iNZP, iNZP /= 0) ) * p_infp( pack(iNZP, iNZP /= 0) ) ) )
 
                 ! updating functions used in the Newton's solver. f'(p)
                 fpp = sum( -1.0_wp * ( gs_min - 1.0_wp ) * ( mek - m0k*qvs ) / ( ( pO + gs_min * p_infp ) ** 2 ) ) &
