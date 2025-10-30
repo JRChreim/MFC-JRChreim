@@ -706,7 +706,7 @@ contains
         ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
         ! mass from one phase to the other. When this is the case, we simply ignore this possibility, set pS = TS = 0,
         ! and discard the hypothesis. The solver can thus move forward.
-        if ((rhoe - mQ - minval(p_infpT)) < 0.0_wp) then
+        if ((rhoe - mQ - minval(ps_inf(iSP))) < 0.0_wp) then
 
             if ( any((/ 0, 1 /) == MFL ) ) then
 
@@ -718,10 +718,10 @@ contains
 #ifndef MFC_OpenACC
             else
                 call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                   , 0.0_wp, (/0.0_wp, 0.0_wp/), rhoe, spread(0.0_wp, 1, num_fluids))                                      
 
-                call s_real_to_str(rhoe - mQ - minval(p_infpT), Econsts)
+                call s_real_to_str(rhoe - mQ - minval(ps_inf(iSP)), Econsts)
                 call s_mpi_abort('Solver for the pT-relaxation solver failed (m_phase_change, s_infinite_pt_relaxation_k) &
                 &    . Energy constraint~'//Econsts//'. Aborting!')
 
@@ -750,9 +750,9 @@ contains
             pO = pS
 
             ! updating functions used in the Newton's solver
-            gp = sum( ( gs_min(iSP) - 1.0_wp ) * m0k(iSP) * cvs(iSP) * ( rhoe + pO - mQ ) / ( mCP * ( pO + p_infpT(iZP) ) ) )
+            gp = sum( ( gs_min(iSP) - 1.0_wp ) * m0k(iSP) * cvs(iSP) * ( rhoe + pO - mQ ) / ( mCP * ( pO + ps_inf(iSP) ) ) )
 
-            gpp = sum( ( gs_min(iSP) - 1.0_wp ) * m0k(iSP) * cvs(iSP) * ( p_infpT(iSP) - rhoe + mQ ) / ( mCP * ( pO + p_infpT(iSP) ) **2 ) )
+            gpp = sum( ( gs_min(iSP) - 1.0_wp ) * m0k(iSP) * cvs(iSP) * ( ps_inf(iSP) - rhoe + mQ ) / ( mCP * ( pO + ps_inf(iSP) ) **2 ) )
 
             hp = 1.0_wp/(rhoe + pO - mQ) + 1.0_wp/(pO + minval(ps_inf(iSP)))
 
@@ -764,10 +764,10 @@ contains
 
             ! check if solution is out of bounds (which I believe it won`t happen given the solver is gloabally convergent.
 #ifndef MFC_OpenACC
-            if ((pS <= -1.0_wp*minval(p_infpT)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
+            if ((pS <= -1.0_wp*minval(ps_inf(iSP))) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
 
               call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                 , pS, (/abs( gp - 1.0_wp ), 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
 
               call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
