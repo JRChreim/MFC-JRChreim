@@ -411,12 +411,10 @@ contains
                   ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*p_infp) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
-                  print *, pS
-                  print *, minval(gs_min*p_infp)
-                  print *, p_infp
-                  print *, gs_min
-                  print *, alphak
-                  print *, m0k
+                  print *, 'pS', pS
+                  print *, 'minval(gs_min*p_infp)', minval(gs_min*p_infp)
+                  print *, 'p_infp', p_infp
+                  print *, 'gs_min', gs_min
 
                   print *, 'abs err', abs(   sum( mek ) - rhoe )
                   print *, 'rel err', abs( ( sum( mek ) - rhoe ) / rhoe )
@@ -424,14 +422,19 @@ contains
 
                   print *, 'Om', Om
                   print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
+                  print *, 'm0k', m0k
                   print *, 'me0k', me0k 
                   print *, 'meik', meik 
                   print *, 'rhoe', rhoe
+                  
                   print *, 'alpha0k', alpha0k
+                  print *, 'alphak', alphak
 
                   pS = pO
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
+
+                  pause
 
                 else if (ns > max_iter) then
                   
