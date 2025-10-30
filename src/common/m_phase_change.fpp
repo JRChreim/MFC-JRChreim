@@ -307,7 +307,7 @@ contains
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
         pS = (rhoe - ( sum( alpha0k * pi_infs ) - sum( alpha0k( pack(iZP, iZP /= 0) ) * pi_infs( pack(iZP, iZP /= 0) ) ) ) &
         - ( sum( m0k * qvs ) - sum( m0k( pack(iZP, iZP /= 0) ) * qvs( pack(iZP, iZP /= 0) ) ) ) ) &
-        / ( sum( alpha0k * gammas ) - sum( alpha0k( pack(iZP, iVar /= 0) ) * gammas( pack(iVar, iVar /= 0) ) ) ) 
+        / ( sum( alpha0k * gammas ) - sum( alpha0k( pack(iZP, iZP /= 0) ) * gammas( pack(iZP, iZP /= 0) ) ) ) 
 
         ! internal energies - first estimate
         mek = meik * ( 1 + ptgalpha_eps )
@@ -334,8 +334,8 @@ contains
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
             Econst = sum( ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( gs_min * p_infp - minval(p_infp) ) ) &
-            - sum( (gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp) * ( mek( pack(iVar, iVar /= 0) ) - m0k( pack(iVar, iVar /= 0) ) &
-            * qvs( pack(iVar, iVar /= 0) ) ) / ( gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) - minval(p_infp) ) )
+            - sum( (gs_min( pack(iZP, iZP /= 0) ) - 1.0_wp) * ( mek( pack(iZP, iZP /= 0) ) - m0k( pack(iZP, iZP /= 0) ) &
+            * qvs( pack(iZP, iZP /= 0) ) ) / ( gs_min( pack(iZP, iZP /= 0) ) * p_infp( pack(iZP, iZP /= 0) ) - minval(p_infp) ) )
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
@@ -377,15 +377,15 @@ contains
 
                 ! updating functions used in the Newton's solver. f(p)
                 fp = sum( ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( pO + gs_min * p_infp ) ) &
-                   - sum( ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) * ( mek( pack(iVar, iVar /= 0) ) &
-                   - m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) &
-                   / ( pO + gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) ) )
+                   - sum( ( gs_min( pack(iZP, iZP /= 0) ) - 1.0_wp ) * ( mek( pack(iZP, iZP /= 0) ) &
+                   - m0k( pack(iZP, iZP /= 0) ) * qvs( pack(iZP, iZP /= 0) ) ) &
+                   / ( pO + gs_min( pack(iZP, iZP /= 0) ) * p_infp( pack(iZP, iZP /= 0) ) ) )
 
                 ! updating functions used in the Newton's solver. f'(p)
                 fpp = sum( -1.0_wp * ( gs_min - 1.0_wp ) * ( mek - m0k*qvs ) / ( ( pO + gs_min * p_infp ) ** 2 ) ) &
-                    - sum( -1.0_wp * ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) &
-                    * ( mek( pack(iVar, iVar /= 0) ) - m0k( pack(iVar, iVar /= 0) ) * qvs( pack(iVar, iVar /= 0) ) ) &
-                    / ( ( pO + gs_min( pack(iVar, iVar /= 0) ) * p_infp( pack(iVar, iVar /= 0) ) ) ** 2 ) )
+                    - sum( -1.0_wp * ( gs_min( pack(iZP, iZP /= 0) ) - 1.0_wp ) &
+                    * ( mek( pack(iZP, iZP /= 0) ) - m0k( pack(iZP, iZP /= 0) ) * qvs( pack(iZP, iZP /= 0) ) ) &
+                    / ( ( pO + gs_min( pack(iZP, iZP /= 0) ) * p_infp( pack(iZP, iZP /= 0) ) ) ** 2 ) )
 
                 ! updating the relaxed pressure
                 pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) &
@@ -407,10 +407,10 @@ contains
 
                 ! returning zero-mass phases to their original values
                 ! internal energies
-                mek( pack(iVar, iVar /= 0) ) = meik( pack(iVar, iVar /= 0) )
+                mek( pack(iZP, iZP /= 0) ) = meik( pack(iZP, iZP /= 0) )
 
                 ! volume fractions
-                alphak( pack(iVar, iVar /= 0) ) = alpha0k( pack(iVar, iVar /= 0) )
+                alphak( pack(iZP, iZP /= 0) ) = alpha0k( pack(iZP, iZP /= 0) )
 
                 ! checking if pS is within expected bounds
                 if ( ((pS <= -1.0_wp*minval( gs_min * p_infp ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
@@ -440,7 +440,7 @@ contains
                   print *, 'alpha0k', alpha0k
                   print *, 'alphak', alphak
 
-                  print *, 'iVar', iVar
+                  print *, 'iZP', iZP
 
                   print *, 'fp', fp
                   print *, 'fpp', fpp
@@ -490,8 +490,8 @@ contains
         ! correcting nonphysical temperatures due to alphak/m0k = 0/0 division. Note that the state for these fluids
         ! need not be determined, as alpha = alpharho = alpharhoe = 0 (state components for the q array). They cannot only
         ! be either 0 or NaN for the sake of the algorithm
-        Tk( pack(iVar, iVar /= 0) ) = (pS + p_infp( pack(iVar, iVar /= 0) )) &
-        / ( (gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp) * cvs( pack(iVar, iVar /= 0) ) )
+        Tk( pack(iZP, iZP /= 0) ) = (pS + p_infp( pack(iZP, iZP /= 0) )) &
+        / ( (gs_min( pack(iZP, iZP /= 0) ) - 1.0_wp) * cvs( pack(iZP, iZP /= 0) ) )
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
