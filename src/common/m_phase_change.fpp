@@ -1008,12 +1008,13 @@ contains
         real(wp), intent(out) :: rM, rho
         logical, intent(inout) :: TR
         integer, intent(in) :: CT, j, k, l
-        integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(num_fluids) :: iFix, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(:), allocatable :: iZP
         integer :: i
         !> @}
 
         iFix = (/ (i, i=1,num_fluids) /)
-        iVar = iFix
+        iAuxZP = iFix
 
         ! Mixture density
         rho = sum(m0k)
@@ -1060,29 +1061,29 @@ contains
 
             end if
         elseif (CT == 2) then
-            ! auxiliry variable to avoid do loops - use Morgan's Law
+            ! zero phase indices. Auxiliary variable to avoid do loops - use Morgan's Law
             if ( any((/ 1, 4 /) == relax_model ) ) then
-                ! this iVar is only valid when we use either the old or new p-relaxationS, as they are only
+                ! this iAuxZP is only valid when we use either the old or new p-relaxations, as they are only
                 ! used with the 6-equation model. Note that they test the phisical validity of the initial conditions
-                iVar( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
-
+                iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
             else
                 ! this is used for either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
                 ! energies are not important
-                iVar( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) ) ) = 0
+                iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) ) ) = 0
             end if
+            iZP = pack(iAuxZP, iAuxZP /= 0)
 
             ! if either the volume fraction or the partial density is negative, make them positive
-            alpha0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+            alpha0k(iZP) = 0.0_wp
             ! the greastes value of alpha0k must be one
             alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
             
-            m0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+            m0k(iZP) = 0.0_wp
             ! renormalizing all variables of interest based on the volume fraction
             ! so everything is adjusted accordingly
 
             if (model_eqns == 3) then
-              me0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+              me0k(iZP) = 0.0_wp
               ! me0k = me0k / sum(alpha0k)
             end if
 
