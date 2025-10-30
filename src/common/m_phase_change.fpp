@@ -430,6 +430,8 @@ contains
                   print *, 'alpha0k', alpha0k
                   print *, 'alphak', alphak
 
+                  print *, 'iVar', iVar
+
                   pS = pO
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
