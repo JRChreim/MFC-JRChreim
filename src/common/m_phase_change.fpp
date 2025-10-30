@@ -277,7 +277,8 @@ contains
         real(wp), dimension(num_fluids) :: alphak, mek, meik, p_infp
         character(20) :: nss, pSs, Econsts
         integer, dimension(num_fluids) :: iFix, iZP, iNZP !< auxiliary index for choosing appropiate values for conditional sums
-
+        integer, dimension(:), allocatable :: test
+        
         integer :: mF !< multiplying factor for the tolerance of the solver
         integer :: i, na, ns, nsL !< generic loop iterators
 
@@ -294,10 +295,13 @@ contains
         ! ie if abs( mk ) > sgm_eps + rM * mixM, the fluid is considered. Note that fluids withe negative mass should 
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
         iZP = iFix ; iZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
-        iNZP = iFix ; iNZP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
 
-        print *, 'iZP', iZP
-        print *, 'iNZP', iNZP
+        test = pack(iNZP, iNZP /= 0)
+
+        print *, 'test', test
+
+        ! indices for phases that do not have zero mass
+        iNZP = iFix ; iNZP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
 
         ! this value is rather arbitrary, as I am interested in MINVAL( gs_min * ps_inf ) for the solver.
         ! This way, I am ensuring this value will not be selected.
@@ -305,9 +309,9 @@ contains
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
-        pS = (rhoe - ( sum( alpha0k * pi_infs ) - sum( alpha0k( pack(iZP, iZP /= 0) ) * pi_infs( pack(iZP, iZP /= 0) ) ) ) &
-        - ( sum( m0k * qvs ) - sum( m0k( pack(iZP, iZP /= 0) ) * qvs( pack(iZP, iZP /= 0) ) ) ) ) &
-        / ( sum( alpha0k * gammas ) - sum( alpha0k( pack(iZP, iZP /= 0) ) * gammas( pack(iZP, iZP /= 0) ) ) ) 
+        pS = (rhoe - sum( alpha0k( pack(iNZP, iNZP /= 0) ) * pi_infs( pack(iNZP, iNZP /= 0) ) ) &
+            - sum( m0k( pack(iNZP, iNZP /= 0) ) * qvs( pack(iNZP, iNZP /= 0) ) ) ) &
+            / sum( alpha0k( pack(iNZP, iNZP /= 0) ) * gammas( pack(iNZP, iNZP /= 0) ) ) 
 
         ! internal energies - first estimate
         mek = meik * ( 1 + ptgalpha_eps )
@@ -327,15 +331,10 @@ contains
             ! increasing counter
             nsL = nsL + 1
 
-            ! if ( ( abs(   sum( me0k ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( me0k ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) then
-            !   print *, 'energy correction. Abs, Rel', abs(   sum( me0k ) - rhoe ), abs( ( sum( me0k ) - rhoe ) / rhoe )
-            ! end if
-
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
-            Econst = sum( ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( gs_min * p_infp - minval(p_infp) ) ) &
-            - sum( (gs_min( pack(iZP, iZP /= 0) ) - 1.0_wp) * ( mek( pack(iZP, iZP /= 0) ) - m0k( pack(iZP, iZP /= 0) ) &
-            * qvs( pack(iZP, iZP /= 0) ) ) / ( gs_min( pack(iZP, iZP /= 0) ) * p_infp( pack(iZP, iZP /= 0) ) - minval(p_infp) ) )
+            Econst = sum( (gs_min( pack(iNZP, iNZP /= 0) ) - 1.0_wp) * ( mek( pack(iNZP, iNZP /= 0) ) - m0k( pack(iNZP, iNZP /= 0) ) &
+            * qvs( pack(iNZP, iNZP /= 0) ) ) / ( gs_min( pack(iNZP, iNZP /= 0) ) * ps_inf( pack(iNZP, iNZP /= 0) ) - minval( ps_inf( pack(iNZP, iNZP /= 0) ) ) ) )
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
