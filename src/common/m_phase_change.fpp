@@ -276,8 +276,8 @@ contains
         real(wp) :: Econst, Om, TS !< auxiliary variables
         real(wp), dimension(num_fluids) :: alphak, mek, meik, p_infp
         character(20) :: nss, pSs, Econsts
-        integer, dimension(num_fluids) :: iFix, iZP, iNZP !< auxiliary index for choosing appropiate values for conditional sums
-        integer, dimension(:), allocatable :: test
+        integer, dimension(num_fluids) :: iFix, iAuxNZP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(:), allocatable :: iNZP, iZP
         
         integer :: mF !< multiplying factor for the tolerance of the solver
         integer :: i, na, ns, nsL !< generic loop iterators
@@ -295,14 +295,14 @@ contains
         ! ie if abs( mk ) > sgm_eps + rM * mixM, the fluid is considered. Note that fluids withe negative mass should 
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
         iZP = iFix ; iZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
-
-        test = pack(iNZP, iNZP /= 0)
-
-        PRINT *, 'iNZP', iNZP
-        print *, 'test', test
+        iZP = pack(iAuxZP, iAuxZP /= 0)
 
         ! indices for phases that do not have zero mass
-        iNZP = iFix ; iNZP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iAuxNZP = iFix ; iAuxNZP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iNZP = pack(iAuxNZP, iAuxNZP /= 0)
+
+        PRINT *, 'iZP', iZP
+        PRINT *, 'iNZP', iNZP
 
         ! this value is rather arbitrary, as I am interested in MINVAL( gs_min * ps_inf ) for the solver.
         ! This way, I am ensuring this value will not be selected.
@@ -352,8 +352,8 @@ contains
               print *, 'alpha0k', alpha0k
 
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, p_infp &
-                                , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + p_infp) / ( (gs_min - 1.0_wp) * m0k * cvs ))
+                                , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
+                                , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ))
 
               call s_real_to_str(Econst, Econsts)
               call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
@@ -376,20 +376,18 @@ contains
                 pO = pS
 
                 ! updating functions used in the Newton's solver. f(p)
-                fp = sum( ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( pO + gs_min * p_infp ) ) &
-                   - sum( ( gs_min( pack(iNZP, iNZP /= 0) ) - 1.0_wp ) * ( mek( pack(iNZP, iNZP /= 0) ) &
+                fp = sum( ( gs_min( pack(iNZP, iNZP /= 0) ) - 1.0_wp ) * ( mek( pack(iNZP, iNZP /= 0) ) &
                    - m0k( pack(iNZP, iNZP /= 0) ) * qvs( pack(iNZP, iNZP /= 0) ) ) &
                    / ( pO + gs_min( pack(iNZP, iNZP /= 0) ) * p_infp( pack(iNZP, iNZP /= 0) ) ) )
 
                 ! updating functions used in the Newton's solver. f'(p)
-                fpp = sum( -1.0_wp * ( gs_min - 1.0_wp ) * ( mek - m0k*qvs ) / ( ( pO + gs_min * p_infp ) ** 2 ) ) &
-                    - sum( -1.0_wp * ( gs_min( pack(iZP, iZP /= 0) ) - 1.0_wp ) &
-                    * ( mek( pack(iZP, iZP /= 0) ) - m0k( pack(iZP, iZP /= 0) ) * qvs( pack(iZP, iZP /= 0) ) ) &
-                    / ( ( pO + gs_min( pack(iZP, iZP /= 0) ) * p_infp( pack(iZP, iZP /= 0) ) ) ** 2 ) )
+                fpp = sum( -1.0_wp * ( gs_min( pack(iNZP, iNZP /= 0) ) - 1.0_wp ) &
+                    * ( mek( pack(iNZP, iNZP /= 0) ) - m0k( pack(iNZP, iNZP /= 0) ) * qvs( pack(iNZP, iNZP /= 0) ) ) &
+                    / ( ( pO + gs_min( pack(iNZP, iNZP /= 0) ) * p_infp( pack(iNZP, iNZP /= 0) ) ) ** 2 ) )
 
                 ! updating the relaxed pressure
                 pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) &
-                   / ( 2.0_wp * fpp * ( pO + minval( gs_min * p_infp ) ) ) )
+                   / ( 2.0_wp * fpp * ( pO + minval( gs_min( pack(iNZP, iNZP /= 0) ) * p_infp( pack(iNZP, iNZP /= 0) ) ) ) ) )
 
                 ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
                 if ( Om >= maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) ) ) then
