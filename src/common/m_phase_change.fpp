@@ -422,15 +422,21 @@ contains
 
                   print *, 'Om', Om
                   print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
-                  print *, 'm0k', m0k
+                  
+                  print *, 'mek', mek 
                   print *, 'me0k', me0k 
                   print *, 'meik', meik 
                   print *, 'rhoe', rhoe
+
+                  print *, 'm0k', m0k
                   
                   print *, 'alpha0k', alpha0k
                   print *, 'alphak', alphak
 
                   print *, 'iVar', iVar
+
+                  print *, 'fp', fp
+                  print *, 'fpp', fpp
 
                   pS = pO
 
