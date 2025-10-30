@@ -668,7 +668,8 @@ contains
         real(wp), intent(in) :: rhoe, rM
         real(wp), intent(in), dimension(num_fluids) :: m0k
         integer, intent(in) :: j, k, l, MFL
-        integer, dimension(num_fluids) :: iVar, iFix !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(num_fluids) :: iFix, iAuxSP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(:), allocatable :: iSP, iZP
         real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
 
@@ -677,17 +678,21 @@ contains
         ! auxiliary variables for the pT-equilibrium solver
         p_infpT = ps_inf
 
-        ! auxiliary variables to skip index looping
-        iFix = (/ (i, i=1,num_fluids) /)
+        ! indices for all the fluids/phases
+        iFix = (/ (i, i=1,num_fluids) /) 
 
-        ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction.
-        ! ie if abs( mk ) > sgm_eps + rM * mixM, the fluid is considered. Note that fluids withe negative mass should 
+        ! indices for zero-mass phases (negligible amount of partial density). Fluids with negative partial densities should 
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
-        iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
-        
+        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iZP = pack(iAuxZP, iAuxZP /= 0)
+
+        ! indices for phases that have a significant partial density
+        iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iSP = pack(iAuxSP, iAuxSP /= 0)
+
         ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
         ! This way, I am ensuring this value will not be selected.
-        p_infpT( pack(iVar, iVar /= 0) ) = 2 * maxval( ps_inf )
+        p_infpT(iZP) = 2 * maxval( ps_inf )
         
         ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
           ! sum of the total alpha*rho*cp of the system
@@ -745,26 +750,17 @@ contains
             pO = pS
 
             ! updating functions used in the Newton's solver
-            gp = sum( ( gs_min - 1.0_wp ) * m0k * cvs * ( rhoe + pO - mQ ) &
-              / ( mCP * ( pO + p_infpT ) ) ) &
-               - sum( ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) * m0k( pack(iVar, iVar /= 0) ) &
-               * cvs( pack(iVar, iVar /= 0) ) * ( rhoe + pO - mQ ) &
-              / ( mCP * ( pO + p_infpT( pack(iVar, iVar /= 0) ) ) ) )
+            gp = sum( ( gs_min(iSP) - 1.0_wp ) * m0k(iSP) * cvs(iSP) * ( rhoe + pO - mQ ) / ( mCP * ( pO + p_infpT(iZP) ) ) )
 
-            gpp = sum( ( gs_min - 1.0_wp ) * m0k * cvs * ( p_infpT - rhoe + mQ ) &
-              / ( mCP * ( pO + p_infpT ) **2 ) ) &
-              - sum( ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) * m0k( pack(iVar, iVar /= 0) ) &
-              * cvs( pack(iVar, iVar /= 0) ) * ( p_infpT( pack(iVar, iVar /= 0) ) - rhoe + mQ )  &
-              / ( mCP * ( pO + p_infpT( pack(iVar, iVar /= 0) ) ) **2 ) )
+            gpp = sum( ( gs_min(iSP) - 1.0_wp ) * m0k(iSP) * cvs(iSP) * ( p_infpT(iSP) - rhoe + mQ ) / ( mCP * ( pO + p_infpT(iSP) ) **2 ) )
 
-            hp = 1.0_wp/(rhoe + pO - mQ) + 1.0_wp/(pO + minval(p_infpT))
+            hp = 1.0_wp/(rhoe + pO - mQ) + 1.0_wp/(pO + minval(ps_inf(iSP)))
 
             ! updating common pressure for the newton solver
-            pS = pO + ((1.0_wp - gp)/gpp)/(1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) &
-                                          /(2.0_wp*gpp)*hp)
+            pS = pO + ((1.0_wp - gp) / gpp) / (1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) / (2.0_wp*gpp)*hp)
 
             ! common temperature
-            TS = (rhoe + pS - mQ)/mCP
+            TS = (rhoe + pS - mQ) / mCP
 
             ! check if solution is out of bounds (which I believe it won`t happen given the solver is gloabally convergent.
 #ifndef MFC_OpenACC
