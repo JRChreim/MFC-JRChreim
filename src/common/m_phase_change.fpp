@@ -274,7 +274,7 @@ contains
 
         real(wp) :: fp, fpp, pO !< variables for the Newton Solver
         real(wp) :: Econst, Om, TS !< auxiliary variables
-        real(wp), dimension(num_fluids) :: alphak, mek, meik, p_infp
+        real(wp), dimension(num_fluids) :: alphak, mek, meik
         character(20) :: nss, pSs, Econsts
         integer, dimension(num_fluids) :: iFix, iAuxNZP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
         integer, dimension(:), allocatable :: iNZP, iZP
@@ -283,8 +283,6 @@ contains
         integer :: i, na, ns, nsL !< generic loop iterators
 
         iFix = (/ (i, i=1,num_fluids) /) 
-
-        p_infp = ps_inf
 
         ! Re-distributing the initial internal energy values such that rhoe = rhoe6E, eventually.
         ! meik does the role of me0k, but it is its value adjusted to match rhoe = rhoe6E. This step might be unecessary
@@ -304,14 +302,10 @@ contains
         PRINT *, 'iZP', iZP
         PRINT *, 'iNZP', iNZP
 
-        ! this value is rather arbitrary, as I am interested in MINVAL( gs_min * ps_inf ) for the solver.
-        ! This way, I am ensuring this value will not be selected.
-        p_infp( iZP ) = 2 * maxval( gs_min * ps_inf )
-
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
-        pS = (rhoe - sum( alpha0k( iNZP ) * pi_infs( iNZP ) ) - sum( m0k( iNZP ) * qvs( iNZP ) ) ) &
-        / sum( alpha0k( iNZP ) * gammas( iNZP ) ) 
+        pS = (rhoe - sum( alpha0k(iNZP) * pi_infs(iNZP) ) - sum( m0k(iNZP) * qvs(iNZP) ) ) &
+        / sum( alpha0k(iNZP) * gammas(iNZP) ) 
 
         ! internal energies - first estimate
         mek = meik * ( 1 + ptgalpha_eps )
@@ -333,12 +327,12 @@ contains
 
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
-            Econst = sum( (gs_min( iNZP ) - 1.0_wp) * ( mek( iNZP ) - m0k( iNZP ) * qvs( iNZP ) ) &
-            / ( gs_min( iNZP ) * ps_inf( iNZP ) - minval( ps_inf( iNZP ) ) ) )
+            Econst = sum( (gs_min(iNZP) - 1.0_wp) * ( mek(iNZP) - m0k(iNZP) * qvs(iNZP) ) &
+            / ( gs_min(iNZP) * ps_inf(iNZP) - minval( ps_inf(iNZP) ) ) )
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
-            if ((minval( ps_inf( iNZP ) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
+            if ((minval( ps_inf(iNZP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
               print *, 'abs err', abs(   sum( mek ) - rhoe )
               print *, 'rel err', abs( ( sum( mek ) - rhoe ) / rhoe )
@@ -375,47 +369,47 @@ contains
                 pO = pS
 
                 ! updating functions used in the Newton's solver. f(p)
-                fp = sum( ( gs_min( iNZP ) - 1.0_wp ) * ( mek( iNZP ) - m0k( iNZP ) * qvs( iNZP ) ) &
-                   / ( pO + gs_min( iNZP ) * p_infp( iNZP ) ) )
+                fp = sum( ( gs_min(iNZP) - 1.0_wp ) * ( mek(iNZP) - m0k(iNZP) * qvs(iNZP) ) &
+                   / ( pO + gs_min(iNZP) * ps_inf(iNZP) ) )
 
                 ! updating functions used in the Newton's solver. f'(p)
-                fpp = sum( -1.0_wp * ( gs_min( iNZP ) - 1.0_wp ) * ( mek( iNZP ) - m0k( iNZP ) * qvs( iNZP ) ) &
-                    / ( ( pO + gs_min( iNZP ) * p_infp( iNZP ) ) ** 2 ) )
+                fpp = sum( -1.0_wp * ( gs_min(iNZP) - 1.0_wp ) * ( mek(iNZP) - m0k(iNZP) * qvs(iNZP) ) &
+                    / ( ( pO + gs_min(iNZP) * ps_inf(iNZP) ) ** 2 ) )
 
                 ! updating the relaxed pressure
                 pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) &
-                   / ( 2.0_wp * fpp * ( pO + minval( gs_min( iNZP ) * p_infp( iNZP ) ) ) ) )
+                   / ( 2.0_wp * fpp * ( pO + minval( gs_min(iNZP) * ps_inf(iNZP) ) ) ) )
 
                 ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
-                if ( Om >= maxval( (meik( iNZP ) - m0k( iNZP ) * qvs( iNZP ) ) / ( pS * (alphak( iNZP ) - alpha0k( iNZP )) ) ) ) then
-                  Om = maxval( (meik( iNZP ) - m0k( iNZP ) * qvs( iNZP ) ) / ( pS * (alphak( iNZP ) - alpha0k( iNZP )) ) ) / 2
+                if ( Om >= maxval( (meik(iNZP) - m0k(iNZP) * qvs(iNZP) ) / ( pS * (alphak(iNZP) - alpha0k(iNZP)) ) ) ) then
+                  Om = maxval( (meik(iNZP) - m0k(iNZP) * qvs(iNZP) ) / ( pS * (alphak(iNZP) - alpha0k(iNZP)) ) ) / 2
                 else
                   Om = under_relax
                 end if
 
                 ! updating phase variables, together with the relaxed pressure, in a loosely coupled procedure
                 ! internal energies
-                mek( iNZP ) = meik( iNZP ) - Om * ( pS + pS ) * ( alphak( iNZP ) - alpha0k( iNZP ) ) / 2
+                mek(iNZP) = meik(iNZP) - Om * ( pS + pS ) * ( alphak(iNZP) - alpha0k(iNZP) ) / 2
 
                 ! volume fractions
-                alphak( iNZP ) = ( gs_min( iNZP ) - 1.0_wp ) * ( mek( iNZP ) - m0k( iNZP ) * qvs( iNZP ) ) / (pS + gs_min( iNZP ) * p_infp( iNZP ) )
+                alphak(iNZP) = ( gs_min(iNZP) - 1.0_wp ) * ( mek(iNZP) - m0k(iNZP) * qvs(iNZP) ) / (pS + gs_min(iNZP) * ps_inf(iNZP) )
 
                 ! returning zero-mass phases to their original values
                 ! internal energies
-                mek( iZP ) = meik( iZP )
+                mek(iZP) = meik(iZP)
 
                 ! volume fractions
-                alphak( iZP ) = alpha0k( iZP )
+                alphak(iZP) = alpha0k(iZP)
 
                 ! checking if pS is within expected bounds
-                if ( ((pS <= -1.0_wp*minval( gs_min * p_infp ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
+                if ( ((pS <= -1.0_wp*minval( gs_min(iNZP) * ps_inf(iNZP) ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
 
-                  ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*p_infp) due to the
+                  ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*ps_inf) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
                   print *, 'pS', pS
-                  print *, 'minval(gs_min*p_infp)', minval(gs_min*p_infp)
-                  print *, 'p_infp', p_infp
+                  print *, 'minval(gs_min*ps_inf)', minval(gs_min(iNZP)*ps_inf(iNZP))
+                  print *, 'ps_inf', ps_inf
                   print *, 'gs_min', gs_min
 
                   print *, 'abs err', abs(   sum( mek ) - rhoe )
@@ -435,6 +429,7 @@ contains
                   print *, 'alpha0k', alpha0k
                   print *, 'alphak', alphak
 
+                  print *, 'iNZP', iNZP
                   print *, 'iZP', iZP
 
                   print *, 'fp', fp
@@ -443,8 +438,6 @@ contains
                   pS = pO
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
-
-                  pause
 
                 else if (ns > max_iter) then
                   
@@ -467,8 +460,8 @@ contains
                       print *, 'alpha0k', alpha0k
 
                       call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                        , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infp &
-                                        , pS, (/fp - 1.0_wp, 0.0_wp/), rhoe, alphak * (pS + p_infp) / ( (gs_min - 1.0_wp) * m0k * cvs ) )
+                                        , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                        , pS, (/fp - 1.0_wp, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ) )
 
                       call s_real_to_str(pS, pSs)
                       call s_int_to_str(ns, nss)
@@ -480,13 +473,12 @@ contains
         end do
 
         ! (NOT common) temperatures
-        Tk = alphak * (pS + p_infp) / ( (gs_min - 1.0_wp) * m0k * cvs )
+        Tk(iNZP) = alphak(iNZP) * (pS + ps_inf(iNZP)) / ( (gs_min(iNZP) - 1.0_wp) * m0k(iNZP) * cvs(iNZP) )
 
         ! correcting nonphysical temperatures due to alphak/m0k = 0/0 division. Note that the state for these fluids
         ! need not be determined, as alpha = alpharho = alpharhoe = 0 (state components for the q array). They cannot only
         ! be either 0 or NaN for the sake of the algorithm
-        Tk( iZP ) = (pS + p_infp( iZP )) &
-        / ( (gs_min( iZP ) - 1.0_wp) * cvs( iZP ) )
+        Tk(iZP) = (pS + ps_inf(iZP)) / ( (gs_min(iZP) - 1.0_wp) * m0k(iZP) * cvs(iZP) )
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
