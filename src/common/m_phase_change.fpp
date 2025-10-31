@@ -323,6 +323,7 @@ contains
             Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
 
           if (i == 0 .and. j == 0 .and. k == 0) then
+            print *, 'pre'
             print *, 'i,j,k', i, j, k
             print *, 'alpha', alpha0k
             print *, 'm', m0k
@@ -489,6 +490,14 @@ contains
                 end if
             end do
         end do
+
+          if (i == 0 .and. j == 0 .and. k == 0) then
+            print *, 'pos'
+            print *, 'i,j,k', i, j, k
+            print *, 'alpha', alpha0k
+            print *, 'm', m0k
+            print *, 'me', me0k
+          end if
 
         ! (NOT common) temperatures
         Tk(iSP) = alphak(iSP) * (pS + ps_inf(iSP)) / ( (gs_min(iSP) - 1.0_wp) * m0k(iSP) * cvs(iSP) )
