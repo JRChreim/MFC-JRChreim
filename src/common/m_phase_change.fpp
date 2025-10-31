@@ -389,7 +389,8 @@ contains
                 pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
 
                 ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
-                if ( Om >= maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) ) then
+                if ( ( Om >= maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) ) & 
+                .and. ( maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) > 0 ) ) then
                   Om = maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) / 2
                 else
                   Om = under_relax
