@@ -299,7 +299,7 @@ contains
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
-        pS = (rhoe - sum( alpha0k(iSP) * pi_infs(iSP) ) - sum( m0k(iSP) * qvs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
+        pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
         ! internal energies - first estimate
         mek = meik * ( 1 + ptgalpha_eps )
@@ -314,8 +314,7 @@ contains
         ! the internal energies after finding pS.
         Om = under_relax
        
-        do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
-               .or.  ( nSL == 0 ) )
+        do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
 
@@ -337,6 +336,7 @@ contains
               print *, 'deltas in energies', abs(rhoe - sum(me0k(iSP))), abs(rhoe - sum(me0k(iSP))) / rhoe 
 
               print *, 'Om', Om
+              print *, 'under_relax', under_relax
               print *, 'Om Crit', maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) )
               
               print *, 'mek', mek 
@@ -425,6 +425,7 @@ contains
                   print *, 'deltas in energies', abs(rhoe - sum(me0k(iSP))), abs(rhoe - sum(me0k(iSP))) / rhoe 
 
                   print *, 'Om', Om
+                  print *, 'under_relax', under_relax
                   print *, 'Om Crit', maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) )
                   
                   print *, 'mek', mek 
@@ -461,6 +462,7 @@ contains
 
                       print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
                       print *, 'Om', Om
+                      print *, 'under_relax', under_relax
                       print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
                       print *, 'me0k', me0k 
                       print *, 'meik', meik
