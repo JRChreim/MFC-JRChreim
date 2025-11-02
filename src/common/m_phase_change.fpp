@@ -90,8 +90,6 @@ contains
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
 
-        print *, 'pirocas, talkey?'
-
         ! starting equilibrium solver
         $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL, &
             & rhoe,rhoeT,dynE,rhos,rho,rM,m1,m2,TR, &
@@ -142,7 +140,6 @@ contains
                         case (1) ! (old) p-equilibrium
                             call s_old_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, Tk)                            
                         case (4) ! p-equilibrium
-                          print *, 'inside case 4'
                             call s_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, rM, Tk)
                         case (5) ! pT-equilibrium
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
@@ -316,8 +313,6 @@ contains
         ! Relaxation factor. Although this is not needed for Newton Solver for finding p, it seems to be needed to update
         ! the internal energies after finding pS.
         Om = under_relax
-       
-        print *, 'before do loop'
 
         do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) .or.  ( nSL == 0 ) )
             ! increasing counter
@@ -327,13 +322,13 @@ contains
             ! global convergence will be estabilished
             Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
 
-          if (i == 0 .and. j == 0 .and. k == 0) then
-            print *, 'pre'
-            print *, 'i,j,k', i, j, k
-            print *, 'alpha', alpha0k
-            print *, 'm', m0k
-            print *, 'me', me0k
-          end if
+            ! if (j == 0 .and. k == 0 .and. l == 0) then
+            !   print *, 'pre'
+            !   print *, 'j,k,l', j, k, l
+            !   print *, 'alpha', alpha0k
+            !   print *, 'm', m0k
+            !   print *, 'me', me0k
+            ! end if
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
@@ -496,13 +491,13 @@ contains
             end do
         end do
 
-          if (i == 0 .and. j == 0 .and. k == 0) then
-            print *, 'pos'
-            print *, 'i,j,k', i, j, k
-            print *, 'alpha', alpha0k
-            print *, 'm', m0k
-            print *, 'me', me0k
-          end if
+          ! if (j == 0 .and. k == 0 .and. l == 0) then
+          !   print *, 'pos'
+          !   print *, 'j,k,l', j, k, l
+          !   print *, 'alpha', alpha0k
+          !   print *, 'm', m0k
+          !   print *, 'me', me0k
+          ! end if
 
         ! (NOT common) temperatures
         Tk(iSP) = alphak(iSP) * (pS + ps_inf(iSP)) / ( (gs_min(iSP) - 1.0_wp) * m0k(iSP) * cvs(iSP) )
