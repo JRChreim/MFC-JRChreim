@@ -90,6 +90,8 @@ contains
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
 
+        print *, 'pirocas, talkey?'
+
         ! starting equilibrium solver
         $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL, &
             & rhoe,rhoeT,dynE,rhos,rho,rM,m1,m2,TR, &
@@ -140,6 +142,7 @@ contains
                         case (1) ! (old) p-equilibrium
                             call s_old_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, Tk)                            
                         case (4) ! p-equilibrium
+                          print *, 'inside case 4'
                             call s_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, rM, Tk)
                         case (5) ! pT-equilibrium
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
@@ -314,6 +317,8 @@ contains
         ! the internal energies after finding pS.
         Om = under_relax
        
+        print *, 'before do loop'
+
         do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
