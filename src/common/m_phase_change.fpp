@@ -76,6 +76,7 @@ contains
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(wp) :: rhoe, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
         real(wp) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
+        real(wp) :: alpha_b !< volume fraction of the subgrid component, used in case icsg is activated
         logical :: TR
 
         $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
@@ -116,6 +117,12 @@ contains
                             me0k(i) = q_cons_vf(i + intxb - 1)%sf(j, k, l)
                         end if
                     end do
+
+                    ! in case interface capturing and subgrid are on, use
+                    ! subgrid parameter alpha_b as a triggering parameter for phase change
+                    if (icsg) then
+                      alpha_b = q_cons_vf(alf_idx)%sf(j, k, l)
+                    end if
 
                     if ( count( ieee_is_nan( m0k ) ) == num_fluids ) then
                       TR = .false.  
@@ -214,7 +221,7 @@ contains
                                     m0k(lp) = m1 ; m0k(vp) = m2
 
                                     ! pTg-relaxation
-                                    call s_infinite_ptg_relaxation_k(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
+                                    call s_infinite_ptg_relaxation_k(alpha_b, j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
                                     if ( TR .eqv. .false. ) then
                                         $:GPU_LOOP(parallelism='[seq]')
@@ -628,7 +635,8 @@ contains
         real(wp), intent(in) :: rhoe, rM
         real(wp), intent(in), dimension(num_fluids) :: m0k
         integer, intent(in) :: j, k, l, MFL
-        integer, dimension(num_fluids) :: iVar, iFix !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(num_fluids) :: iFix, iAuxSP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(:), allocatable :: iSP, iZP
         real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
 
@@ -637,29 +645,34 @@ contains
         ! auxiliary variables for the pT-equilibrium solver
         p_infpT = ps_inf
 
-        ! auxiliary variables to skip index looping
-        iFix = (/ (i, i=1,num_fluids) /)
+        ! indices for all the fluids/phases
+        iFix = (/ (i, i=1,num_fluids) /) 
 
-        ! dismissing fluids that do not participate into pT-relaxation due to the small amount of mass fraction
-        iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0 ) ) ) ) = 0
-        
+        ! indices for zero-mass phases (negligible amount of partial density). Fluids with negative partial densities should 
+        ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
+        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iZP = pack(iAuxZP, iAuxZP /= 0)
+
+        ! indices for phases that have a significant partial density
+        iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iSP = pack(iAuxSP, iAuxSP /= 0)
+
         ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
         ! This way, I am ensuring this value will not be selected.
-        p_infpT( pack(iVar, iVar /= 0) ) = 2 * maxval( ps_inf )
+        p_infpT(iZP) = 2 * maxval( ps_inf )
         
-        ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
-          ! sum of the total alpha*rho*cp of the system
-          mCP = sum( m0k * cvs * gs_min )
+        ! sum of the total alpha*rho*cp of the system. Note that these variables already dismiss the subgrid fluid
+        ! physical parameters
+        mCP = sum( m0k * cvs * gs_min )
 
-          ! sum of the total alpha*rho*q of the system
-          mQ = sum( m0k * qvs )
-        ! end if
+        ! sum of the total alpha*rho*q of the system
+        mQ = sum( m0k * qvs )
 
         ! Checking energy constraint. In the case we are calculating the possibility of having subcooled liquid or
         ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
         ! mass from one phase to the other. When this is the case, we simply ignore this possibility, set pS = TS = 0,
         ! and discard the hypothesis. The solver can thus move forward.
-        if ((rhoe - mQ - minval(p_infpT)) < 0.0_wp) then
+        if ((rhoe - mQ - minval(ps_inf(iSP))) < 0.0_wp) then
 
             if ( any((/ 0, 1 /) == MFL ) ) then
 
@@ -671,10 +684,10 @@ contains
 #ifndef MFC_OpenACC
             else
                 call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                   , 0.0_wp, (/0.0_wp, 0.0_wp/), rhoe, spread(0.0_wp, 1, num_fluids))                                      
 
-                call s_real_to_str(rhoe - mQ - minval(p_infpT), Econsts)
+                call s_real_to_str(rhoe - mQ - minval(ps_inf(iSP)), Econsts)
                 call s_mpi_abort('Solver for the pT-relaxation solver failed (m_phase_change, s_infinite_pt_relaxation_k) &
                 &    . Energy constraint~'//Econsts//'. Aborting!')
 
@@ -703,33 +716,24 @@ contains
             pO = pS
 
             ! updating functions used in the Newton's solver
-            gp = sum( ( gs_min - 1.0_wp ) * m0k * cvs * ( rhoe + pO - mQ ) &
-              / ( mCP * ( pO + p_infpT ) ) ) &
-               - sum( ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) * m0k( pack(iVar, iVar /= 0) ) &
-               * cvs( pack(iVar, iVar /= 0) ) * ( rhoe + pO - mQ ) &
-              / ( mCP * ( pO + p_infpT( pack(iVar, iVar /= 0) ) ) ) )
+            gp = sum( ( gs_min(iSP) - 1.0_wp ) * m0k(iSP) * cvs(iSP) * ( rhoe + pO - mQ ) / ( mCP * ( pO + ps_inf(iSP) ) ) )
 
-            gpp = sum( ( gs_min - 1.0_wp ) * m0k * cvs * ( p_infpT - rhoe + mQ ) &
-              / ( mCP * ( pO + p_infpT ) **2 ) ) &
-              - sum( ( gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp ) * m0k( pack(iVar, iVar /= 0) ) &
-              * cvs( pack(iVar, iVar /= 0) ) * ( p_infpT( pack(iVar, iVar /= 0) ) - rhoe + mQ )  &
-              / ( mCP * ( pO + p_infpT( pack(iVar, iVar /= 0) ) ) **2 ) )
+            gpp = sum( ( gs_min(iSP) - 1.0_wp ) * m0k(iSP) * cvs(iSP) * ( ps_inf(iSP) - rhoe + mQ ) / ( mCP * ( pO + ps_inf(iSP) ) **2 ) )
 
-            hp = 1.0_wp/(rhoe + pO - mQ) + 1.0_wp/(pO + minval(p_infpT))
+            hp = 1.0_wp/(rhoe + pO - mQ) + 1.0_wp/(pO + minval(ps_inf(iSP)))
 
             ! updating common pressure for the newton solver
-            pS = pO + ((1.0_wp - gp)/gpp)/(1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) &
-                                          /(2.0_wp*gpp)*hp)
+            pS = pO + ((1.0_wp - gp) / gpp) / (1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) / (2.0_wp*gpp)*hp)
 
             ! common temperature
-            TS = (rhoe + pS - mQ)/mCP
+            TS = (rhoe + pS - mQ) / mCP
 
             ! check if solution is out of bounds (which I believe it won`t happen given the solver is gloabally convergent.
 #ifndef MFC_OpenACC
-            if ((pS <= -1.0_wp*minval(p_infpT)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
+            if ((pS <= -1.0_wp*minval(ps_inf(iSP))) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
 
               call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                 , pS, (/abs( gp - 1.0_wp ), 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
 
               call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
@@ -754,7 +758,7 @@ contains
         !!  @param rhoe mixture energy
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TS equilibrium temperature at the interface
-    impure subroutine s_infinite_ptg_relaxation_k(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
+    impure subroutine s_infinite_ptg_relaxation_k(alpha_b, j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
 
         $:GPU_ROUTINE(function_name='s_infinite_ptg_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
@@ -762,7 +766,7 @@ contains
         real(wp), dimension(num_fluids), intent(inout) :: alphak, me0k, m0k
         real(wp), dimension(num_fluids), intent(in) :: p_infpT
         real(wp), intent(inout) :: pS, TS, rM
-        real(wp), intent(in) :: rhoe
+        real(wp), intent(in) :: alpha_b, rhoe
         integer, intent(in) :: j, k, l
         logical, intent(inout) :: TR
         real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk
