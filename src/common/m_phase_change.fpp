@@ -31,7 +31,7 @@ module m_phase_change
     integer, parameter :: max_iter = 1e4_wp             !< max # of iterations
     real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
     real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
-    real(wp), parameter :: mixM = sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    real(wp), parameter :: mixM = 0*sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
     integer, parameter :: lp = 1                        !< index for the liquid phase of the reacting fluid
     integer, parameter :: vp = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
@@ -75,15 +75,18 @@ contains
         real(wp) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
         real(wp) :: rhoe, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
-        real(wp) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
+        real(wp) :: rho, rM !< total density, total reacting mass
         real(wp) :: alpha_b !< volume fraction of the subgrid component, used in case icsg is activated
         logical :: TR, TIC, TSG
 
         $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
-        $:GPU_DECLARE(create='[rhoe,dynE,rhos,rho,rM,m1,m2,TR]')
+        $:GPU_DECLARE(create='[rhoe,dynE,rhos,rho,rM,TR]')
 
         real(wp), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alphak, me0k, m0k, rhok, Tk
         $:GPU_DECLARE(create='[p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
+
+        real(wp), dimension(2) :: mOr !< Individual reacting masses
+        $:GPU_DECLARE(create='[mOr]')
 
         !< Generic loop iterators
         integer :: i, j, k, l
@@ -93,8 +96,9 @@ contains
 
         ! starting equilibrium solver
         $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL, &
-            & rhoe,rhoeT,dynE,rhos,rho,rM,m1,m2,TR, &
-            & p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
+            & rhoe,rhoeT,dynE,rhos,rho,rM,TR, &
+            & p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk, &
+            & mOr]')
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -117,7 +121,6 @@ contains
                             me0k(i) = q_cons_vf(i + intxb - 1)%sf(j, k, l)
                         end if
                     end do
-
 
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
@@ -181,13 +184,9 @@ contains
                             ! 2.2. Heterogeneous pTg-equilibrium (either IC or SG activated).
                             TIC .or. TSG &
                             ) ) then
-
-                                print *, 'TSG', TSG
-                                print *, 'pS', pS
-                                
                                 ! updating m1 and m2 AFTER correcting the partial densities. These values are 
                                 ! stored to be retrieved in case the final state is a mixture of fluids
-                                m1 = m0k(lp) ; m2 = m0k(vp)
+                                mOr = (/ m0k(lp), m0k(vp) /) 
 
                                 ! checking if fluid is either subcoooled liquid or overheated vapor (NOT metastability)
 
@@ -208,17 +207,28 @@ contains
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1                       
                                 call s_infinite_pt_relaxation_k(j, k, l, m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
 
+                                print *, 'pSOV, pSSL', pSOV, pSSL
+                                print *, 'TSOV, TSSL', TSOV, TSSL
+                                print *, 'TSatOV, TSatSL', TSatOV, TSatSL
+
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
 
+                                    print *, 'testing OV'
+                                    print *, 'pS', pS
+
                                     ! Assigning pressure and temperature
                                     pS = pSOV ; TS = TSOV
 
                                     ! correcting the liquid and vapor partial densities
                                     m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
+
+                                    print *, 'pS', pS
+                                    print *, 'p_infpT', p_infpT
+                                    print *, 'm0k', m0k
 
                                 ! checking the conditions for subcooled liquid
                                 elseif (TSSL < TSatSL) then
@@ -229,13 +239,20 @@ contains
                                     ! correcting the liquid and vapor partial densities
                                     m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
 
+                                    print *, 'testing SL'
+
                                 ! if not, mixture of fluids. Starting phase change (pTg)
                                 else
                                     ! returning partial pressures to what they were after the partial density correction 
-                                    m0k(lp) = m1 ; m0k(vp) = m2
+                                    m0k(lp) = mOr(1) ; m0k(vp) = mOr(2)
+
+                                    print *, 'does phase change happen at any point?'
 
                                     ! pTg-relaxation
                                     call s_infinite_ptg_relaxation_k(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
+
+                                    print *, 'does the solver get off phase change?'
+
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
                                     if ( TR .eqv. .false. ) then
                                         $:GPU_LOOP(parallelism='[seq]')
@@ -677,10 +694,10 @@ contains
         
         ! sum of the total alpha*rho*cp of the system. Note that these variables already dismiss the subgrid fluid
         ! physical parameters
-        mCP = sum( m0k * cvs * gs_min )
+        mCP = sum( m0k(iSP) * cvs(iSP) * gs_min(iSP) )
 
         ! sum of the total alpha*rho*q of the system
-        mQ = sum( m0k * qvs )
+        mQ = sum( m0k(iSP) * qvs(iSP) )
 
         ! Checking energy constraint. In the case we are calculating the possibility of having subcooled liquid or
         ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
@@ -690,8 +707,7 @@ contains
 
             if ( any((/ 0, 1 /) == MFL ) ) then
 
-                ! Assigning zero values for mass depletion cases
-                ! pressure and temperature
+                ! Assigning zero values for pressure and temperature in case of mass depletion cases
                 pS = 0.0_wp ; TS = 0.0_wp
 
                 return
@@ -760,6 +776,13 @@ contains
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
         
+        if ( m0k(lp) == 0 .and. MFL == 0 ) then
+          print *, m0k
+          print *, pS
+          print *, MFL
+          print *, qvs
+        end if
+
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine is created to activate the pTg-equilibrium for N fluids under pT
