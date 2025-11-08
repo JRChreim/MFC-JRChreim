@@ -322,46 +322,9 @@ contains
             ! global convergence will be estabilished
             Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
 
-            ! if (j == 0 .and. k == 0 .and. l == 0) then
-            !   print *, 'pre'
-            !   print *, 'j,k,l', j, k, l
-            !   print *, 'alpha', alpha0k
-            !   print *, 'm', m0k
-            !   print *, 'me', me0k
-            ! end if
-
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
             if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
-
-              print *, 'pS', pS
-              print *, 'minval(gs_min*ps_inf)', minval(gs_min(iSP)*ps_inf(iSP))
-              print *, 'ps_inf', ps_inf
-              print *, 'gs_min', gs_min
-
-              print *, 'abs err', abs(   sum( mek(iSP) ) - rhoe )
-              print *, 'rel err', abs( ( sum( mek(iSP) ) - rhoe ) / rhoe )
-              print *, 'deltas in energies', abs(rhoe - sum(me0k(iSP))), abs(rhoe - sum(me0k(iSP))) / rhoe 
-
-              print *, 'Om', Om
-              print *, 'under_relax', under_relax
-              print *, 'Om Crit', maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) )
-              
-              print *, 'mek', mek 
-              print *, 'me0k', me0k 
-              print *, 'meik', meik 
-              print *, 'rhoe', rhoe
-
-              print *, 'm0k', m0k
-              
-              print *, 'alpha0k', alpha0k
-              print *, 'alphak', alphak
-
-              print *, 'iSP', iSP
-              print *, 'iZP', iZP
-
-              print *, 'fp', fp
-              print *, 'fpp', fpp
 
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
@@ -406,17 +369,10 @@ contains
 
                 ! updating phase variables, together with the relaxed pressure, in a loosely coupled procedure
                 ! internal energies
-                mek(iSP) = meik(iSP) - Om * ( pS + pS ) * ( alphak(iSP) - alpha0k(iSP) ) / 2
+                mek(iSP) = meik(iSP) - Om * pS * ( alphak(iSP) - alpha0k(iSP) )
 
                 ! volume fractions
-                alphak(iSP) = ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / (pS + gs_min(iSP) * ps_inf(iSP) )
-
-                ! returning zero-mass phases to their original values
-                ! internal energies
-                mek(iZP) = meik(iZP)
-
-                ! volume fractions
-                alphak(iZP) = alpha0k(iZP)
+                alphak(iSP) = ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS + gs_min(iSP) * ps_inf(iSP) )
 
                 ! checking if pS is within expected bounds
                 if ( ((pS <= -1.0_wp*minval( gs_min(iSP) * ps_inf(iSP) ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
@@ -424,36 +380,26 @@ contains
                   ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*ps_inf) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
-                  print *, 'pS', pS
-                  print *, 'minval(gs_min*ps_inf)', minval(gs_min(iSP)*ps_inf(iSP))
-                  print *, 'ps_inf', ps_inf(iSP)
-                  print *, 'gs_min', gs_min(iSP)
-
-                  print *, 'abs err', abs(   sum( mek(iSP) ) - rhoe )
-                  print *, 'rel err', abs( ( sum( mek(iSP) ) - rhoe ) / rhoe )
-                  print *, 'deltas in energies', abs(rhoe - sum(me0k(iSP))), abs(rhoe - sum(me0k(iSP))) / rhoe 
-
-                  print *, 'Om', Om
-                  print *, 'under_relax', under_relax
-                  print *, 'Om Crit', maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) )
-                  
-                  print *, 'mek', mek 
-                  print *, 'me0k', me0k 
-                  print *, 'meik', meik 
-                  print *, 'rhoe', rhoe
-
+                  ! print *, 'pS', pS
+                  print *, 'iSP', iSP
                   print *, 'm0k', m0k
-                  
                   print *, 'alpha0k', alpha0k
                   print *, 'alphak', alphak
+                  print *, 'mek(iSP) - m0k(iSP) * qvs(iSP)', mek(iSP) - m0k(iSP) * qvs(iSP)
+                  print *, 'pO + gs_min(iSP) * ps_inf(iSP)', pO + gs_min(iSP) * ps_inf(iSP)
 
-                  print *, 'iSP', iSP
-                  print *, 'iZP', iZP
+                  print *, 'Om', Om
+                  print *, 'Om Crit', ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) )
 
-                  print *, 'fp', fp
-                  print *, 'fpp', fpp
+                  ! print *, 'mek', mek 
+                  ! print *, 'me0k', me0k 
+                  ! print *, 'meik', meik 
+                  ! print *, 'rhoe', rhoe
+                  
+                  ! print *, 'fp', fp
+                  ! print *, 'fpp', fpp
 
-                  pS = pO
+                  pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
@@ -469,15 +415,6 @@ contains
                     
                     else
 
-                      print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
-                      print *, 'Om', Om
-                      print *, 'under_relax', under_relax
-                      print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
-                      print *, 'me0k', me0k 
-                      print *, 'meik', meik
-                      
-                      print *, 'alpha0k', alpha0k
-
                       call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                         , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                         , pS, (/fp - 1.0_wp, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ) )
@@ -491,21 +428,13 @@ contains
             end do
         end do
 
-          ! if (j == 0 .and. k == 0 .and. l == 0) then
-          !   print *, 'pos'
-          !   print *, 'j,k,l', j, k, l
-          !   print *, 'alpha', alpha0k
-          !   print *, 'm', m0k
-          !   print *, 'me', me0k
-          ! end if
-
         ! (NOT common) temperatures
         Tk(iSP) = alphak(iSP) * (pS + ps_inf(iSP)) / ( (gs_min(iSP) - 1.0_wp) * m0k(iSP) * cvs(iSP) )
 
         ! correcting nonphysical temperatures due to alphak/m0k = 0/0 division. Note that the state for these fluids
         ! need not be determined, as alpha = alpharho = alpharhoe = 0 (state components for the q array). They cannot only
         ! be either 0 or NaN for the sake of the algorithm
-        Tk(iZP) = (pS + ps_inf(iZP)) / ( (gs_min(iZP) - 1.0_wp) * m0k(iZP) * cvs(iZP) )
+        Tk(iZP) = (pS + ps_inf(iZP)) / ( (gs_min(iZP) - 1.0_wp) * cvs(iZP) )
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
@@ -1475,23 +1404,18 @@ contains
         ! rhos =  0.0_wp
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
-          ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
-        
-              ! mass factions. Note that, at most, only liquid and vapor masses should change
-              q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
+      
+          ! mass factions. Note that, at most, only liquid and vapor masses should change
+          q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
 
-              ! print *, 'mass', q_cons_vf(i + contxb - 1)%sf(j, k, l)
-              ! volume fractions
-              q_cons_vf(i + advxb - 1)%sf(j, k, l) = m0k(i)/rhok(i)
+          ! volume fractions
+          q_cons_vf(i + advxb - 1)%sf(j, k, l) = m0k(i)/rhok(i)
 
-              ! print *, 'alpha', q_cons_vf(i + advxb - 1)%sf(j, k, l)
-              ! alpha*rho*e
-              if (model_eqns == 3) then
-                  q_cons_vf(i + intxb - 1)%sf(j, k, l) = m0k(i)*ek(i)
-                  ! print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
-              end if
+          ! alpha*rho*e
+          if (model_eqns == 3) then
+              q_cons_vf(i + intxb - 1)%sf(j, k, l) = m0k(i)*ek(i)
+          end if
 
-          ! end if
           ! Total entropy
           ! rhos = sum( m0k * sk )
         end do
