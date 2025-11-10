@@ -277,6 +277,7 @@ contains
         real(wp), dimension(num_fluids) :: alphak, mek, meik
         character(20) :: nss, pSs, Econsts
         integer, dimension(num_fluids) :: iFix, iAuxSP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        real(wp), dimension(3) :: Oc
         integer, dimension(:), allocatable :: iSP, iZP
         
         integer :: mF !< multiplying factor for the tolerance of the solver
@@ -359,10 +360,21 @@ contains
                 ! updating the relaxed pressure
                 pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
 
+                ! updating the underelaxation parameters.
+                ! First retriction
+                if ( any( pS + gs_min(iSP) * ps_inf(iSP) > 0 ) ) then
+                  Oc(1) = minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 2
+                end if
+
+                ! second restriction
+                if ( any( pS + gs_min(iSP) * ps_inf(iSP) < 0 ) ) then
+                  Oc(2) = maxval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 1
+                end if
+
                 ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
-                if ( ( Om >= maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) ) & 
-                .and. ( maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) > 0 ) ) then
-                  Om = maxval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) / 2
+                if ( ( Om >= minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) ) & 
+                .and. ( minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) > 0 ) ) then
+                  Om = minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) / 2
                 else
                   Om = under_relax
                 end if
