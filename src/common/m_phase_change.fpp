@@ -91,9 +91,7 @@ contains
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL, &
-            & rhoe,rhoeT,dynE,rhos,rho,rM,m1,m2,TR, &
-            & p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
+        #:call GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rhos,rho,rM,m1,m2,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -253,6 +251,7 @@ contains
                 end do
             end do
         end do
+        #:endcall GPU_PARALLEL_LOOP
     end subroutine s_infinite_relaxation_k ! ----------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
@@ -1310,7 +1309,7 @@ contains
         !!  @param pSat Saturation Pressure
         !!  @param TSat Saturation Temperature
         !!  @param TSIn equilibrium Temperature
-    elemental subroutine s_TSat(pSat, TSat, TSIn)
+    subroutine s_TSat(pSat, TSat, TSIn)
         $:GPU_ROUTINE(function_name='s_TSat',parallelism='[seq]', &
             & cray_inline=True)
 
@@ -1376,7 +1375,7 @@ contains
                     call s_real_to_str(TSat, TSatS)
                     call s_real_to_str(pSat, pSatS)
                     call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
-&                     ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
+                    & ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
 
                 end if
 #endif
@@ -1386,7 +1385,7 @@ contains
 
     end subroutine s_TSat
 
-    impure subroutine update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+    subroutine update_conservative_vars(j, k, l, m0k, pS, q_cons_vf, Tk )
         
         !$acc routine seq
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
@@ -1433,7 +1432,7 @@ contains
         end do
     end subroutine update_conservative_vars
 
-    impure subroutine s_real_to_str(rl, res)
+    subroutine s_real_to_str(rl, res)
         real(wp), intent(in) :: rl
         character(len=*), intent(out) :: res
         write (res, '(F10.4)') rl
