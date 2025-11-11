@@ -543,6 +543,10 @@ contains
                                 q_cons_ts(stor)%vf(i)%sf(j, k, l) = &
                                     q_cons_ts(1)%vf(i)%sf(j, k, l)
                             end if
+                            q_cons_AuxIn_vf(i)%sf(j, k, l) = &
+                                (rk_coef(s, 1)*q_cons_ts(1)%vf(i)%sf(j, k, l) &
+                                + rk_coef(s, 2)*q_cons_ts(stor)%vf(i)%sf(j, k, l))/rk_coef(s, 4)
+                            
                             q_cons_ts(1)%vf(i)%sf(j, k, l) = &
                                 (rk_coef(s, 1)*q_cons_ts(1)%vf(i)%sf(j, k, l) &
                                  + rk_coef(s, 2)*q_cons_ts(stor)%vf(i)%sf(j, k, l) &
@@ -585,8 +589,12 @@ contains
 
             if (grid_geometry == 3) call s_apply_fourier_filter(q_cons_ts(1)%vf)
 
-            if (model_eqns == 3 .and. (.not. relax)) then
-                call s_pressure_relaxation_procedure(q_cons_ts(1)%vf)
+            if (model_eqns == 3) then
+                call s_correct_internal_energies(rk_coef(s, 3)/rk_coef(s, 4), q_cons_ts(1)%vf, q_cons_AuxIn_vf, rhs_vf)
+                ! applying old p-relaxation subroutine
+                if (.not. relax) then
+                    call s_pressure_relaxation_procedure(q_cons_ts(1)%vf)
+                end if
             end if
 
             if (adv_n) call s_comp_alpha_from_n(q_cons_ts(1)%vf)

@@ -308,39 +308,39 @@ contains
 
         real(wp) :: fp, fpp, pO !< variables for the Newton Solver
         real(wp) :: Econst, Om, TS !< auxiliary variables
-        real(wp), dimension(num_fluids) :: alphak, mek, meik, p_infp
+        real(wp), dimension(num_fluids) :: alphak, mek, meik
         character(20) :: nss, pSs, Econsts
-        integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
-
+        integer, dimension(num_fluids) :: iFix, iAuxSP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        real(wp), dimension(3) :: Oc
+        integer, dimension(:), allocatable :: iSP, iZP
+        
         integer :: mF !< multiplying factor for the tolerance of the solver
         integer :: i, na, ns, nsL !< generic loop iterators
 
+        ! indices for all the fluids/phases
         iFix = (/ (i, i=1,num_fluids) /) 
 
-        p_infp = ps_inf
+        ! indices for zero-mass phases (negligible amount of partial density). Fluids with negative partial densities should 
+        ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
+        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iZP = pack(iAuxZP, iAuxZP /= 0)
 
-        ! Re-distributing the initial internal energy values such that rhoe = rhoe6E, eventually.
-        ! meik does the role of me0k, but it is its value adjusted to match rhoe = rhoe6E. This step might be unecessary
-        ! soon
+        ! indices for phases that have a significant partial density
+        iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iSP = pack(iAuxSP, iAuxSP /= 0)
+
+        ! Re-distributing the initial internal energies such that rhoe = rhoe6E. This step might be unecessary in the future
         meik = me0k * rhoe / sum(me0k)
-
-        ! dismissing fluids that do not participate into p-relaxation due to the small amount of mass fraction
-        ! iVar \neq 0, fluid should be dismissed. Conversely, if iVar == 0, the fluid should be considered
-        iVar = iFix ; iVar( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
-
-        ! this value is rather arbitrary, as I am interested in MINVAL( gs_min * ps_inf ) for the solver.
-        ! This way, I am ensuring this value will not be selected.
-        p_infp( pack(iVar, iVar /= 0) ) = 2 * maxval(gs_min * ps_inf )
 
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
-        pS = (rhoe - sum( alpha0k * p_infp ) - sum( m0k * qvs ) ) / sum( alpha0k * gammas )
+        pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
         ! internal energies - first estimate
-        mek = meik + sgm_eps
+        mek = meik * ( 1 + ptgalpha_eps )
         
         ! volume fractions - first estimate
-        alphak = ( alpha0k + sgm_eps ) / sum( alpha0k + sgm_eps ) 
+        alphak = alpha0k * ( 1 + ptgalpha_eps ) / sum( alpha0k * ( 1 + ptgalpha_eps ) )
 
         ! counter for the outer loop
         nsL = 0
@@ -348,34 +348,22 @@ contains
         ! Relaxation factor. Although this is not needed for Newton Solver for finding p, it seems to be needed to update
         ! the internal energies after finding pS.
         Om = under_relax
-       
-        do while ( ( ( abs(   sum( mek ) - rhoe ) > ptgalpha_eps ) &
-               .and. ( abs( ( sum( mek ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) &
-               .or.  ( nSL == 0 ) )
+
+        do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
 
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
-            Econst = sum( (gs_min - 1.0_wp)*(mek - m0k*qvs) / (gs_min*p_infp - minval(p_infp)) )
+            Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
-            if ((minval(p_infp) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
-
-              print *, 'abs err', abs(   sum( mek ) - rhoe )
-              print *, 'rel err', abs( ( sum( mek ) - rhoe ) / rhoe )
-              print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
-
-              print *, 'Om', Om
-              print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
-              print *, 'me0k', me0k 
-              print *, 'meik', meik 
-              print *, 'alpha0k', alpha0k
+            if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, p_infp &
-                                , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + p_infp) / ( (gs_min - 1.0_wp) * m0k * cvs ))
+                                , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
+                                , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ))
 
               call s_real_to_str(Econst, Econsts)
               call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
@@ -398,49 +386,66 @@ contains
                 pO = pS
 
                 ! updating functions used in the Newton's solver. f(p)
-                fp = sum( (gs_min - 1.0_wp)*(mek - m0k*qvs) / (pO + gs_min*p_infp) )
+                fp = sum( ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pO + gs_min(iSP) * ps_inf(iSP) ) )
 
                 ! updating functions used in the Newton's solver. f'(p)
-                fpp = sum( - 1.0_wp * (gs_min - 1.0_wp)*(mek - m0k*qvs) / ((pO + gs_min*p_infp)**2) )
+                fpp = sum( -1.0_wp * ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( ( pO + gs_min(iSP) * ps_inf(iSP) ) ** 2 ) )
 
                 ! updating the relaxed pressure
-                pS = pO + ((1.0_wp - fp)/fpp)/(1.0_wp - (1.0_wp - fp + abs(1.0_wp - fp))/(2.0_wp*fpp*(pO + minval(gs_min*p_infp))))
+                pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
+
+                ! updating the underelaxation parameters.
+                ! First retriction
+                if ( any( pS + gs_min(iSP) * ps_inf(iSP) > 0 ) ) then
+                  Oc(1) = minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 2
+                end if
+
+                ! second restriction
+                if ( any( pS + gs_min(iSP) * ps_inf(iSP) < 0 ) ) then
+                  Oc(2) = maxval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 1
+                end if
 
                 ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
-                if ( Om >= maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) ) ) then
-                  Om = maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) ) / 2
+                if ( ( Om >= minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) ) & 
+                .and. ( minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) > 0 ) ) then
+                  Om = minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) / 2
                 else
                   Om = under_relax
                 end if
 
-                mek = meik - Om * ( pS + pS ) * (alphak - alpha0k) / 2
+                ! updating phase variables, together with the relaxed pressure, in a loosely coupled procedure
+                ! internal energies
+                mek(iSP) = meik(iSP) - Om * pS * ( alphak(iSP) - alpha0k(iSP) )
 
-                ! updating fluid variables, together with the relaxed pressure, in a loosely coupled procedure
                 ! volume fractions
-                alphak = ( gs_min - 1.0_wp ) * ( mek - m0k * qvs ) / ( pS + gs_min * p_infp )
+                alphak(iSP) = ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS + gs_min(iSP) * ps_inf(iSP) )
 
                 ! checking if pS is within expected bounds
-                if ( ((pS <= -1.0_wp*minval(gs_min*p_infp)) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
+                if ( ((pS <= -1.0_wp*minval( gs_min(iSP) * ps_inf(iSP) ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
 
-                  ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*p_infp) due to the
+                  ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*ps_inf) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
-                  print *, 'pS, pO', pS, pO
-                  print *, 'pS + gs_min*p_infp', pS + gs_min * p_infp
-                  print *, 'pO + gs_min*p_infp', pO + gs_min * p_infp
-                  print *, 'initial estimate for pS', (rhoe - sum( alpha0k * pi_infs ) - sum( m0k * qvs ) ) / sum( alpha0k * gammas )
-                  print *, 'minval(gs_min*p_infp)', minval(gs_min*p_infp)
-                  print *, 'p_infp', p_infp
-                  print *, 'gs_min', gs_min
-                  print *, 'alphak', alphak
-                  print *, 'alpha0k', alpha0k
+                  ! print *, 'pS', pS
+                  print *, 'iSP', iSP
                   print *, 'm0k', m0k
-                  print *, 'rhoe', rhoe
-                  print *, 'sum( alphak * pi_infs )', sum( alpha0k * pi_infs )
-                  print *, 'sum( m0k * qvs )', sum( m0k * qvs )
-                  print *, 'sum( alpha0k * gammas )', sum( alpha0k * gammas )
+                  print *, 'alpha0k', alpha0k
+                  print *, 'alphak', alphak
+                  print *, 'mek(iSP) - m0k(iSP) * qvs(iSP)', mek(iSP) - m0k(iSP) * qvs(iSP)
+                  print *, 'pO + gs_min(iSP) * ps_inf(iSP)', pO + gs_min(iSP) * ps_inf(iSP)
 
-                  pS = pS + minval( gs_min * p_infp ) + ptgalpha_eps
+                  print *, 'Om', Om
+                  print *, 'Om Crit', ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) )
+
+                  ! print *, 'mek', mek 
+                  ! print *, 'me0k', me0k 
+                  ! print *, 'meik', meik 
+                  ! print *, 'rhoe', rhoe
+                  
+                  ! print *, 'fp', fp
+                  ! print *, 'fpp', fpp
+
+                  pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
@@ -456,17 +461,9 @@ contains
                     
                     else
 
-                      print *, 'deltas in energies', abs(rhoe - sum(me0k)), abs(rhoe - sum(me0k)) / rhoe 
-                      print *, 'Om', Om
-                      print *, 'Om Crit', maxval( (meik - m0k * qvs ) / ( pS * (alphak - alpha0k) ) )
-                      print *, 'me0k', me0k 
-                      print *, 'meik', meik
-                      
-                      print *, 'alpha0k', alpha0k
-
                       call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                        , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infp &
-                                        , pS, (/fp - 1.0_wp, 0.0_wp/), rhoe, alphak * (pS + p_infp) / ( (gs_min - 1.0_wp) * m0k * cvs ) )
+                                        , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                        , pS, (/fp - 1.0_wp, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ) )
 
                       call s_real_to_str(pS, pSs)
                       call s_int_to_str(ns, nss)
@@ -478,13 +475,12 @@ contains
         end do
 
         ! (NOT common) temperatures
-        Tk = alphak * (pS + p_infp) / ( (gs_min - 1.0_wp) * m0k * cvs )
+        Tk(iSP) = alphak(iSP) * (pS + ps_inf(iSP)) / ( (gs_min(iSP) - 1.0_wp) * m0k(iSP) * cvs(iSP) )
 
         ! correcting nonphysical temperatures due to alphak/m0k = 0/0 division. Note that the state for these fluids
         ! need not be determined, as alpha = alpharho = alpharhoe = 0 (state components for the q array). They cannot only
         ! be either 0 or NaN for the sake of the algorithm
-        Tk( pack(iVar, iVar /= 0) ) = (pS + p_infp( pack(iVar, iVar /= 0) ) ) &
-        / ( (gs_min( pack(iVar, iVar /= 0) ) - 1.0_wp) * cvs( pack(iVar, iVar /= 0) ) )
+        Tk(iZP) = (pS + ps_inf(iZP)) / ( (gs_min(iZP) - 1.0_wp) * cvs(iZP) )
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
@@ -528,7 +524,7 @@ contains
 
         ! Numerical correction of the volume fractions, partial densities, and internal energies
         if (mpp_lim) then
-          ! auxiliry variable to avoid do loops
+          ! auxiliry variable to avoid do loops. Correting only variables for fluids whose alpha < 0 OR m < 0
           iVar = iFix ; iVar( pack( iFix, ( alpha0k >= 0 ) .and. ( m0k >= 0 ) ) ) = 0
           
           ! if alpha < 0 or m < 0, set everything to 0
@@ -545,7 +541,7 @@ contains
         ! Initial state
         pk = 0.0_wp
         
-        ! auxiliry variable to avoid do loops
+        ! auxiliry variable to avoid do loops. Disregarding variables when alpha <= sgm_eps
         iVar = iFix ; iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
 
         pk( pack( iVar, iVar /= 0 ) ) = ( ( mek( pack( iVar, iVar /= 0 ) ) &
@@ -553,7 +549,7 @@ contains
         alphak( pack( iVar, iVar /= 0 ) ) - pi_infs( pack( iVar, iVar /= 0 ) ) ) &
         / gammas( pack( iVar, iVar /= 0 ) )               
 
-        ! auxiliry variable to avoid do loops
+        ! auxiliry variable to avoid do loops. Disregarding pressures that are not physical
         iVar = iFix ; iVar( pack( iFix, .not. ( pk < -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) ) = 0
 
         pk( pack( iVar, iVar /= 0 ) ) = -(1.0_wp - ptgalpha_eps)*ps_inf( pack( iVar, iVar /= 0 ) ) &
@@ -580,7 +576,7 @@ contains
               pO = minval(-(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps)
             end if
 
-            ! calulating fp and fpp
+            ! calulating fp and fpp. Disregarding fluids for alpha < sgm_eps
             iVar = iFix ; iVar( pack( iFix, alphak <= sgm_eps ) ) = 0
             
             num       = gs_min * (pO + ps_inf)
@@ -1011,12 +1007,13 @@ contains
         real(wp), intent(out) :: rM, rho
         logical, intent(inout) :: TR
         integer, intent(in) :: CT, j, k, l
-        integer, dimension(num_fluids) :: iFix, iVar !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(num_fluids) :: iFix, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        integer, dimension(:), allocatable :: iZP
         integer :: i
         !> @}
 
         iFix = (/ (i, i=1,num_fluids) /)
-        iVar = iFix
+        iAuxZP = iFix
 
         ! Mixture density
         rho = sum(m0k)
@@ -1063,29 +1060,29 @@ contains
 
             end if
         elseif (CT == 2) then
-            ! auxiliry variable to avoid do loops - use Morgan's Law
+            ! zero phase indices. Auxiliary variable to avoid do loops - use Morgan's Law
             if ( any((/ 1, 4 /) == relax_model ) ) then
-                ! this iVar is only valid when we use either the old or new p-relaxationS, as they are only
+                ! this iAuxZP is only valid when we use either the old or new p-relaxations, as they are only
                 ! used with the 6-equation model. Note that they test the phisical validity of the initial conditions
-                iVar( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
-
+                iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
             else
                 ! this is used for either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
                 ! energies are not important
-                iVar( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) ) ) = 0
+                iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) ) ) = 0
             end if
+            iZP = pack(iAuxZP, iAuxZP /= 0)
 
             ! if either the volume fraction or the partial density is negative, make them positive
-            alpha0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+            alpha0k(iZP) = 0.0_wp
             ! the greastes value of alpha0k must be one
             alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
             
-            m0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+            m0k(iZP) = 0.0_wp
             ! renormalizing all variables of interest based on the volume fraction
             ! so everything is adjusted accordingly
 
             if (model_eqns == 3) then
-              me0k(pack(iVar, iVar /= 0) ) = 0.0_wp
+              me0k(iZP) = 0.0_wp
               ! me0k = me0k / sum(alpha0k)
             end if
 
@@ -1458,23 +1455,18 @@ contains
         ! rhos =  0.0_wp
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
-          ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
-        
-              ! mass factions. Note that, at most, only liquid and vapor masses should change
-              q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
+      
+          ! mass factions. Note that, at most, only liquid and vapor masses should change
+          q_cons_vf(i + contxb - 1)%sf(j, k, l) = m0k(i)
 
-              ! print *, 'mass', q_cons_vf(i + contxb - 1)%sf(j, k, l)
-              ! volume fractions
-              q_cons_vf(i + advxb - 1)%sf(j, k, l) = m0k(i)/rhok(i)
+          ! volume fractions
+          q_cons_vf(i + advxb - 1)%sf(j, k, l) = m0k(i)/rhok(i)
 
-              ! print *, 'alpha', q_cons_vf(i + advxb - 1)%sf(j, k, l)
-              ! alpha*rho*e
-              if (model_eqns == 3) then
-                  q_cons_vf(i + intxb - 1)%sf(j, k, l) = m0k(i)*ek(i)
-                  ! print *, 'internal energies', q_cons_vf(i + intxb - 1)%sf(j, k, l)
-              end if
+          ! alpha*rho*e
+          if (model_eqns == 3) then
+              q_cons_vf(i + intxb - 1)%sf(j, k, l) = m0k(i)*ek(i)
+          end if
 
-          ! end if
           ! Total entropy
           ! rhos = sum( m0k * sk )
         end do
