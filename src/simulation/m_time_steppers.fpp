@@ -549,27 +549,8 @@ contains
                     end do
                 end do
             end do
-
-            !Evolve pb and mv for non-polytropic qbmm
-            if (qbmm .and. (.not. polytropic)) then
-                $:GPU_PARALLEL_LOOP(collapse=5)
-                do i = 1, nb
-                    do l = 0, p
-                        do k = 0, n
-                            do j = 0, m
-                                if (s == 1 .and. nstage > 1) then
-                                    q_cons_ts(stor)%vf(i)%sf(j, k, l) = &
-                                        q_cons_ts(1)%vf(i)%sf(j, k, l)
-                                end if
-                                q_cons_ts(1)%vf(i)%sf(j, k, l) = &
-                                    (rk_coef(s, 1)*q_cons_ts(1)%vf(i)%sf(j, k, l) &
-                                     + rk_coef(s, 2)*q_cons_ts(stor)%vf(i)%sf(j, k, l) &
-                                     + rk_coef(s, 3)*dt*rhs_vf(i)%sf(j, k, l))/rk_coef(s, 4)
-                            end do
-                        end do
-                    end do
-                end do
             #:endcall GPU_PARALLEL_LOOP
+
             !Evolve pb and mv for non-polytropic qbmm
             if (qbmm .and. (.not. polytropic)) then
                 #:call GPU_PARALLEL_LOOP(collapse=5)
@@ -743,7 +724,7 @@ contains
                         end if
 
                         ! Compute mixture sound speed
-                        call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c)
+                        call s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, alpha, vel_sum, 0._wp, c, qv)
 
                         call s_compute_dt_from_cfl(vel, c, max_dt, rho, Re, j, k, l)
                     end do
