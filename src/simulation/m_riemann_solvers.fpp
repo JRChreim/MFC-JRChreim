@@ -2061,10 +2061,8 @@ contains
                                             if (Re_size(i) > 0) Re_R(i) = 0._wp
                                             $:GPU_LOOP(parallelism='[seq]')
                                             do q = 1, Re_size(i)
-                                                Re_L(i) = qL_prim_rs${XYZ}$_vf(j, k, l, E_idx + Re_idx(i, q))/Res_gs(i, q) &
-                                                          + Re_L(i)
-                                                Re_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + Re_idx(i, q))/Res_gs(i, q) &
-                                                          + Re_R(i)
+                                                Re_L(i) = qL_prim_rs${XYZ}$_vf(j, k, l, E_idx + Re_idx(i, q))/Res_gs(i, q) + Re_L(i)
+                                                Re_R(i) = qR_prim_rs${XYZ}$_vf(j + 1, k, l, E_idx + Re_idx(i, q))/Res_gs(i, q) + Re_R(i)
                                             end do
                                             Re_L(i) = 1._wp/max(Re_L(i), sgm_eps)
                                             Re_R(i) = 1._wp/max(Re_R(i), sgm_eps)
@@ -2303,16 +2301,12 @@ contains
                                     ! K-th pressure and velocity in preparation for the internal energy flux
                                     $:GPU_LOOP(parallelism='[seq]')
                                     do i = 1, num_fluids
-                                        p_K_Star = xi_M*(xi_MP*((pres_L + pi_infs(i)/(1._wp + gammas(i)))* &
-                                                                xi_L**(1._wp/gammas(i) + 1._wp) - pi_infs(i)/(1._wp + gammas(i)) - pres_L) + pres_L) + &
-                                                   xi_P*(xi_PP*((pres_R + pi_infs(i)/(1._wp + gammas(i)))* &
-                                                                xi_R**(1._wp/gammas(i) + 1._wp) - pi_infs(i)/(1._wp + gammas(i)) - pres_R) + pres_R)
+                                        p_K_Star = xi_M*(xi_MP*((pres_L + ps_inf(i))*xi_L**gs_min(i) - ps_inf(i) - pres_L) + pres_L) + &
+                                                   xi_P*(xi_PP*((pres_R + ps_inf(i))*xi_R**gs_min(i) - ps_inf(i) - pres_R) + pres_R)           
 
                                         flux_rs${XYZ}$_vf(j, k, l, i + intxb - 1) = &
-                                            ((xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, i + advxb - 1) + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i + advxb - 1))* &
-                                             (gammas(i)*p_K_Star + pi_infs(i)) + &
-                                             (xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, i + contxb - 1) + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i + contxb - 1))* &
-                                             qvs(i))*vel_K_Star &
+                                            ((xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, i + advxb - 1) + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i + advxb - 1))*(gammas(i)*p_K_Star + pi_infs(i)) + &
+                                             (xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, i + contxb - 1) + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i + contxb - 1))*qvs(i))*vel_K_Star &
                                             + (s_M/s_L)*(s_P/s_R)*pcorr*s_S*(xi_M*qL_prim_rs${XYZ}$_vf(j, k, l, i + advxb - 1) + xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, i + advxb - 1))
                                     end do
 

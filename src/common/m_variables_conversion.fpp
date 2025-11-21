@@ -1348,11 +1348,9 @@ contains
                     if (model_eqns == 3) then
                         do i = 1, num_fluids
                             ! internal energy calculation for each of the fluids
-                            q_cons_vf(i + internalEnergies_idx%beg - 1)%sf(j, k, l) = &
-                                q_cons_vf(i + adv_idx%beg - 1)%sf(j, k, l)* &
-                                (fluid_pp(i)%gamma*q_prim_vf(E_idx)%sf(j, k, l) + &
-                                 fluid_pp(i)%pi_inf) + &
-                                q_cons_vf(i + cont_idx%beg - 1)%sf(j, k, l)*fluid_pp(i)%qv
+                            q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + advxb - 1)%sf(j, k, l)* &
+                                (gammas(i)*q_prim_vf(E_idx)%sf(j, k, l) + pi_infs(i)) + &
+                                q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
                         end do
                     end if
 
@@ -1659,13 +1657,7 @@ contains
                            pi_infs(2))/gammas(2)
                 c = (1._wp/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
             elseif (model_eqns == 3) then
-                c = 0._wp
-                $:GPU_LOOP(parallelism='[seq]')
-                do q = 1, num_fluids
-                    c = c + adv(q)* gs_min(q) * &
-                        (pres + pi_infs(q)/(gammas(q) + 1._wp))
-                end do
-                c = c/rho
+                c = sum( adv * gs_min * ( pres + ps_inf ) ) / rho
             elseif (((model_eqns == 4) .or. (model_eqns == 2 .and. bubbles_euler))) then
                 ! Sound speed for bubble mmixture to order O(\alpha)
 
