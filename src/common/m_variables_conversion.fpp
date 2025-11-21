@@ -271,6 +271,7 @@ contains
         end do
 
         if (mpp_lim) then
+
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0._wp, alpha_rho_K(i))
                 alpha_K(i) = min(max(0._wp, alpha_K(i)), 1._wp)
@@ -320,7 +321,6 @@ contains
                 pi_inf = fluid_pp(1)%pi_inf
                 qv = fluid_pp(1)%qv
             end if
-
         end if
 
 #ifdef MFC_SIMULATION
@@ -497,7 +497,6 @@ contains
         alpha_K_sum = 0._wp
 
         if (mpp_lim) then
-
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0._wp, alpha_rho_K(i))
                 alpha_K(i) = min(max(0._wp, alpha_K(i)), 1._wp)
