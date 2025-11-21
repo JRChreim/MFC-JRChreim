@@ -217,8 +217,6 @@ contains
 
         if (chemistry) call s_compute_T_from_primitives(q_T_sf, q_prim_vf, idwint)
 
-        ! call s_norm_denorm('N', q_cons_vf, q_prim_vf, q_T_sf)
-
         if (qbmm .and. .not. polytropic) then
             !Initialize pb and mv
             call s_initialize_mv(q_cons_vf, mv%sf)
