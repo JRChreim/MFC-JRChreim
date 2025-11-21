@@ -74,12 +74,12 @@ contains
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
-        real(wp) :: rhoe, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
+        real(wp) :: rhoe, dynE !< total internal energies (different calculations), kinetic energy, and total entropy
         real(wp) :: rho, rM, m1, m2 !< total density, total reacting mass, individual reacting masses
         logical :: TR
 
         $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
-        $:GPU_DECLARE(create='[rhoe,dynE,rhos,rho,rM,m1,m2,TR]')
+        $:GPU_DECLARE(create='[rhoe,dynE,rho,rM,m1,m2,TR]')
 
         real(wp), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alphak, me0k, m0k, rhok, Tk
         $:GPU_DECLARE(create='[p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
@@ -91,7 +91,7 @@ contains
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        #:call GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rhos,rho,rM,m1,m2,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
+        #:call GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rho,rM,m1,m2,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -360,7 +360,7 @@ contains
                 pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
 
                 ! updating the underelaxation parameters.
-                ! First retriction
+                ! First restriction
                 if ( any( pS + gs_min(iSP) * ps_inf(iSP) > 0 ) ) then
                   Oc(1) = minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 2
                 end if
@@ -373,7 +373,7 @@ contains
                 ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
                 if ( ( Om >= minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) ) & 
                 .and. ( minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) > 0 ) ) then
-                  Om = minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) / 2
+                  Om =  minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) / 2
                 else
                   Om = under_relax
                 end if
@@ -511,7 +511,7 @@ contains
 
         pk( pack( iVar, iVar /= 0 ) ) = ( ( mek( pack( iVar, iVar /= 0 ) ) &
         - mk( pack( iVar, iVar /= 0 ) ) * qvs( pack( iVar, iVar /= 0 ) ) ) /      &
-        alphak( pack( iVar, iVar /= 0 ) ) - fluid_pp( pack( iVar, iVar /= 0 ) )%pi_inf ) &
+        alphak( pack( iVar, iVar /= 0 ) ) - pi_infs( pack( iVar, iVar /= 0 ) ) ) &
         / fluid_pp( pack( iVar, iVar /= 0 ) )%gamma               
 
         ! auxiliry variable to avoid do loops. Disregarding pressures that are not physical
@@ -1411,8 +1411,7 @@ contains
         ! internal energy
         ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
 
-        ! calculating volume fractions, internal energies, and total entropy
-        ! rhos =  0.0_wp
+        ! assigning volume fractions, internal energies, and total entropy
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
       
@@ -1427,8 +1426,6 @@ contains
               q_cons_vf(i + intxb - 1)%sf(j, k, l) = m0k(i)*ek(i)
           end if
 
-          ! Total entropy
-          ! rhos = sum( m0k * sk )
         end do
     end subroutine update_conservative_vars
 
