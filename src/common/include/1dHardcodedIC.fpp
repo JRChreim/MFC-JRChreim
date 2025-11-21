@@ -10,6 +10,15 @@
         q_prim_vf(momxb)%sf(i, 0, 0) =  patch_icpp(1)%vel(1) &
                                         * ( exp( - ( x_cc(i) - 1 ) ** 2 / 2 ) &
                                         -   exp( - ( x_cc(i) + 1 ) ** 2 / 2 ) )
+    case (150) ! 1D Smooth Alfven Case for MHD
+        ! velocity
+        q_prim_vf(momxb + 1)%sf(i, 0, 0) = 0.1_wp*sin(2._wp*pi*x_cc(i))
+        q_prim_vf(momxb + 2)%sf(i, 0, 0) = 0.1_wp*cos(2._wp*pi*x_cc(i))
+
+        ! magnetic field
+        q_prim_vf(B_idx%end - 1)%sf(i, 0, 0) = 0.1_wp*sin(2._wp*pi*x_cc(i))
+        q_prim_vf(B_idx%end)%sf(i, 0, 0) = 0.1_wp*cos(2._wp*pi*x_cc(i))
+
     case (170)
         ! This hardcoded case can be used to start a simulation with initial conditions given from a known 1D profile (e.g. Cantera, SDtoolbox)
         @: HardcodedReadValues()

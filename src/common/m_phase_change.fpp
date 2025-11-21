@@ -91,7 +91,7 @@ contains
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        #:call GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rho,rM,m1,m2,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
+        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rho,rM,m1,m2,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -251,7 +251,7 @@ contains
                 end do
             end do
         end do
-        #:endcall GPU_PARALLEL_LOOP
+        $:END_GPU_PARALLEL_LOOP()
     end subroutine s_infinite_relaxation_k ! ----------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
