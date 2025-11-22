@@ -128,8 +128,6 @@ contains
                         dynE = dynE + 5.0e-1_wp*q_cons_vf(i)%sf(j, k, l)**2 / max(rho, sgm_eps)
                     end do
 
-
-                    print *, test
                     ! calculating the internal mixture energy that MUST be preserved throughout pT- and pTg-relaxation procedures
                     ! This calulation is performed as the total energy minus the kinetic one as energy it is preserved at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
