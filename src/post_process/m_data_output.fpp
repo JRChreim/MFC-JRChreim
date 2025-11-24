@@ -1611,6 +1611,7 @@ contains
                     rho = 0._wp
                     gamma = 0._wp
                     pi_inf = 0._wp
+                    qv = 0._wp
                     pres = q_prim_vf(E_idx)%sf(i, j, k)
                     Egint = Egint + q_prim_vf(E_idx + 2)%sf(i, j, k)*(fluid_pp(2)%gamma*pres)*dV
                     do s = 1, num_vels

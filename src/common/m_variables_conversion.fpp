@@ -1634,7 +1634,7 @@ contains
             elseif (model_eqns == 3) then
                 c = sum( adv * gs_min * ( pres + ps_inf ) ) / rho
             elseif (((model_eqns == 4) .or. (model_eqns == 2 .and. bubbles_euler))) then
-                ! Sound speed for bubble mmixture to order O(\alpha)
+                ! Sound speed for bubble mixture to order O(\alpha)
 
                 if (mpp_lim .and. (num_fluids > 1)) then
                     c = (1._wp/gamma + 1._wp)* &
@@ -1646,7 +1646,7 @@ contains
                         (rho*(1._wp - adv(num_fluids)))
                 end if
             else
-                c = ((H - 5.e-1*vel_sum - qv/rho)/gamma)
+                c = (H - 5.e-1*vel_sum - qv/rho)/gamma
             end if
 
             if (mixture_err .and. c < 0._wp) then
