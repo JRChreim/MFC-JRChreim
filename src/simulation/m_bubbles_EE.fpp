@@ -37,10 +37,8 @@ contains
 
         @:ALLOCATE(rs(1:nb))
         @:ALLOCATE(vs(1:nb))
-        if (.not. polytropic) then
-            @:ALLOCATE(ps(1:nb))
-            @:ALLOCATE(ms(1:nb))
-        end if
+        @:ALLOCATE(ps(1:nb))
+        @:ALLOCATE(ms(1:nb))
 
         do l = 1, nb
             rs(l) = bub_idx%rs(l)
@@ -48,13 +46,14 @@ contains
             if (.not. polytropic) then
                 ps(l) = bub_idx%ps(l)
                 ms(l) = bub_idx%ms(l)
+            else
+                ps(l) = rs(l)
+                ms(l) = rs(l)
             end if
         end do
 
         $:GPU_UPDATE(device='[rs, vs]')
-        if (.not. polytropic) then
-            $:GPU_UPDATE(device='[ps, ms]')
-        end if
+        $:GPU_UPDATE(device='[ps, ms]')
 
         @:ALLOCATE(divu%sf(idwbuff(1)%beg:idwbuff(1)%end, idwbuff(2)%beg:idwbuff(2)%end, idwbuff(3)%beg:idwbuff(3)%end))
         @:ACC_SETUP_SFs(divu)
@@ -71,12 +70,12 @@ contains
 
     ! Compute the bubble volume fraction alpha from the bubble number density n
         !! @param q_cons_vf is the conservative variable
-    pure subroutine s_comp_alpha_from_n(q_cons_vf)
+    subroutine s_comp_alpha_from_n(q_cons_vf)
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp) :: nR3bar
         integer(wp) :: i, j, k, l
 
-        $:GPU_PARALLEL_LOOP(collapse=3)
+        $:GPU_PARALLEL_LOOP(private='[i,j,k,l,nR3bar]', collapse=3)
         do l = 0, p
             do k = 0, n
                 do j = 0, m
@@ -89,10 +88,11 @@ contains
                 end do
             end do
         end do
+        $:END_GPU_PARALLEL_LOOP()
 
     end subroutine s_comp_alpha_from_n
 
-    pure subroutine s_compute_bubbles_EE_rhs(idir, q_prim_vf, divu_in)
+    subroutine s_compute_bubbles_EE_rhs(idir, q_prim_vf, divu_in)
 
         integer, intent(in) :: idir
         type(scalar_field), dimension(sys_size), intent(in) :: q_prim_vf
@@ -103,7 +103,7 @@ contains
         if (idir == 1) then
 
             if (.not. qbmm) then
-                $:GPU_PARALLEL_LOOP(collapse=3)
+                $:GPU_PARALLEL_LOOP(private='[j,k,l]', collapse=3)
                 do l = 0, p
                     do k = 0, n
                         do j = 0, m
@@ -115,11 +115,12 @@ contains
                         end do
                     end do
                 end do
+                $:END_GPU_PARALLEL_LOOP()
             end if
 
         elseif (idir == 2) then
 
-            $:GPU_PARALLEL_LOOP(collapse=3)
+            $:GPU_PARALLEL_LOOP(private='[j,k,l]', collapse=3)
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
@@ -130,10 +131,11 @@ contains
                     end do
                 end do
             end do
+            $:END_GPU_PARALLEL_LOOP()
 
         elseif (idir == 3) then
 
-            $:GPU_PARALLEL_LOOP(collapse=3)
+            $:GPU_PARALLEL_LOOP(private='[j,k,l]', collapse=3)
             do l = 0, p
                 do k = 0, n
                     do j = 0, m
@@ -144,6 +146,7 @@ contains
                     end do
                 end do
             end do
+            $:END_GPU_PARALLEL_LOOP()
 
         end if
 
@@ -166,6 +169,7 @@ contains
         real(wp) :: myR, myV, alf, myP, myRho, R2Vav, R3
         real(wp), dimension(num_fluids) :: myalpha, myalpha_rho
         real(wp) :: nbub !< Bubble number density
+        real(wp) :: my_divu
 
         real(wp) :: fpbdot, fCp, fCpbw
         real(wp) :: fRho, fR, fV, fR0, fC
@@ -177,7 +181,7 @@ contains
         integer :: dmBub_id !< Dummy variables for unified subgrid bubble subroutines
         real(wp) :: dmMass_v, dmMass_n, dmBeta_c, dmBeta_t, dmCson
 
-        $:GPU_PARALLEL_LOOP(collapse=3)
+        $:GPU_PARALLEL_LOOP(private='[j,k,l,q]', collapse=3)
         do l = 0, p
             do k = 0, n
                 do j = 0, m
@@ -193,9 +197,10 @@ contains
                 end do
             end do
         end do
+        $:END_GPU_PARALLEL_LOOP()
 
         adap_dt_stop_max = 0
-        $:GPU_PARALLEL_LOOP(collapse=3, private='[Rtmp, Vtmp, myalpha_rho, myalpha]', &
+        $:GPU_PARALLEL_LOOP(private='[j,k,l,Rtmp, Vtmp, myalpha_rho, myalpha, myR, myV, alf, myP, myRho, R2Vav, R3, nbub, pb_local, mv_local, vflux, pbdot, rddot, n_tait, B_tait, my_divu]', collapse=3, &
             & reduction='[[adap_dt_stop_max]]', reductionOp='[MAX]', &
             & copy='[adap_dt_stop_max]')
         do l = 0, p
@@ -300,11 +305,12 @@ contains
                 end do
             end do
         end do
+        $:END_GPU_PARALLEL_LOOP()
 
         if (adap_dt .and. adap_dt_stop_max > 0) call s_mpi_abort("Adaptive time stepping failed to converge.")
 
         if (.not. adap_dt) then
-            $:GPU_PARALLEL_LOOP(collapse=3)
+            $:GPU_PARALLEL_LOOP(private='[i,k,l,q]', collapse=3)
             do l = 0, p
                 do q = 0, n
                     do i = 0, m
@@ -323,6 +329,7 @@ contains
                     end do
                 end do
             end do
+            $:END_GPU_PARALLEL_LOOP()
         end if
     end subroutine s_compute_bubble_EE_source
 

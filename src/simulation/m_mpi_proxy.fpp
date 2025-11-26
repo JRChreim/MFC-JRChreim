@@ -208,8 +208,8 @@ contains
         end do
 
         do i = 1, num_ibs
-            #:for VAR in [ 'radius', 'length_x', 'length_y', &
-                & 'x_centroid', 'y_centroid', 'c', 'm', 'p', 't', 'theta', 'slip']
+            #:for VAR in [ 'radius', 'length_x', 'length_y', 'length_z', &
+                & 'x_centroid', 'y_centroid', 'z_centroid', 'c', 'm', 'p', 't', 'theta', 'slip']
                 call MPI_BCAST(patch_ib(i)%${VAR}$, 1, mpi_p, 0, MPI_COMM_WORLD, ierr)
             #:endfor
             #:for VAR in ['vel', 'angular_vel', 'angles']
@@ -319,7 +319,7 @@ contains
         #:for mpi_dir in [1, 2, 3]
             if (mpi_dir == ${mpi_dir}$) then
                 #:if mpi_dir == 1
-                    $:GPU_PARALLEL_LOOP(collapse=3,private='[r]')
+                    $:GPU_PARALLEL_LOOP(collapse=3,private='[j,k,l,r]')
                     do l = 0, p
                         do k = 0, n
                             do j = 0, buff_size - 1
@@ -328,8 +328,9 @@ contains
                             end do
                         end do
                     end do
+                    $:END_GPU_PARALLEL_LOOP()
                 #:elif mpi_dir == 2
-                    $:GPU_PARALLEL_LOOP(collapse=3,private='[r]')
+                    $:GPU_PARALLEL_LOOP(collapse=3,private='[j,k,l,r]')
                     do l = 0, p
                         do k = 0, buff_size - 1
                             do j = -buff_size, m + buff_size
@@ -339,8 +340,9 @@ contains
                             end do
                         end do
                     end do
+                    $:END_GPU_PARALLEL_LOOP()
                 #:else
-                    $:GPU_PARALLEL_LOOP(collapse=3,private='[r]')
+                    $:GPU_PARALLEL_LOOP(collapse=3,private='[j,k,l,r]')
                     do l = 0, buff_size - 1
                         do k = -buff_size, n + buff_size
                             do j = -buff_size, m + buff_size
@@ -350,6 +352,7 @@ contains
                             end do
                         end do
                     end do
+                    $:END_GPU_PARALLEL_LOOP()
                 #:endif
             end if
         #:endfor
@@ -358,7 +361,7 @@ contains
         #:for rdma_mpi in [False, True]
             if (rdma_mpi .eqv. ${'.true.' if rdma_mpi else '.false.'}$) then
                 #:if rdma_mpi
-                    #:call GPU_HOST_DATA(use_device='[ib_buff_send, ib_buff_recv]')
+                    #:call GPU_HOST_DATA(use_device_addr='[ib_buff_send, ib_buff_recv]')
 
                         call nvtxStartRange("IB-MARKER-SENDRECV-RDMA")
                         call MPI_SENDRECV( &
@@ -393,7 +396,7 @@ contains
         #:for mpi_dir in [1, 2, 3]
             if (mpi_dir == ${mpi_dir}$) then
                 #:if mpi_dir == 1
-                    $:GPU_PARALLEL_LOOP(collapse=3,private='[r]')
+                    $:GPU_PARALLEL_LOOP(collapse=3,private='[j,k,l,r]')
                     do l = 0, p
                         do k = 0, n
                             do j = -buff_size, -1
@@ -402,8 +405,9 @@ contains
                             end do
                         end do
                     end do
+                    $:END_GPU_PARALLEL_LOOP()
                 #:elif mpi_dir == 2
-                    $:GPU_PARALLEL_LOOP(collapse=3,private='[r]')
+                    $:GPU_PARALLEL_LOOP(collapse=3,private='[j,k,l,r]')
                     do l = 0, p
                         do k = -buff_size, -1
                             do j = -buff_size, m + buff_size
@@ -413,9 +417,10 @@ contains
                             end do
                         end do
                     end do
+                    $:END_GPU_PARALLEL_LOOP()
                 #:else
                     ! Unpacking buffer from bc_z%beg
-                    $:GPU_PARALLEL_LOOP(collapse=3,private='[r]')
+                    $:GPU_PARALLEL_LOOP(collapse=3,private='[j,k,l,r]')
                     do l = -buff_size, -1
                         do k = -buff_size, n + buff_size
                             do j = -buff_size, m + buff_size
@@ -426,6 +431,7 @@ contains
                             end do
                         end do
                     end do
+                    $:END_GPU_PARALLEL_LOOP()
                 #:endif
             end if
         #:endfor

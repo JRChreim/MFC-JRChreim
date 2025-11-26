@@ -1,3 +1,4 @@
+#:include 'case.fpp'
 #:include 'macros.fpp'
 
 module m_sim_helpers
@@ -20,7 +21,7 @@ contains
         !! @param k y coordinate index
         !! @param l z coordinate index
         !! @return fltr_dtheta Modified dtheta value for cylindrical coordinates
-    pure function f_compute_filtered_dtheta(k, l) result(fltr_dtheta)
+    function f_compute_filtered_dtheta(k, l) result(fltr_dtheta)
         $:GPU_ROUTINE(parallelism='[seq]')
         integer, intent(in) :: k, l
         real(wp) :: fltr_dtheta
@@ -47,7 +48,7 @@ contains
         !! @param k y coordinate index
         !! @param l z coordinate index
         !! @return cfl_terms computed CFL terms for 2D/3D cases
-    pure function f_compute_multidim_cfl_terms(vel, c, j, k, l) result(cfl_terms)
+    function f_compute_multidim_cfl_terms(vel, c, j, k, l) result(cfl_terms)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), dimension(num_vels), intent(in) :: vel
         real(wp), intent(in) :: c
@@ -59,15 +60,17 @@ contains
 
         if (p > 0) then
             !3D
-            if (grid_geometry == 3) then
-                cfl_terms = min(dx(j)/(abs(vel(1)) + c), &
-                                dy(k)/(abs(vel(2)) + c), &
-                                fltr_dtheta/(abs(vel(3)) + c))
-            else
-                cfl_terms = min(dx(j)/(abs(vel(1)) + c), &
-                                dy(k)/(abs(vel(2)) + c), &
-                                dz(l)/(abs(vel(3)) + c))
-            end if
+            #:if not MFC_CASE_OPTIMIZATION or num_dims > 2
+                if (grid_geometry == 3) then
+                    cfl_terms = min(dx(j)/(abs(vel(1)) + c), &
+                                    dy(k)/(abs(vel(2)) + c), &
+                                    fltr_dtheta/(abs(vel(3)) + c))
+                else
+                    cfl_terms = min(dx(j)/(abs(vel(1)) + c), &
+                                    dy(k)/(abs(vel(2)) + c), &
+                                    dz(l)/(abs(vel(3)) + c))
+                end if
+            #:endif
         else
             !2D
             cfl_terms = min(dx(j)/(abs(vel(1)) + c), &
@@ -89,7 +92,7 @@ contains
         !! @param j x index
         !! @param k y index
         !! @param l z index
-    pure subroutine s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, qv, j, k, l)
+    subroutine s_compute_enthalpy(q_prim_vf, pres, rho, gamma, pi_inf, Re, H, alpha, vel, vel_sum, qv, j, k, l)
         $:GPU_ROUTINE(function_name='s_compute_enthalpy',parallelism='[seq]', &
             & cray_inline=True)
 
@@ -182,7 +185,7 @@ contains
         !! @param icfl_sf cell-centered inviscid cfl number
         !! @param vcfl_sf (optional) cell-centered viscous CFL number
         !! @param Rc_sf (optional) cell centered Rc
-    pure subroutine s_compute_stability_from_dt(vel, c, rho, Re_l, j, k, l, icfl_sf, vcfl_sf, Rc_sf)
+    subroutine s_compute_stability_from_dt(vel, c, rho, Re_l, j, k, l, icfl_sf, vcfl_sf, Rc_sf)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), intent(in), dimension(num_vels) :: vel
         real(wp), intent(in) :: c, rho
@@ -205,23 +208,25 @@ contains
         ! Viscous calculations
         if (viscous) then
             if (p > 0) then
-                !3D
-                if (grid_geometry == 3) then
-                    fltr_dtheta = f_compute_filtered_dtheta(k, l)
-                    vcfl_sf(j, k, l) = maxval(dt/Re_l/rho) &
-                                       /min(dx(j), dy(k), fltr_dtheta)**2._wp
-                    Rc_sf(j, k, l) = min(dx(j)*(abs(vel(1)) + c), &
-                                         dy(k)*(abs(vel(2)) + c), &
-                                         fltr_dtheta*(abs(vel(3)) + c)) &
-                                     /maxval(1._wp/Re_l)
-                else
-                    vcfl_sf(j, k, l) = maxval(dt/Re_l/rho) &
-                                       /min(dx(j), dy(k), dz(l))**2._wp
-                    Rc_sf(j, k, l) = min(dx(j)*(abs(vel(1)) + c), &
-                                         dy(k)*(abs(vel(2)) + c), &
-                                         dz(l)*(abs(vel(3)) + c)) &
-                                     /maxval(1._wp/Re_l)
-                end if
+                #:if not MFC_CASE_OPTIMIZATION or num_dims > 2
+                    !3D
+                    if (grid_geometry == 3) then
+                        fltr_dtheta = f_compute_filtered_dtheta(k, l)
+                        vcfl_sf(j, k, l) = maxval(dt/Re_l/rho) &
+                                           /min(dx(j), dy(k), fltr_dtheta)**2._wp
+                        Rc_sf(j, k, l) = min(dx(j)*(abs(vel(1)) + c), &
+                                             dy(k)*(abs(vel(2)) + c), &
+                                             fltr_dtheta*(abs(vel(3)) + c)) &
+                                         /maxval(1._wp/Re_l)
+                    else
+                        vcfl_sf(j, k, l) = maxval(dt/Re_l/rho) &
+                                           /min(dx(j), dy(k), dz(l))**2._wp
+                        Rc_sf(j, k, l) = min(dx(j)*(abs(vel(1)) + c), &
+                                             dy(k)*(abs(vel(2)) + c), &
+                                             dz(l)*(abs(vel(3)) + c)) &
+                                         /maxval(1._wp/Re_l)
+                    end if
+                #:endif
             elseif (n > 0) then
                 !2D
                 vcfl_sf(j, k, l) = maxval(dt/Re_l/rho)/min(dx(j), dy(k))**2._wp
@@ -245,7 +250,7 @@ contains
         !! @param j x coordinate
         !! @param k y coordinate
         !! @param l z coordinate
-    pure subroutine s_compute_dt_from_cfl(vel, c, max_dt, rho, Re_l, j, k, l)
+    subroutine s_compute_dt_from_cfl(vel, c, max_dt, rho, Re_l, j, k, l)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), dimension(num_vels), intent(in) :: vel
         real(wp), intent(in) :: c, rho

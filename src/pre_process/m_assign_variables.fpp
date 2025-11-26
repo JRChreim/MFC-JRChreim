@@ -52,7 +52,11 @@ module m_assign_variables
             integer, intent(in) :: j, k, l
             real(wp), intent(in) :: eta
             type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
+#ifdef MFC_MIXED_PRECISION
+            integer(kind=1), dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
+#else
             integer, dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
+#endif
 
         end subroutine s_assign_patch_xxxxx_primitive_variables
 
@@ -69,7 +73,9 @@ contains
 
     impure subroutine s_initialize_assign_variables_module
 
-        allocate (alf_sum%sf(0:m, 0:n, 0:p))
+        if (.not. igr) then
+            allocate (alf_sum%sf(0:m, 0:n, 0:p))
+        end if
 
         ! Depending on multicomponent flow model, the appropriate procedure
         ! for assignment of the patch mixture or species primitive variables
@@ -102,15 +108,19 @@ contains
         !! @param eta pseudo volume fraction
         !! @param q_prim_vf Primitive variables
         !! @param patch_id_fp Array to track patch ids
-    pure subroutine s_assign_patch_mixture_primitive_variables(patch_id, j, k, l, &
-                                                               eta, q_prim_vf, patch_id_fp)
+    subroutine s_assign_patch_mixture_primitive_variables(patch_id, j, k, l, &
+                                                          eta, q_prim_vf, patch_id_fp)
         $:GPU_ROUTINE(parallelism='[seq]')
 
         integer, intent(in) :: patch_id
         integer, intent(in) :: j, k, l
         real(wp), intent(in) :: eta
         type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
+#ifdef MFC_MIXED_PRECISION
+        integer(kind=1), dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
+#else
         integer, dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
+#endif
 
         real(wp) :: Ys(1:num_species)
 
@@ -191,7 +201,7 @@ contains
     !! @param k the y-dir node index
     !! @param l the z-dir node index
     !! @param q_prim_vf Primitive variables
-    pure subroutine s_perturb_primitive(j, k, l, q_prim_vf)
+    subroutine s_perturb_primitive(j, k, l, q_prim_vf)
 
         integer, intent(in) :: j, k, l
         type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
@@ -282,7 +292,11 @@ contains
         integer, intent(in) :: patch_id
         integer, intent(in) :: j, k, l
         real(wp), intent(in) :: eta
+#ifdef MFC_MIXED_PRECISION
+        integer(kind=1), dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
+#else
         integer, dimension(0:m, 0:n, 0:p), intent(inout) :: patch_id_fp
+#endif
         type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
 
         ! Density, the specific heat ratio function and the liquid stiffness
@@ -304,7 +318,7 @@ contains
 
         real(wp) :: Ys(1:num_species)
 
-        real(wp), dimension(sys_size) :: orig_prim_vf !<
+        real(stp), dimension(sys_size) :: orig_prim_vf !<
             !! Vector to hold original values of cell for smoothing purposes
 
         integer :: i  !< Generic loop iterator
@@ -689,11 +703,11 @@ contains
 
         if (bubbles_euler .and. (.not. polytropic) .and. (.not. qbmm)) then
             do i = 1, nb
-                if (f_is_default(q_prim_vf(bub_idx%ps(i))%sf(j, k, l))) then
+                if (f_is_default(real(q_prim_vf(bub_idx%ps(i))%sf(j, k, l), kind=wp))) then
                     q_prim_vf(bub_idx%ps(i))%sf(j, k, l) = pb0(i)
                     ! print *, 'setting to pb0'
                 end if
-                if (f_is_default(q_prim_vf(bub_idx%ms(i))%sf(j, k, l))) then
+                if (f_is_default(real(q_prim_vf(bub_idx%ms(i))%sf(j, k, l), kind=wp))) then
                     q_prim_vf(bub_idx%ms(i))%sf(j, k, l) = mass_v0(i)
                 end if
             end do

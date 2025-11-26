@@ -37,9 +37,9 @@ module m_qbmm
     type(int_bounds_info) :: is1_qbmm, is2_qbmm, is3_qbmm
     $:GPU_DECLARE(create='[is1_qbmm,is2_qbmm,is3_qbmm]')
 
-    integer, allocatable, dimension(:) :: bubrs
+    integer, allocatable, dimension(:) :: bubrs_qbmm
     integer, allocatable, dimension(:, :) :: bubmoms
-    $:GPU_DECLARE(create='[bubrs,bubmoms]')
+    $:GPU_DECLARE(create='[bubrs_qbmm,bubmoms]')
 
 contains
 
@@ -394,13 +394,13 @@ contains
 
         $:GPU_UPDATE(device='[momrhs]')
 
-        @:ALLOCATE(bubrs(1:nb))
+        @:ALLOCATE(bubrs_qbmm(1:nb))
         @:ALLOCATE(bubmoms(1:nb, 1:nmom))
 
         do i = 1, nb
-            bubrs(i) = bub_idx%rs(i)
+            bubrs_qbmm(i) = bub_idx%rs(i)
         end do
-        $:GPU_UPDATE(device='[bubrs]')
+        $:GPU_UPDATE(device='[bubrs_qbmm]')
 
         do j = 1, nmom
             do i = 1, nb
@@ -411,13 +411,14 @@ contains
 
     end subroutine s_initialize_qbmm_module
 
-    pure subroutine s_compute_qbmm_rhs(idir, q_cons_vf, q_prim_vf, rhs_vf, flux_n_vf, pb, rhs_pb)
+    subroutine s_compute_qbmm_rhs(idir, q_cons_vf, q_prim_vf, rhs_vf, flux_n_vf, pb, rhs_pb)
 
         integer, intent(in) :: idir
         type(scalar_field), dimension(sys_size), intent(in) :: q_cons_vf, q_prim_vf
         type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf
         type(scalar_field), dimension(sys_size), intent(in) :: flux_n_vf
-        real(wp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: pb, rhs_pb
+        real(stp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: pb
+        real(wp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: rhs_pb  ! TODO :: I think that this should be stp as well.
 
         integer :: i, j, k, l, q
         real(wp) :: nb_q, nb_dot, R, R2, nR, nR2, nR_dot, nR2_dot, var, AX
@@ -433,7 +434,7 @@ contains
         end select
 
         if (.not. polytropic) then
-            $:GPU_PARALLEL_LOOP(collapse=5,private='[nb_q,nR,nR2,R,R2,nb_dot,nR_dot,nR2_dot,var,AX]')
+            $:GPU_PARALLEL_LOOP(collapse=5,private='[i,j,k,l,q,nb_q,nR,nR2,R,R2,nb_dot,nR_dot,nR2_dot,var,AX]')
             do i = 1, nb
                 do q = 1, nnode
                     do l = 0, p
@@ -536,11 +537,12 @@ contains
                     end do
                 end do
             end do
+            $:END_GPU_PARALLEL_LOOP()
         end if
 
         ! The following block is not repeated and is left as is
         if (idir == 1) then
-            $:GPU_PARALLEL_LOOP(collapse=3)
+            $:GPU_PARALLEL_LOOP(private='[i,l,q]', collapse=3)
             do l = 0, p
                 do q = 0, n
                     do i = 0, m
@@ -559,12 +561,13 @@ contains
                     end do
                 end do
             end do
+            $:END_GPU_PARALLEL_LOOP()
         end if
 
     end subroutine s_compute_qbmm_rhs
 
     !Coefficient array for non-polytropic model (pb and mv values are accounted in wght_pb and wght_mv)
-    pure subroutine s_coeff_nonpoly(pres, rho, c, coeffs)
+    subroutine s_coeff_nonpoly(pres, rho, c, coeffs)
         $:GPU_ROUTINE(function_name='s_coeff_nonpoly',parallelism='[seq]', &
             & cray_inline=True)
 
@@ -635,7 +638,7 @@ contains
     end subroutine s_coeff_nonpoly
 
 !Coefficient array for polytropic model (pb for each R0 bin accounted for in wght_pb)
-    pure subroutine s_coeff(pres, rho, c, coeffs)
+    subroutine s_coeff(pres, rho, c, coeffs)
         $:GPU_ROUTINE(function_name='s_coeff',parallelism='[seq]', &
             & cray_inline=True)
 
@@ -687,8 +690,7 @@ contains
                             if (bub_ss) then
                                 coeffs(25, i1, i2) = i2*8._wp*Re_inv/Web/(rho*rho*c)
                             end if
-                            coeffs(26, i1, i2) = -12._wp*i2*gam*Re_inv/(rho*rho*c*c)
-                        end if
+                        #:endif
                     end if
                 end if
             end do; end do
@@ -700,8 +702,10 @@ contains
         type(scalar_field), dimension(:), intent(inout) :: q_cons_vf, q_prim_vf
         type(scalar_field), dimension(:), intent(inout) :: momsp
         type(scalar_field), dimension(0:, 0:, :), intent(inout) :: moms3d
-        real(wp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: pb, rhs_pb
-        real(wp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: mv, rhs_mv
+        real(stp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: pb
+        real(wp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: rhs_pb
+        real(stp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: mv
+        real(wp), dimension(idwbuff(1)%beg:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:, 1:), intent(inout) :: rhs_mv
         type(int_bounds_info), intent(in) :: ix, iy, iz
 
         real(wp), dimension(nmom) :: moms, msum
@@ -714,10 +718,7 @@ contains
         is1_qbmm = ix; is2_qbmm = iy; is3_qbmm = iz
         $:GPU_UPDATE(device='[is1_qbmm,is2_qbmm,is3_qbmm]')
 
-        $:GPU_PARALLEL_LOOP(collapse=3, private='[moms, msum, wght, abscX, &
-            & abscY, wght_pb, wght_mv, wght_ht, coeff, ht, r, q, &
-            & n_tait, B_tait, pres, rho, nbub, c, alf, momsum, &
-            & drdt, drdt2, chi_vw, x_vw, rho_mw, k_mw, T_bar, grad_T]')
+        $:GPU_PARALLEL_LOOP(collapse=3, private='[id1,id2,id3,moms, msum, wght, abscX, abscY, wght_pb, wght_mv, wght_ht, coeff, ht, r, q, n_tait, B_tait, pres, rho, nbub, c, alf, momsum, drdt, drdt2, chi_vw, x_vw, rho_mw, k_mw, T_bar, grad_T, i1, i2, j]')
         do id3 = is3_qbmm%beg, is3_qbmm%end
             do id2 = is2_qbmm%beg, is2_qbmm%end
                 do id1 = is1_qbmm%beg, is1_qbmm%end
@@ -858,6 +859,7 @@ contains
                 end do
             end do
         end do
+        $:END_GPU_PARALLEL_LOOP()
 
     contains
         ! Helper to select the correct coefficient routine
@@ -874,7 +876,7 @@ contains
             end if
         end subroutine s_coeff_selector
 
-        pure subroutine s_chyqmom(momin, wght, abscX, abscY)
+        subroutine s_chyqmom(momin, wght, abscX, abscY)
             $:GPU_ROUTINE(function_name='s_chyqmom',parallelism='[seq]', &
                 & cray_inline=True)
 
@@ -932,7 +934,7 @@ contains
 
         end subroutine s_chyqmom
 
-        pure subroutine s_hyqmom(frho, fup, fmom)
+        subroutine s_hyqmom(frho, fup, fmom)
             $:GPU_ROUTINE(function_name='s_hyqmom',parallelism='[seq]', &
                 & cray_inline=True)
 
@@ -952,7 +954,7 @@ contains
 
         end subroutine s_hyqmom
 
-        pure function f_quad(abscX, abscY, wght_in, q, r, s)
+        function f_quad(abscX, abscY, wght_in, q, r, s)
             $:GPU_ROUTINE(parallelism='[seq]')
             real(wp), dimension(nnode, nb), intent(in) :: abscX, abscY, wght_in
             real(wp), intent(in) :: q, r, s
@@ -968,7 +970,7 @@ contains
 
         end function f_quad
 
-        pure function f_quad2D(abscX, abscY, wght_in, pow)
+        function f_quad2D(abscX, abscY, wght_in, pow)
             $:GPU_ROUTINE(parallelism='[seq]')
             real(wp), dimension(nnode), intent(in) :: abscX, abscY, wght_in
             real(wp), dimension(3), intent(in) :: pow

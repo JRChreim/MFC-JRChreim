@@ -1,3 +1,4 @@
+#:include 'case.fpp'
 #:include 'macros.fpp'
 
 !>
@@ -48,7 +49,7 @@ contains
         !! @param vftmp is the void fraction
         !! @param Rtmp is the  bubble radii
         !! @param ntmp is the output number bubble density
-    pure subroutine s_comp_n_from_prim(vftmp, Rtmp, ntmp, weights)
+    subroutine s_comp_n_from_prim(vftmp, Rtmp, ntmp, weights)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), intent(in) :: vftmp
         real(wp), dimension(nb), intent(in) :: Rtmp
@@ -62,7 +63,7 @@ contains
 
     end subroutine s_comp_n_from_prim
 
-    pure subroutine s_comp_n_from_cons(vftmp, nRtmp, ntmp, weights)
+    subroutine s_comp_n_from_cons(vftmp, nRtmp, ntmp, weights)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), intent(in) :: vftmp
         real(wp), dimension(nb), intent(in) :: nRtmp
@@ -336,7 +337,7 @@ contains
         !! @param peclet Peclet number
         !! @param Re_trans Real part of the transport coefficients
         !! @param Im_trans Imaginary part of the transport coefficients
-    pure elemental subroutine s_transcoeff(omega, peclet, Re_trans, Im_trans)
+    elemental subroutine s_transcoeff(omega, peclet, Re_trans, Im_trans)
 
         real(wp), intent(in) :: omega, peclet
         real(wp), intent(out) :: Re_trans, Im_trans
@@ -355,7 +356,7 @@ contains
 
     end subroutine s_transcoeff
 
-    pure elemental subroutine s_int_to_str(i, res)
+    elemental subroutine s_int_to_str(i, res)
 
         integer, intent(in) :: i
         character(len=*), intent(inout) :: res
@@ -369,7 +370,6 @@ contains
 
         real(wp), dimension(:), intent(inout) :: local_weight
         real(wp), dimension(:), intent(inout) :: local_R0
-
         integer :: ir
         real(wp) :: R0mn, R0mx, dphi, tmp, sd
         real(wp), dimension(nb) :: phi
@@ -384,7 +384,10 @@ contains
                       + (ir - 1._wp)*log(R0mx/R0mn)/(nb - 1._wp)
             local_R0(ir) = exp(phi(ir))
         end do
-        dphi = phi(2) - phi(1)
+
+        #:if not MFC_CASE_OPTIMIZATION or nb > 1
+            dphi = phi(2) - phi(1)
+        #:endif
 
         ! weights for quadrature using Simpson's rule
         do ir = 2, nb - 1
@@ -400,6 +403,7 @@ contains
         local_weight(1) = tmp*dphi/3._wp
         tmp = exp(-0.5_wp*(phi(nb)/sd)**2)/sqrt(2._wp*pi)/sd
         local_weight(nb) = tmp*dphi/3._wp
+
     end subroutine s_simpson
 
     !> This procedure computes the cross product of two vectors.
@@ -419,7 +423,7 @@ contains
     !> This procedure swaps two real numbers.
     !! @param lhs Left-hand side.
     !! @param rhs Right-hand side.
-    pure elemental subroutine s_swap(lhs, rhs)
+    elemental subroutine s_swap(lhs, rhs)
 
         real(wp), intent(inout) :: lhs, rhs
         real(wp) :: ltemp
@@ -432,7 +436,7 @@ contains
     !> This procedure creates a transformation matrix.
     !! @param  p Parameters for the transformation.
     !! @return Transformation matrix.
-    pure function f_create_transform_matrix(param, center) result(out_matrix)
+    function f_create_transform_matrix(param, center) result(out_matrix)
 
         type(ic_model_parameters), intent(in) :: param
         real(wp), dimension(1:3), optional, intent(in) :: center
@@ -493,7 +497,7 @@ contains
     !> This procedure transforms a vector by a matrix.
     !! @param vec Vector to transform.
     !! @param matrix Transformation matrix.
-    pure subroutine s_transform_vec(vec, matrix)
+    subroutine s_transform_vec(vec, matrix)
 
         real(wp), dimension(1:3), intent(inout) :: vec
         real(wp), dimension(1:4, 1:4), intent(in) :: matrix
@@ -508,7 +512,7 @@ contains
     !> This procedure transforms a triangle by a matrix, one vertex at a time.
     !! @param triangle Triangle to transform.
     !! @param matrix   Transformation matrix.
-    pure subroutine s_transform_triangle(triangle, matrix, matrix_n)
+    subroutine s_transform_triangle(triangle, matrix, matrix_n)
 
         type(t_triangle), intent(inout) :: triangle
         real(wp), dimension(1:4, 1:4), intent(in) :: matrix, matrix_n
@@ -526,7 +530,7 @@ contains
     !> This procedure transforms a model by a matrix, one triangle at a time.
     !! @param model  Model to transform.
     !! @param matrix Transformation matrix.
-    pure subroutine s_transform_model(model, matrix, matrix_n)
+    subroutine s_transform_model(model, matrix, matrix_n)
 
         type(t_model), intent(inout) :: model
         real(wp), dimension(1:4, 1:4), intent(in) :: matrix, matrix_n
@@ -542,7 +546,7 @@ contains
     !> This procedure creates a bounding box for a model.
     !! @param model Model to create bounding box for.
     !! @return Bounding box.
-    pure function f_create_bbox(model) result(bbox)
+    function f_create_bbox(model) result(bbox)
 
         type(t_model), intent(in) :: model
         type(t_bbox) :: bbox
@@ -571,7 +575,7 @@ contains
     !! @param lhs logical input.
     !! @param rhs other logical input.
     !! @return xored result.
-    pure elemental function f_xor(lhs, rhs) result(res)
+    elemental function f_xor(lhs, rhs) result(res)
 
         logical, intent(in) :: lhs, rhs
         logical :: res
@@ -582,7 +586,7 @@ contains
     !> This procedure converts logical to 1 or 0.
     !! @param perdicate A Logical argument.
     !! @return 1 if .true., 0 if .false..
-    pure elemental function f_logical_to_int(predicate) result(int)
+    elemental function f_logical_to_int(predicate) result(int)
 
         logical, intent(in) :: predicate
         integer :: int
@@ -598,7 +602,7 @@ contains
     !! @param x is the input value
     !! @param l is the degree
     !! @return P is the unassociated legendre polynomial evaluated at x
-    pure recursive function unassociated_legendre(x, l) result(result_P)
+    recursive function unassociated_legendre(x, l) result(result_P)
 
         integer, intent(in) :: l
         real(wp), intent(in) :: x
@@ -620,7 +624,7 @@ contains
     !! @param l is the degree
     !! @param m_order is the order
     !! @return Y is the spherical harmonic function evaluated at x and phi
-    pure recursive function spherical_harmonic_func(x, phi, l, m_order) result(Y)
+    recursive function spherical_harmonic_func(x, phi, l, m_order) result(Y)
 
         integer, intent(in) :: l, m_order
         real(wp), intent(in) :: x, phi
@@ -642,7 +646,7 @@ contains
     !! @param l is the degree
     !! @param m_order is the order
     !! @return P is the associated legendre polynomial evaluated at x
-    pure recursive function associated_legendre(x, l, m_order) result(result_P)
+    recursive function associated_legendre(x, l, m_order) result(result_P)
 
         integer, intent(in) :: l, m_order
         real(wp), intent(in) :: x
@@ -667,7 +671,7 @@ contains
     !> This function calculates the double factorial value of an integer
     !! @param n_in is the input integer
     !! @return R is the double factorial value of n
-    pure elemental function double_factorial(n_in) result(R_result)
+    elemental function double_factorial(n_in) result(R_result)
 
         integer, intent(in) :: n_in
         integer, parameter :: int64_kind = selected_int_kind(18) ! 18 bytes for 64-bit integer
@@ -681,7 +685,7 @@ contains
     !> The following function calculates the factorial value of an integer
     !! @param n_in is the input integer
     !! @return R is the factorial value of n
-    pure elemental function factorial(n_in) result(R_result)
+    elemental function factorial(n_in) result(R_result)
 
         integer, intent(in) :: n_in
         integer, parameter :: int64_kind = selected_int_kind(18) ! 18 bytes for 64-bit integer
@@ -755,10 +759,6 @@ contains
         m_glb_ds = int((m_glb + 1)/3) - 1
         n_glb_ds = int((n_glb + 1)/3) - 1
         p_glb_ds = int((p_glb + 1)/3) - 1
-
-        do i = 1, sys_size
-            $:GPU_UPDATE(host='[q_cons_vf(i)%sf]')
-        end do
 
         do l = -1, p_ds + 1
             do k = -1, n_ds + 1

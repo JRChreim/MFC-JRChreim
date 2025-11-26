@@ -91,3 +91,6 @@ visitlog.py
 *.py
 *.txt
 *.fig
+
+packaging/spack/spack-test
+.spack 
