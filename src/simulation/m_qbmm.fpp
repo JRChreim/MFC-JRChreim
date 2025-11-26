@@ -690,7 +690,7 @@ contains
                             if (bub_ss) then
                                 coeffs(25, i1, i2) = i2*8._wp*Re_inv/Web/(rho*rho*c)
                             end if
-                        #:endif
+                        end if
                     end if
                 end if
             end do; end do

@@ -1350,7 +1350,7 @@ contains
         !!  @param pSat Saturation Pressure
         !!  @param TSat Saturation Temperature
         !!  @param TSIn equilibrium Temperature
-    elemental subroutine s_TSat(pSat, TSat, TSIn)
+    impure subroutine s_TSat(pSat, TSat, TSIn)
         $:GPU_ROUTINE(function_name='s_TSat',parallelism='[seq]', &
             & cray_inline=True)
 
