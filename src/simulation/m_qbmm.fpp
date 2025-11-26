@@ -479,7 +479,6 @@ contains
                                                                 (nR_dot*nb_q - nR*nb_dot)*(pb(j, k, l, q, i))
                                     end if
                                 end select
-                                
                                 if (q <= 2) then
                                     select case (idir)
                                     case (1)
@@ -531,7 +530,6 @@ contains
                                         end if
                                     end select
                                 end if
-
                             end do
                         end do
                     end do
@@ -800,7 +798,6 @@ contains
                                                 end if
                                             end select
                                         end do
-
                                         moms3d(i1, i2, q)%sf(id1, id2, id3) = nbub*momsum
                                         msum(r) = momsum
                                         r = r + 1

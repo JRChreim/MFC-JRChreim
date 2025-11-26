@@ -1603,7 +1603,6 @@ contains
         pres_av = 0._wp
         pres = 0._wp
         c = 0._wp
-        qv = 0._wp
 
         do k = 0, p
             do j = 0, n

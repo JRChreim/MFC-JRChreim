@@ -701,6 +701,8 @@ contains
 
         integer, intent(in) :: stage
 
+        type(vector_field) :: gm_alpha_qp
+
         call s_convert_conservative_to_primitive_variables( &
             q_cons_ts(1)%vf, &
             q_T_sf, &

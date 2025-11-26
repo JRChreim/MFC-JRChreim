@@ -223,8 +223,8 @@ module m_global_parameters
 
     logical :: relax          !< activate phase change
     integer :: relax_model    !< Relaxation model
-    real(wp) :: palpha_eps    !< trigger parameter for the p relaxation procedure, phase change model
-    real(wp) :: ptgalpha_eps  !< trigger parameter for the pTg relaxation procedure, phase change model
+    real(wp) :: palpha_eps     !< trigger parameter for the p relaxation procedure, phase change model
+    real(wp) :: ptgalpha_eps   !< trigger parameter for the pTg relaxation procedure, phase change model
     real(wp) :: under_relax   !< under relaxation factor for both p-relaxation and pTg-relaxation solvers, phase change model
 
     $:GPU_DECLARE(create='[relax, relax_model, palpha_eps, ptgalpha_eps, under_relax]')

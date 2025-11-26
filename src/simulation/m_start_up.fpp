@@ -1052,9 +1052,8 @@ contains
                                             dyn_pres, pi_inf, gamma, rho, qv, rhoYks, pres, T, pres_mag=pres_mag)
 
                     do i = 1, num_fluids
-                        v_vf(i + internalEnergies_idx%beg - 1)%sf(j, k, l) = v_vf(i + adv_idx%beg - 1)%sf(j, k, l)* &
-                                                                             (gammas(i)*pres + pi_infs(i)) &
-                                                                             + v_vf(i + cont_idx%beg - 1)%sf(j, k, l)*qvs(i)
+                        v_vf(i + intxb - 1)%sf(j, k, l) = v_vf(i + advxb - 1)%sf(j, k, l)*(gammas(i)*pres + pi_infs(i)) &
+                                                                             + v_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
                     end do
 
                 end do
@@ -1505,6 +1504,7 @@ contains
         if (chemistry) then
             $:GPU_UPDATE(device='[q_T_sf%sf]')
         end if
+
         $:GPU_UPDATE(device='[chem_params]')
 
         $:GPU_UPDATE(device='[R0ref,Ca,Web,Re_inv,weight,R0, &
