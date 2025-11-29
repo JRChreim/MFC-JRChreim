@@ -1336,8 +1336,8 @@ contains
                         do i = 1, num_fluids
                             ! internal energy calculation for each of the fluids
                             q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + advxb - 1)%sf(j, k, l)* &
-                                (gammas(i)*q_prim_vf(E_idx)%sf(j, k, l) + pi_infs(i)) + &
-                                q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
+                                                                   (gammas(i)*q_prim_vf(E_idx)%sf(j, k, l) + pi_infs(i)) + &
+                                                                   q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
                         end do
                     end if
 
@@ -1650,7 +1650,7 @@ contains
                 c = 0._wp
                 $:GPU_LOOP(parallelism='[seq]')
                 do q = 1, num_fluids
-                    c = c + adv(q)* gs_min(q) * &
+                    c = c + adv(q)*gs_min(q)* &
                         (pres + pi_infs(q)/(gammas(q) + 1._wp))
                 end do
                 c = c/rho

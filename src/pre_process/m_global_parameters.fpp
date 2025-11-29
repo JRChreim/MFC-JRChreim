@@ -607,6 +607,7 @@ contains
             fluid_pp(i)%qvp = 0._wp
             fluid_pp(i)%D = dflt_real
             fluid_pp(i)%G = 0._wp
+            fluid_pp(i)%D_v = dflt_real
         end do
 
         Bx0 = dflt_real

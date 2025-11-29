@@ -20,7 +20,6 @@ module m_pressure_relaxation
  s_initialize_pressure_relaxation_module, &
  s_finalize_pressure_relaxation_module
 
-
     real(wp), allocatable, dimension(:, :) :: Res_pr
     $:GPU_DECLARE(create='[Res_pr]')
 
@@ -178,7 +177,7 @@ contains
                 ! Enforce pressure bounds
                 do i = 1, num_fluids
                     if (pres_relax <= -(1._wp - 1.e-8_wp)*ps_inf(i) + 1.e-8_wp) &
-                        pres_relax = -(1._wp - 1.e-8_wp)*ps_inf(i) + 1._wp
+                        pres_relax = -(1._wp - 1.e-8_wp)*ps_inf(i) + 1.e-8_wp
                 end do
 
                 ! Newton-Raphson step
@@ -190,7 +189,7 @@ contains
                         rho_K_s(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)/ &
                                      max(q_cons_vf(i + advxb - 1)%sf(j, k, l), sgm_eps) &
                                      *((pres_relax + ps_inf(i))/(pres_K_init(i) + &
-                                                                   ps_inf(i)))**(1._wp/gs_min(i))
+                                                                 ps_inf(i)))**(1._wp/gs_min(i))
                         f_pres = f_pres + q_cons_vf(i + contxb - 1)%sf(j, k, l)/rho_K_s(i)
                         df_pres = df_pres - q_cons_vf(i + contxb - 1)%sf(j, k, l) &
                                   /(gs_min(i)*rho_K_s(i)*(pres_relax + ps_inf(i)))

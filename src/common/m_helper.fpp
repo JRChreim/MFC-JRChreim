@@ -284,7 +284,51 @@ contains
         real(wp), parameter :: k_poly = 1._wp !<
             !! polytropic index used to compute isothermal natural frequency
 
-        ! phi_vn & phi_nv (phi_nn = phi_vv = 1) (Eq. 2.22 in Ando 2010)
+        rhol0 = rhoref
+        pl0 = pref
+#ifdef MFC_SIMULATION
+        @:ALLOCATE(pb0(nb), mass_n0(nb), mass_v0(nb), Pe_T(nb))
+        @:ALLOCATE(k_n(nb), k_v(nb), omegaN(nb))
+        @:ALLOCATE(Re_trans_T(nb), Re_trans_c(nb), Im_trans_T(nb), Im_trans_c(nb))
+#else
+        @:ALLOCATE(pb0(nb), mass_n0(nb), mass_v0(nb), Pe_T(nb))
+        @:ALLOCATE(k_n(nb), k_v(nb), omegaN(nb))
+        @:ALLOCATE(Re_trans_T(nb), Re_trans_c(nb), Im_trans_T(nb), Im_trans_c(nb))
+#endif
+
+        pb0(:) = dflt_real
+        mass_n0(:) = dflt_real
+        mass_v0(:) = dflt_real
+        Pe_T(:) = dflt_real
+        omegaN(:) = dflt_real
+
+        mul0 = fluid_pp(1)%mul0
+        ss = fluid_pp(1)%ss
+        pv = fluid_pp(1)%pv
+        gamma_v = fluid_pp(1)%gamma_v
+        M_v = fluid_pp(1)%M_v
+        mu_v = fluid_pp(1)%mu_v
+        k_v(:) = fluid_pp(1)%k_v
+
+        gamma_n = fluid_pp(2)%gamma_v
+        M_n = fluid_pp(2)%M_v
+        mu_n = fluid_pp(2)%mu_v
+        k_n(:) = fluid_pp(2)%k_v
+
+        gamma_m = gamma_n
+        if (thermal == 2) gamma_m = 1._wp
+
+        temp = 293.15_wp
+        D_m = fluid_pp(2)%D_v
+        uu = sqrt(pl0/rhol0)
+
+        omega_ref = 3._wp*k_poly*Ca + 2._wp*(3._wp*k_poly - 1._wp)/Web
+
+            !!! thermal properties !!!
+        ! gas constants
+        R_n = R_uni/M_n
+        R_v = R_uni/M_v
+        ! phi_vn & phi_nv (phi_nn = phi_vv = 1)
         phi_vn = (1._wp + sqrt(mu_v/mu_n)*(M_n/M_v)**(0.25_wp))**2 &
                  /(sqrt(8._wp)*sqrt(1._wp + M_v/M_n))
         phi_nv = (1._wp + sqrt(mu_n/mu_v)*(M_v/M_n)**(0.25_wp))**2 &

@@ -690,7 +690,7 @@ contains
             fluid_pp(i)%k_v = dflt_real
             fluid_pp(i)%cp_v = dflt_real
             fluid_pp(i)%G = 0._wp
-            fluid_pp(i)%D = dflt_real
+            fluid_pp(i)%D_v = dflt_real
         end do
 
         ! Immersed Boundaries
@@ -835,6 +835,11 @@ contains
         lag_params%epsilonb = 1._wp
         lag_params%charwidth = dflt_real
         lag_params%valmaxvoid = dflt_real
+        lag_params%c0 = dflt_real
+        lag_params%rho0 = dflt_real
+        lag_params%T0 = dflt_real
+        lag_params%Thost = dflt_real
+        lag_params%x0 = dflt_real
 
         ! Continuum damage model
         tau_star = dflt_real
