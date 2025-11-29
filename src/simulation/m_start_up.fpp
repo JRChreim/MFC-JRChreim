@@ -1054,7 +1054,7 @@ contains
 
                     do i = 1, num_fluids
                         v_vf(i + intxb - 1)%sf(j, k, l) = v_vf(i + advxb - 1)%sf(j, k, l)*(gammas(i)*pres + pi_infs(i)) &
-                                                                             + v_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
+                                                          + v_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
                     end do
 
                 end do

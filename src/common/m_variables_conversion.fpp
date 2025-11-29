@@ -1306,8 +1306,7 @@ contains
                         elseif ((model_eqns /= 4) .and. (bubbles_euler .neqv. .true.)) then
                             ! E = Gamma*P + \rho u u /2 + \pi_inf + (\alpha\rho qv)
                             q_cons_vf(E_idx)%sf(j, k, l) = &
-                                gamma*q_prim_vf(E_idx)%sf(j, k, l) + dyn_pres + pi_inf &
-                                + qv
+                                gamma*q_prim_vf(E_idx)%sf(j, k, l) + dyn_pres + pi_inf + qv
                         else if ((model_eqns /= 4) .and. (bubbles_euler)) then
                             ! \tilde{E} = dyn_pres + (1-\alf)(\Gamma p_l + \Pi_inf)
                             q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + &
@@ -1324,8 +1323,8 @@ contains
                         do i = 1, num_fluids
                             ! internal energy calculation for each of the fluids
                             q_cons_vf(i + intxb - 1)%sf(j, k, l) = q_cons_vf(i + advxb - 1)%sf(j, k, l)* &
-                                (gammas(i)*q_prim_vf(E_idx)%sf(j, k, l) + pi_infs(i)) + &
-                                q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
+                                                                   (gammas(i)*q_prim_vf(E_idx)%sf(j, k, l) + pi_infs(i)) + &
+                                                                   q_cons_vf(i + contxb - 1)%sf(j, k, l)*qvs(i)
                         end do
                     end if
 
@@ -1632,7 +1631,12 @@ contains
                            pi_infs(2))/gammas(2)
                 c = (1._wp/(rho*(adv(1)/blkmod1 + adv(2)/blkmod2)))
             elseif (model_eqns == 3) then
-                c = sum( adv * gs_min * ( pres + ps_inf ) ) / rho
+                c = 0._wp
+                $:GPU_LOOP(parallelism='[seq]')
+                do q = 1, num_fluids
+                    c = c + adv(q)*gs_min(q)*(pres + ps_inf(q))
+                end do
+                c = c/rho
             elseif (((model_eqns == 4) .or. (model_eqns == 2 .and. bubbles_euler))) then
                 ! Sound speed for bubble mixture to order O(\alpha)
 
