@@ -96,5 +96,5 @@ visitlog.py
 *.txt
 *.fig
 
-packaging/spack/spack-test
-.spack 
+**isolation_rules/
+**.supercode/
