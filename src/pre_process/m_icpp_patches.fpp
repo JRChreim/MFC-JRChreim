@@ -323,7 +323,7 @@ contains
 
                     @:analytical()
                     if (patch_icpp(patch_id)%hcid /= dflt_int) then
-                        @:Hardcoded2D()
+                        ! @:Hardcoded2D()
                     end if
 
                     ! Updating the patch identities bookkeeping variable
@@ -403,7 +403,7 @@ contains
 
                     @:analytical()
                     if (patch_icpp(patch_id)%hcid /= dflt_int) then
-                        @:Hardcoded2D()
+                        ! @:Hardcoded2D()
                     end if
 
                 end if
@@ -467,7 +467,7 @@ contains
 
                     @:analytical()
                     if (patch_icpp(patch_id)%hcid /= dflt_int) then
-                        @:Hardcoded2D()
+                        ! @:Hardcoded2D()
                     end if
 
                     ! Updating the patch identities bookkeeping variable
@@ -621,7 +621,7 @@ contains
 
                     @:analytical()
                     if (patch_icpp(patch_id)%hcid /= dflt_int) then
-                        @:Hardcoded2D()
+                        ! @:Hardcoded2D()
                     end if
 
                     ! Updating the patch identities bookkeeping variable
@@ -792,7 +792,7 @@ contains
                         @:analytical()
 
                         if (patch_icpp(patch_id)%hcid /= dflt_int) then
-                            @:Hardcoded2D()
+                            ! @:Hardcoded2D()
                         end if
 
                         if ((q_prim_vf(1)%sf(i, j, 0) < 1.e-10) .and. (model_eqns == 4)) then
@@ -957,7 +957,7 @@ contains
 
                     @:analytical()
                     if (patch_icpp(patch_id)%hcid /= dflt_int) then
-                        @:Hardcoded2D()
+                        ! @:Hardcoded2D()
                     end if
 
                     ! Updating the patch identities bookkeeping variable
