@@ -1432,9 +1432,7 @@ contains
                 ! Sound speed for bubble mixture to order O(\alpha)
 
                 if ((mpp_lim .and. num_fluids > 1) .or. oneway) then
-                    ! c = (1._wp/gamma + 1._wp)* &
-                    !     (pres + pi_inf/(gamma + 1._wp))/rho
-                    c = (H - 5.e-1*vel_sum - qv/rho)/gamma
+                    c = (1._wp/gamma + 1._wp)*(pres + pi_inf/(gamma + 1._wp))/rho
                 else
                     c = &
                         (1._wp/gamma + 1._wp)* &
