@@ -564,16 +564,15 @@ contains
             end do
         else
             !get mixture density from pressure via SG EOS
-            ! \rho = (( p_l + ps_infs))/( p_ref + ps_infs))**(1/little_gam) * rhoref(1-alf)
+            ! \rho = (( p_l + ps_inf))/( p_ref + ps_inf))**(1/little_gam) * rhoref(1-alf)
             q_prim_vf(1)%sf(j, k, l) = &
-                (((q_prim_vf(E_idx)%sf(j, k, l) + ps_infs(1))/(pref + ps_infs(1)))**(1/gs_min(1)))* &
+                (((q_prim_vf(E_idx)%sf(j, k, l) + ps_inf(1))/(pref + ps_inf(1)))**(1/gs_min(1)))* &
                 rhoref*(1 - q_prim_vf(alf_idx)%sf(j, k, l))
         end if
 
         ! Density and the specific heat ratio and liquid stiffness functions
         ! call s_convert_species_to_mixture_variables(q_prim_vf, j, k, l, &
-        call s_convert_to_mixture_variables(q_prim_vf, j, k, l, &
-                                            rho, gamma, pi_inf, qv)
+        call s_convert_to_mixture_variables(q_prim_vf, j, k, l, rho, gamma, pi_inf, qv)
 
         ! Velocity
         do i = 1, E_idx - mom_idx%beg
