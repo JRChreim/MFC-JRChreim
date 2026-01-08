@@ -1046,17 +1046,15 @@ contains
                                 + pi_inf + qv
                         elseif ((model_eqns /= 4) .and. (bubbles_euler .neqv. .true.)) then
                             ! E = Gamma*P + \rho u u /2 + \pi_inf + (\alpha\rho qv)
-                            q_cons_vf(E_idx)%sf(j, k, l) = &
-                                gamma*q_prim_vf(E_idx)%sf(j, k, l) + dyn_pres + pi_inf + qv
+                            q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf + qv
                         else if ((model_eqns /= 4) .and. (bubbles_euler) .and. .not. oneway) then
                             ! \tilde{E} = dyn_pres + (1-\alf)(\Gamma p_l + \Pi_inf)
                             q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + &
                                                            (1._wp - q_prim_vf(alf_idx)%sf(j, k, l))* &
-                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf)
+                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf + qv)
                         else if ((model_eqns /= 4) .and. (bubbles_euler) .and. oneway) then
                             ! \tilde{E} = dyn_pres + (\Gamma p_l + \Pi_inf)
-                            q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + &
-                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf)
+                            q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf + qv
                         else
                             !Tait EOS, no conserved energy variable
                             q_cons_vf(E_idx)%sf(j, k, l) = 0._wp
