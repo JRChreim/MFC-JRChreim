@@ -542,7 +542,7 @@ contains
         integer, dimension(3) :: cell
 
         integer :: adap_dt_stop_max, adap_dt_stop !< Fail-safe exit if max iteration count reached
-        real(wp) :: dmalf, dmntait, dmBtait, dm_bub_adv_src, dm_divu !< Dummy variables for unified subgrid bubble subroutines
+        real(wp) :: dmalf, dm_bub_adv_src, dm_divu !< Dummy variables for unified subgrid bubble subroutines
 
         integer :: i, k, l
 
@@ -609,7 +609,7 @@ contains
             if (adap_dt) then
 
                 call s_advance_step(myRho, myPinf, myR, myV, myR0, myPb, myPbdot, dmalf, &
-                                    dmntait, dmBtait, dm_bub_adv_src, dm_divu, &
+                                    dm_bub_adv_src, dm_divu, &
                                     k, myMass_v, myMass_n, myBeta_c, &
                                     myBeta_t, myCson, adap_dt_stop)
 
@@ -623,7 +623,7 @@ contains
 
                 ! Radial acceleration from bubble models
                 intfc_dveldt(k, stage) = f_rddot(myRho, myPinf, myR, myV, myR0, &
-                                                 myPb, myPbdot, dmalf, dmntait, dmBtait, &
+                                                 myPb, myPbdot, dmalf, &
                                                  dm_bub_adv_src, dm_divu, &
                                                  myCson)
                 intfc_draddt(k, stage) = myV

@@ -141,8 +141,8 @@ contains
             pi_fac, perturb_flow, perturb_flow_fluid, perturb_flow_mag, &
             perturb_sph, perturb_sph_fluid, fluid_rho, &
             cyl_coord, loops_x, loops_y, loops_z, &
-            rhoref, pref, bubbles_euler, R0ref, nb, &
-            polytropic, thermal, Ca, Web, Re_inv, &
+            rhoref, pref, bubbles_euler, oneway, oneway_vf, oneway_patch, &
+            R0ref, nb, polytropic, thermal, Ca, Web, Re_inv, &
             polydisperse, poly_sigma, qbmm, &
             sigR, sigV, dist_type, rhoRV, &
             file_per_process, relax, relax_model, &

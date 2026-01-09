@@ -35,15 +35,13 @@ contains
         !!  @param fpb Internal bubble pressure
         !!  @param fpbdot Time-derivative of internal bubble pressure
         !!  @param alf bubble volume fraction
-        !!  @param fntait Tait EOS parameter
-        !!  @param fBtait Tait EOS parameter
         !!  @param f_bub_adv_src Source for bubble volume fraction
         !!  @param f_divu Divergence of velocity
         !!  @param fCson Speed of sound from fP (EL)
-    elemental function f_rddot(fRho, fP, fR, fV, fR0, fpb, fpbdot, alf, fntait, fBtait, f_bub_adv_src, f_divu, fCson)
+    elemental function f_rddot(fRho, fP, fR, fV, fR0, fpb, fpbdot, alf, f_bub_adv_src, f_divu, fCson)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), intent(in) :: fRho, fP, fR, fV, fR0, fpb, fpbdot, alf
-        real(wp), intent(in) :: fntait, fBtait, f_bub_adv_src, f_divu
+        real(wp), intent(in) :: f_bub_adv_src, f_divu
         real(wp), intent(in) :: fCson
 
         real(wp) :: fCpbw, fCpinf, fCpinf_dot, fH, fHdot, c_gas, c_liquid
@@ -53,17 +51,21 @@ contains
             ! Gilmore bubbles
             fCpinf = fP - Eu
             fCpbw = f_cpbw(fR0, fR, fV, fpb)
-            fH = f_H(fCpbw, fCpinf, fntait, fBtait)
-            c_gas = f_cgas(fCpinf, fntait, fBtait, fH)
-            fCpinf_dot = f_cpinfdot(fRho, fP, alf, fntait, fBtait, f_bub_adv_src, f_divu)
-            fHdot = f_Hdot(fCpbw, fCpinf, fCpinf_dot, fntait, fBtait, fR, fV, fR0, fpbdot)
-            f_rddot = f_rddot_G(fCpbw, fR, fV, fH, fHdot, c_gas, fntait, fBtait)
+            fH = f_H(fCpbw, fCpinf)
+            c_gas = f_cgas(fCpinf, fH)
+            fCpinf_dot = f_cpinfdot(fRho, fP, alf, f_bub_adv_src, f_divu)
+            fHdot = f_Hdot(fCpbw, fCpinf, fCpinf_dot, fR, fV, fR0, fpbdot)
+            f_rddot = f_rddot_G(fCpbw, fR, fV, fH, fHdot, c_gas)
         else if (bubble_model == 2) then
             ! Keller-Miksis bubbles
             fCpinf = fP
             fCpbw = f_cpbw_KM(fR0, fR, fV, fpb)
             if (bubbles_euler) then
-                c_liquid = sqrt(fntait*(fP + fBtait)/(fRho*(1._wp - alf)))
+                if (oneway) then
+                    c_liquid = sqrt(gs_min(1)*(fP + ps_inf(1)/pi_fac)/fRho)
+                else
+                    c_liquid = sqrt(gs_min(1)*(fP + ps_inf(1)/pi_fac)/(fRho*(1._wp - alf)))
+                end if
             else
                 c_liquid = fCson
             end if
@@ -101,40 +103,36 @@ contains
     !>  Function that computes the bubble enthalpy
         !!  @param fCpbw Bubble wall pressure
         !!  @param fCpinf Driving bubble pressure
-        !!  @param fntait Tait EOS parameter
-        !!  @param fBtait Tait EOS parameter
-    elemental function f_H(fCpbw, fCpinf, fntait, fBtait)
+    elemental function f_H(fCpbw, fCpinf)
         $:GPU_ROUTINE(parallelism='[seq]')
-        real(wp), intent(in) :: fCpbw, fCpinf, fntait, fBtait
+        real(wp), intent(in) :: fCpbw, fCpinf
 
         real(wp) :: tmp1, tmp2, tmp3
         real(wp) :: f_H
 
-        tmp1 = (fntait - 1._wp)/fntait
-        tmp2 = (fCpbw/(1._wp + fBtait) + 1._wp)**tmp1
-        tmp3 = (fCpinf/(1._wp + fBtait) + 1._wp)**tmp1
+        tmp1 = (gs_min(1) - 1._wp)/gs_min(1)
+        tmp2 = (fCpbw/(1._wp + ps_inf(1)/pi_fac) + 1._wp)**tmp1
+        tmp3 = (fCpinf/(1._wp + ps_inf(1)/pi_fac) + 1._wp)**tmp1
 
-        f_H = (tmp2 - tmp3)*fntait*(1._wp + fBtait)/(fntait - 1._wp)
+        f_H = (tmp2 - tmp3)*(1._wp + ps_inf(1)/pi_fac)/tmp1
 
     end function f_H
 
     !> Function that computes the sound speed for the bubble
         !! @param fCpinf Driving bubble pressure
-        !! @param fntait Tait EOS parameter
-        !! @param fBtait Tait EOS parameter
         !! @param fH Bubble enthalpy
-    elemental function f_cgas(fCpinf, fntait, fBtait, fH)
+    elemental function f_cgas(fCpinf, fH)
         $:GPU_ROUTINE(parallelism='[seq]')
-        real(wp), intent(in) :: fCpinf, fntait, fBtait, fH
+        real(wp), intent(in) :: fCpinf, fH
 
         real(wp) :: tmp
         real(wp) :: f_cgas
 
         ! get sound speed for Gilmore equations "C" -> c_gas
-        tmp = (fCpinf/(1._wp + fBtait) + 1._wp)**((fntait - 1._wp)/fntait)
-        tmp = fntait*(1._wp + fBtait)*tmp
+        tmp = (fCpinf/(1._wp + ps_inf(1)/pi_fac) + 1._wp)**((gs_min(1) - 1._wp)/gs_min(1))
+        tmp = gs_min(1)*(1._wp + ps_inf(1)/pi_fac)*tmp
 
-        f_cgas = sqrt(tmp + (fntait - 1._wp)*fH)
+        f_cgas = sqrt(tmp + (gs_min(1) - 1._wp)*fH)
 
     end function f_cgas
 
@@ -142,23 +140,21 @@ contains
         !!  @param fRho Local liquid density
         !!  @param fP Local pressure
         !!  @param falf Local void fraction
-        !!  @param fntait Tait EOS parameter
-        !!  @param fBtait Tait EOS parameter
         !!  @param advsrc Advection equation source term
         !!  @param divu Divergence of velocity
-    elemental function f_cpinfdot(fRho, fP, falf, fntait, fBtait, advsrc, divu)
+    elemental function f_cpinfdot(fRho, fP, falf, advsrc, divu)
         $:GPU_ROUTINE(parallelism='[seq]')
-        real(wp), intent(in) :: fRho, fP, falf, fntait, fBtait, advsrc, divu
+        real(wp), intent(in) :: fRho, fP, falf, advsrc, divu
 
         real(wp) :: c2_liquid
         real(wp) :: f_cpinfdot
 
         ! get sound speed squared for liquid (only needed for pbdot)
         ! c_l^2 = gam (p+B) / (rho*(1-alf))
-        if (mpp_lim) then
-            c2_liquid = fntait*(fP + fBtait)/fRho
+        if (mpp_lim .or. oneway) then
+            c2_liquid = gs_min(1)*(fP + ps_inf(1)/pi_fac)/fRho
         else
-            c2_liquid = fntait*(fP + fBtait)/(fRho*(1._wp - falf))
+            c2_liquid = gs_min(1)*(fP + ps_inf(1)/pi_fac)/(fRho*(1._wp - falf))
         end if
 
         ! \dot{Cp_inf} = rho sound^2 (alf_src - divu)
@@ -170,15 +166,13 @@ contains
         !!  @param fCpbw Bubble wall pressure
         !!  @param fCpinf Driving bubble pressure
         !!  @param fCpinf_dot Time derivative of the driving pressure
-        !!  @param fntait Tait EOS parameter
-        !!  @param fBtait Tait EOS parameter
         !!  @param fR Current bubble radius
         !!  @param fV Current bubble velocity
         !!  @param fR0 Equilibrium bubble radius
         !!  @param fpbdot Time derivative of the internal bubble pressure
-    elemental function f_Hdot(fCpbw, fCpinf, fCpinf_dot, fntait, fBtait, fR, fV, fR0, fpbdot)
+    elemental function f_Hdot(fCpbw, fCpinf, fCpinf_dot, fR, fV, fR0, fpbdot)
         $:GPU_ROUTINE(parallelism='[seq]')
-        real(wp), intent(in) :: fCpbw, fCpinf, fCpinf_dot, fntait, fBtait
+        real(wp), intent(in) :: fCpbw, fCpinf, fCpinf_dot
         real(wp), intent(in) :: fR, fV, fR0, fpbdot
 
         real(wp) :: tmp1, tmp2
@@ -193,8 +187,8 @@ contains
         tmp2 = (2._wp/Web + 4._wp*Re_inv*fV)*fV/(fR**2._wp)
 
         f_Hdot = &
-            (fCpbw/(1._wp + fBtait) + 1._wp)**(-1._wp/fntait)*(tmp1 + tmp2) &
-            - (fCpinf/(1._wp + fBtait) + 1._wp)**(-1._wp/fntait)*fCpinf_dot
+            (fCpbw/(1._wp + ps_inf(1)/pi_fac) + 1._wp)**(-1._wp/gs_min(1))*(tmp1 + tmp2) &
+            - (fCpinf/(1._wp + ps_inf(1)/pi_fac) + 1._wp)**(-1._wp/gs_min(1))*fCpinf_dot
 
         ! Hdot = (Cpbw/(1+B) + 1)^(-1/n_tait)*(-3 gam)*(R0/R)^(3gam) V/R
         !f_Hdot = ((fCpbw/(1._wp+fBtait)+1._wp)**(-1._wp/fntait))*(-3._wp)*gam * &
@@ -233,19 +227,17 @@ contains
         !!  @param fH Current enthalpy
         !!  @param fHdot Current time derivative of the enthalpy
         !!  @param fcgas Current gas sound speed
-        !!  @param fntait Tait EOS parameter
-        !!  @param fBtait Tait EOS parameter
-    elemental function f_rddot_G(fCpbw, fR, fV, fH, fHdot, fcgas, fntait, fBtait)
+    elemental function f_rddot_G(fCpbw, fR, fV, fH, fHdot, fcgas)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), intent(in) :: fCpbw, fR, fV, fH, fHdot
-        real(wp), intent(in) :: fcgas, fntait, fBtait
+        real(wp), intent(in) :: fcgas
 
         real(wp) :: tmp1, tmp2, tmp3
         real(wp) :: f_rddot_G
 
         tmp1 = fV/fcgas
-        tmp2 = 1._wp + 4._wp*Re_inv/fcgas/fR*(fCpbw/(1._wp + fBtait) + 1._wp) &
-               **(-1._wp/fntait)
+        tmp2 = 1._wp + 4._wp*Re_inv/fcgas/fR*(fCpbw/(1._wp + ps_inf(1)/pi_fac) + 1._wp) &
+               **(-1._wp/gs_min(1))
         tmp3 = 1.5_wp*fV**2._wp*(tmp1/3._wp - 1._wp) + fH*(1._wp + tmp1) &
                + fR*fHdot*(1._wp - tmp1)/fcgas
 
@@ -452,8 +444,6 @@ contains
         !!  @param fpb Internal bubble pressure
         !!  @param fpbdot Time-derivative of internal bubble pressure
         !!  @param alf bubble volume fraction
-        !!  @param fntait Tait EOS parameter
-        !!  @param fBtait Tait EOS parameter
         !!  @param f_bub_adv_src Source for bubble volume fraction
         !!  @param f_divu Divergence of velocity
         !!  @param bub_id Bubble identifier (EL)
@@ -464,7 +454,7 @@ contains
         !!  @param fCson Speed of sound (EL)
         !!  @param adap_dt_stop Fail-safe exit if max iteration count reached
     subroutine s_advance_step(fRho, fP, fR, fV, fR0, fpb, fpbdot, alf, &
-                              fntait, fBtait, f_bub_adv_src, f_divu, &
+                              f_bub_adv_src, f_divu, &
                               bub_id, fmass_v, fmass_g, fbeta_c, &
                               fbeta_t, fCson, adap_dt_stop)
         $:GPU_ROUTINE(function_name='s_advance_step',parallelism='[seq]', &
@@ -472,7 +462,7 @@ contains
 
         real(wp), intent(inout) :: fR, fV, fpb, fmass_v
         real(wp), intent(in) :: fRho, fP, fR0, fpbdot, alf
-        real(wp), intent(in) :: fntait, fBtait, f_bub_adv_src, f_divu
+        real(wp), intent(in) :: f_bub_adv_src, f_divu
         integer, intent(in) :: bub_id
         real(wp), intent(in) :: fmass_g, fbeta_c, fbeta_t, fCson
         integer, intent(inout) :: adap_dt_stop
@@ -486,7 +476,7 @@ contains
         integer :: iter_count
 
         call s_initial_substep_h(fRho, fP, fR, fV, fR0, fpb, fpbdot, alf, &
-                                 fntait, fBtait, f_bub_adv_src, f_divu, fCson, h0)
+                                 f_bub_adv_src, f_divu, fCson, h0)
         h = h0
         ! Advancing one step
         t_new = 0._wp
@@ -506,7 +496,7 @@ contains
                 ! Advance one sub-step
                 call s_advance_substep(err(1), &
                                        fRho, fP, fR, fV, fR0, fpb, fpbdot, alf, &
-                                       fntait, fBtait, f_bub_adv_src, f_divu, &
+                                       f_bub_adv_src, f_divu, &
                                        bub_id, fmass_v, fmass_g, fbeta_c, &
                                        fbeta_t, fCson, h, &
                                        myR_tmp1, myV_tmp1, myPb_tmp1, myMv_tmp1)
@@ -518,7 +508,7 @@ contains
                 ! Advance one sub-step by advancing two half steps
                 call s_advance_substep(err(2), &
                                        fRho, fP, fR, fV, fR0, fpb, fpbdot, alf, &
-                                       fntait, fBtait, f_bub_adv_src, f_divu, &
+                                       f_bub_adv_src, f_divu, &
                                        bub_id, fmass_v, fmass_g, fbeta_c, &
                                        fbeta_t, fCson, 0.5_wp*h, &
                                        myR_tmp2, myV_tmp2, myPb_tmp2, myMv_tmp2)
@@ -532,7 +522,7 @@ contains
 
                 call s_advance_substep(err(3), &
                                        fRho, fP, fR2, fV2, fR0, fpb2, fpbdot, alf, &
-                                       fntait, fBtait, f_bub_adv_src, f_divu, &
+                                       f_bub_adv_src, f_divu, &
                                        bub_id, fmass_v2, fmass_g, fbeta_c, &
                                        fbeta_t, fCson, 0.5_wp*h, &
                                        myR_tmp2, myV_tmp2, myPb_tmp2, myMv_tmp2)
@@ -601,20 +591,18 @@ contains
         !!  @param fpb Internal bubble pressure
         !!  @param fpbdot Time-derivative of internal bubble pressure
         !!  @param alf bubble volume fraction
-        !!  @param fntait Tait EOS parameter
-        !!  @param fBtait Tait EOS parameter
         !!  @param f_bub_adv_src Source for bubble volume fraction
         !!  @param f_divu Divergence of velocity
         !!  @param fCson Speed of sound (EL)
         !!  @param h Time step size
     subroutine s_initial_substep_h(fRho, fP, fR, fV, fR0, fpb, fpbdot, alf, &
-                                   fntait, fBtait, f_bub_adv_src, f_divu, &
+                                   f_bub_adv_src, f_divu, &
                                    fCson, h)
         $:GPU_ROUTINE(function_name='s_initial_substep_h',parallelism='[seq]', &
             & cray_inline=True)
 
         real(wp), intent(IN) :: fRho, fP, fR, fV, fR0, fpb, fpbdot, alf
-        real(wp), intent(IN) :: fntait, fBtait, f_bub_adv_src, f_divu
+        real(wp), intent(IN) :: f_bub_adv_src, f_divu
         real(wp), intent(IN) :: fCson
         real(wp), intent(OUT) :: h
 
@@ -627,7 +615,7 @@ contains
         myR_tmp(1) = fR
         myV_tmp(1) = fV
         myA_tmp(1) = f_rddot(fRho, fP, myR_tmp(1), myV_tmp(1), fR0, &
-                             fpb, fpbdot, alf, fntait, fBtait, &
+                             fpb, fpbdot, alf, &
                              f_bub_adv_src, f_divu, &
                              fCson)
 
@@ -644,7 +632,7 @@ contains
         myR_tmp(2) = myR_tmp(1) + h_size(1)*myV_tmp(1)
         myV_tmp(2) = myV_tmp(1) + h_size(1)*myA_tmp(1)
         myA_tmp(2) = f_rddot(fRho, fP, myR_tmp(2), myV_tmp(2), fR0, &
-                             fpb, fpbdot, alf, fntait, fBtait, &
+                             fpb, fpbdot, alf, &
                              f_bub_adv_src, f_divu, &
                              fCson)
 
@@ -674,8 +662,6 @@ contains
         !!  @param fpb Internal bubble pressure
         !!  @param fpbdot Time-derivative of internal bubble pressure
         !!  @param alf bubble volume fraction
-        !!  @param fntait Tait EOS parameter
-        !!  @param fBtait Tait EOS parameter
         !!  @param f_bub_adv_src Source for bubble volume fraction
         !!  @param f_divu Divergence of velocity
         !!  @param bub_id Bubble identifier (EL)
@@ -690,7 +676,7 @@ contains
         !!  @param myPb_tmp Internal bubble pressure at each stage (EL)
         !!  @param myMv_tmp Mass of vapor in the bubble at each stage (EL)
     subroutine s_advance_substep(err, fRho, fP, fR, fV, fR0, fpb, fpbdot, alf, &
-                                 fntait, fBtait, f_bub_adv_src, f_divu, &
+                                 f_bub_adv_src, f_divu, &
                                  bub_id, fmass_v, fmass_g, fbeta_c, &
                                  fbeta_t, fCson, h, &
                                  myR_tmp, myV_tmp, myPb_tmp, myMv_tmp)
@@ -699,7 +685,7 @@ contains
 
         real(wp), intent(OUT) :: err
         real(wp), intent(IN) :: fRho, fP, fR, fV, fR0, fpb, fpbdot, alf
-        real(wp), intent(IN) :: fntait, fBtait, f_bub_adv_src, f_divu, h
+        real(wp), intent(IN) :: f_bub_adv_src, f_divu, h
         integer, intent(IN) :: bub_id
         real(wp), intent(IN) :: fmass_v, fmass_g, fbeta_c, fbeta_t, fCson
         real(wp), dimension(4), intent(OUT) :: myR_tmp, myV_tmp, myPb_tmp, myMv_tmp
@@ -720,7 +706,7 @@ contains
                               fmass_g, fbeta_c, fbeta_t, mydPbdt_tmp(1), mydMvdt_tmp(1))
         end if
         myA_tmp(1) = f_rddot(fRho, fP, myR_tmp(1), myV_tmp(1), fR0, &
-                             myPb_tmp(1), mydPbdt_tmp(1), alf, fntait, fBtait, &
+                             myPb_tmp(1), mydPbdt_tmp(1), alf, &
                              f_bub_adv_src, f_divu, &
                              fCson)
 
@@ -737,7 +723,7 @@ contains
                               bub_id, fmass_g, fbeta_c, fbeta_t, mydPbdt_tmp(2), mydMvdt_tmp(2))
         end if
         myA_tmp(2) = f_rddot(fRho, fP, myR_tmp(2), myV_tmp(2), fR0, &
-                             myPb_tmp(2), mydPbdt_tmp(2), alf, fntait, fBtait, &
+                             myPb_tmp(2), mydPbdt_tmp(2), alf, &
                              f_bub_adv_src, f_divu, &
                              fCson)
 
@@ -754,7 +740,7 @@ contains
                               bub_id, fmass_g, fbeta_c, fbeta_t, mydPbdt_tmp(3), mydMvdt_tmp(3))
         end if
         myA_tmp(3) = f_rddot(fRho, fP, myR_tmp(3), myV_tmp(3), fR0, &
-                             myPb_tmp(3), mydPbdt_tmp(3), alf, fntait, fBtait, &
+                             myPb_tmp(3), mydPbdt_tmp(3), alf, &
                              f_bub_adv_src, f_divu, &
                              fCson)
 
@@ -771,7 +757,7 @@ contains
                               bub_id, fmass_g, fbeta_c, fbeta_t, mydPbdt_tmp(4), mydMvdt_tmp(4))
         end if
         myA_tmp(4) = f_rddot(fRho, fP, myR_tmp(4), myV_tmp(4), fR0, &
-                             myPb_tmp(4), mydPbdt_tmp(4), alf, fntait, fBtait, &
+                             myPb_tmp(4), mydPbdt_tmp(4), alf, &
                              f_bub_adv_src, f_divu, &
                              fCson)
 

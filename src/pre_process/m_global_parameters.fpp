@@ -229,6 +229,9 @@ module m_global_parameters
     real(wp) :: Ca, Web, Re_inv, Eu
     real(wp), dimension(:), allocatable :: weight, R0
     logical :: bubbles_euler
+    logical :: oneway
+    integer :: oneway_patch
+    real(wp) :: oneway_vf
     logical :: qbmm      !< Quadrature moment method
     integer :: nmom  !< Number of carried moments
     real(wp) :: sigR, sigV, rhoRV !< standard deviations in R/V
@@ -508,6 +511,9 @@ contains
 
         ! Bubble modeling
         bubbles_euler = .false.
+        oneway = .false.
+        oneway_patch = dflt_int
+        oneway_vf = dflt_real
         polytropic = .true.
         polydisperse = .false.
 
@@ -692,7 +698,12 @@ contains
             sys_size = adv_idx%end
 
             if (bubbles_euler) then
-                alf_idx = adv_idx%end
+                if (oneway) then
+                    alf_idx = adv_idx%end + 1
+                    sys_size = sys_size + 1
+                else
+                    alf_idx = adv_idx%end
+                end if
             else
                 alf_idx = 1
             end if

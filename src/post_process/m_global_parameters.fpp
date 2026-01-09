@@ -311,6 +311,7 @@ module m_global_parameters
     real(wp) :: Eu, Ca, Web, Re_inv
     real(wp), dimension(:), allocatable :: weight, R0
     logical :: bubbles_euler
+    logical :: oneway
     logical :: qbmm
     logical :: polytropic
     logical :: polydisperse
@@ -523,6 +524,7 @@ contains
 
         ! Bubble modeling
         bubbles_euler = .false.
+        oneway = .false.
         qbmm = .false.
         R0ref = dflt_real
         nb = dflt_int
@@ -613,7 +615,12 @@ contains
             sys_size = adv_idx%end
 
             if (bubbles_euler) then
-                alf_idx = adv_idx%end
+                if (oneway) then
+                    alf_idx = adv_idx%end + 1
+                    sys_size = sys_size + 1
+                else
+                    alf_idx = adv_idx%end
+                end if
             else
                 alf_idx = 1
             end if

@@ -218,7 +218,7 @@ contains
                             end if
                         end do
 
-                        if (bubbles_euler) then
+                        if (bubbles_euler .and. .not. oneway) then
                             rho_visc = 0._wp
                             gamma_visc = 0._wp
                             pi_inf_visc = 0._wp
@@ -324,7 +324,7 @@ contains
                                 end if
                             end do
 
-                            if (bubbles_euler) then
+                            if (bubbles_euler .and. .not. oneway) then
                                 rho_visc = 0._wp
                                 gamma_visc = 0._wp
                                 pi_inf_visc = 0._wp
