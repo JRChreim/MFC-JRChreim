@@ -300,8 +300,6 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
 
         self.prohibit(not bubbles_euler,
                      "adv_n requires bubbles_euler to be enabled")
-        self.prohibit(num_fluids != 1,
-                     "adv_n requires num_fluids = 1")
         self.prohibit(qbmm,
                      "adv_n is not compatible with qbmm")
 
