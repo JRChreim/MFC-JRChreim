@@ -193,6 +193,7 @@ contains
                             ! 2.2. Heterogeneous pTg-equilibrium (either IC or SG activated).
                             TIC .or. TSG &
                             ) ) then
+                              print *, 'pirocas, talkey'
                                 ! updating m1 and m2 AFTER correcting the partial densities. These values are 
                                 ! stored to be retrieved in case the final state is a mixture of fluids
                                 mOr = (/ m0k(lp), m0k(vp) /) 
