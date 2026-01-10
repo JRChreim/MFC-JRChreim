@@ -759,7 +759,7 @@ contains
 
         real(wp), dimension(num_fluids), intent(inout) :: alphak, me0k, m0k
         real(wp), dimension(num_fluids), intent(in) :: p_infpT
-        real(wp), intent(inout) :: pS, TS, rM
+        real(wp), intent(inout) :: pS, TS, rM, TSatSL
         real(wp), intent(in) :: rhoe
         integer, intent(in) :: j, k, l
         logical, intent(inout) :: TR, TSG ! triggering parameters
@@ -782,6 +782,8 @@ contains
         
         pSO = pS
         mOk = m0k
+
+        s_TSat(pS, TSatSL, TS)
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
