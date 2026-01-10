@@ -224,6 +224,7 @@ contains
                                 ! checking the conditions for subcooled liquid
                                 elseif (TSSL < TSatSL) then
 
+                                    print *, alpha_b
                                     print *, pS
                                     print *, pSSL
 
