@@ -210,9 +210,8 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
-                                ! if (pS < 0) then 
-                                !   print *, alpha_b
-                                ! end if
+                                print *, TSOV, TSatOV
+                                print *, TSSL, TSatSL
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -783,7 +782,7 @@ contains
         
         pSO = pS
         mOk = m0k
-        
+
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
         if ( ( (pS < -1.47e10_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp)) ) .or. &
