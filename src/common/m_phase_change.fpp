@@ -210,6 +210,10 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
+                                print *, 'pSSL', pSSL
+                                print *, 'TSSL', TSSL
+                                print *, 'TSatSL', TSatSL
+
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
 
