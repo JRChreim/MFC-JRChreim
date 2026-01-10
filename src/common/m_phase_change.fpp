@@ -154,8 +154,9 @@ contains
                     end if
                     TSG = alpha_b > 1.4e-3_wp
 
-                    if (TSG) then
+                    if (alpha_b > 1.4e-3_wp) then
                       print *, TSG
+                      print *, alpha_b
                     end if
 
                     ! if phase change is still necessary
