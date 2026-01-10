@@ -154,14 +154,14 @@ contains
                     end if
                     TSG = alpha_b > 1.4e-3_wp
 
-                    if (TSG) then
-                      print *, 'TR', TR
-                      print *, 'pS<pCr', ( pS < pCr )
-                      print *, 'pS<0', ( pS < 0 )
-                      print *, 'pS+pinf>0', ( pS + minval(p_infpT) > 0.0_wp )
-                      print *, 'TIC', TIC
-                      print *, 'TSG', TSG
-                    end if
+                    ! if (TSG) then
+                    !   print *, 'TR', TR
+                    !   print *, 'pS<pCr', ( pS < pCr )
+                    !   print *, 'pS<0', ( pS < 0 )
+                    !   print *, 'pS+pinf>0', ( pS + minval(p_infpT) > 0.0_wp )
+                    !   print *, 'TIC', TIC
+                    !   print *, 'TSG', TSG
+                    ! end if
 
                     ! if phase change is still necessary
                     if (TR) then
@@ -193,7 +193,6 @@ contains
                             ! 2.2. Heterogeneous pTg-equilibrium (either IC or SG activated).
                             TIC .or. TSG &
                             ) ) then
-                              print *, 'pirocas, talkey'
                                 ! updating m1 and m2 AFTER correcting the partial densities. These values are 
                                 ! stored to be retrieved in case the final state is a mixture of fluids
                                 mOr = (/ m0k(lp), m0k(vp) /) 
@@ -229,6 +228,8 @@ contains
                                     ! correcting the liquid and vapor partial densities
                                     m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
 
+                                    print *, 'OV'
+
                                 ! checking the conditions for subcooled liquid
                                 elseif (TSSL < TSatSL) then
 
@@ -237,6 +238,8 @@ contains
 
                                     ! correcting the liquid and vapor partial densities
                                     m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
+
+                                    print *, 'SL'
 
                                 ! if not, mixture of fluids. Starting phase change (pTg)
                                 else
