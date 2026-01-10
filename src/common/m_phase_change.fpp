@@ -781,6 +781,8 @@ contains
         ! checking if homogeneous cavitation is expected. If yes, transfering a small amount of mass to the depleted
         ! phase, and then let the algorithm run.
         
+        print *, pS
+
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
         if ( ( (pS < -1.47e10_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp)) ) .or. &
@@ -949,8 +951,6 @@ contains
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
-
-        print *, m0k
 
     end subroutine s_infinite_ptg_relaxation_k ! -----------------------
 
