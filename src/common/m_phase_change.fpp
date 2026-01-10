@@ -154,15 +154,6 @@ contains
                     end if
                     TSG = alpha_b > 1.4e-3_wp
 
-                    ! if (TSG) then
-                    !   print *, 'TR', TR
-                    !   print *, 'pS<pCr', ( pS < pCr )
-                    !   print *, 'pS<0', ( pS < 0 )
-                    !   print *, 'pS+pinf>0', ( pS + minval(p_infpT) > 0.0_wp )
-                    !   print *, 'TIC', TIC
-                    !   print *, 'TSG', TSG
-                    ! end if
-
                     ! if phase change is still necessary
                     if (TR) then
                         select case (relax_model)
@@ -239,7 +230,8 @@ contains
                                     ! correcting the liquid and vapor partial densities
                                     m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
 
-                                    print *, 'SL'
+                                    print *, 'TSatSL', TSatSL
+                                    print *, 'TSSL', TSSL
 
                                 ! if not, mixture of fluids. Starting phase change (pTg)
                                 else
