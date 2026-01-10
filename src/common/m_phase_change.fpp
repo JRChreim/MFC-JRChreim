@@ -152,7 +152,7 @@ contains
                     else
                       alpha_b = 0.0_wp
                     end if
-                    TSG = alpha_b > 1.4e-3_wp
+                    TSG = alpha_b > 1.0e-4_wp
 
                     ! if phase change is still necessary
                     if (TR) then
@@ -210,9 +210,9 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
-                                if (pS < 0) then 
-                                  print *, alpha_b
-                                end if
+                                ! if (pS < 0) then 
+                                !   print *, alpha_b
+                                ! end if
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -231,9 +231,6 @@ contains
 
                                     ! correcting the liquid and vapor partial densities
                                     m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
-
-                                    print *, 'TSatSL', TSatSL
-                                    print *, 'TSSL', TSSL
 
                                 ! if not, mixture of fluids. Starting phase change (pTg)
                                 else
