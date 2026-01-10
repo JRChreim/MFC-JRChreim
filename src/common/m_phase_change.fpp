@@ -210,6 +210,7 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
+                                print *, 'pS', pS
                                 print *, 'pSSL', pSSL
                                 print *, 'TSSL', TSSL
                                 print *, 'TSatSL', TSatSL
