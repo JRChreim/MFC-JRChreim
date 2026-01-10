@@ -666,6 +666,10 @@ contains
         ! sum of the total alpha*rho*q of the system
         mQ = sum( m0k(iSP) * qvs(iSP) )
 
+        if ( any((/ 1 /) == MFL ) ) then
+          print *, p_infpT
+        end if
+
         ! Checking energy constraint. In the case we are calculating the possibility of having subcooled liquid or
         ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
         ! mass from one phase to the other. When this is the case, we simply ignore this possibility, set pS = TS = 0,
