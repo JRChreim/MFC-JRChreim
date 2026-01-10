@@ -759,7 +759,7 @@ contains
 
         real(wp), dimension(num_fluids), intent(inout) :: alphak, me0k, m0k
         real(wp), dimension(num_fluids), intent(in) :: p_infpT
-        real(wp), intent(inout) :: pS, TS, rM, TSatSL
+        real(wp), intent(inout) :: pS, TS, rM
         real(wp), intent(in) :: rhoe
         integer, intent(in) :: j, k, l
         logical, intent(inout) :: TR, TSG ! triggering parameters
@@ -767,7 +767,7 @@ contains
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
-        real(wp) :: Om, pSO ! underrelaxation factor
+        real(wp) :: Om, pSO, TSatSL ! underrelaxation factor
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
