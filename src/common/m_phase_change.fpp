@@ -210,9 +210,6 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
-                                print *, TSOV, TSatOV
-                                print *, TSSL, TSatSL
-
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
 
@@ -784,6 +781,8 @@ contains
         mOk = m0k
 
         call s_TSat(pS, TSatSL, TS)
+
+        print *, TSatSL
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
