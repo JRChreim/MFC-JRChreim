@@ -210,8 +210,12 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
+                                if (pS < 0) then 
+                                  print *, alpha_b
+                                end if
+
                                 ! checking the conditions for overheated vapor
-                                if ( ( .not. TSG ) .and. (TSOV > TSatOV) ) then
+                                if (TSOV > TSatOV) then
 
                                     ! Assigning pressure and temperature
                                     pS = pSOV ; TS = TSOV
@@ -219,14 +223,8 @@ contains
                                     ! correcting the liquid and vapor partial densities
                                     m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
 
-                                    print *, 'OV'
-
                                 ! checking the conditions for subcooled liquid
-                                elseif (( .not. TSG ) .and. (TSSL < TSatSL) )then
-
-                                    print *, alpha_b
-                                    print *, pS
-                                    print *, pSSL
+                                elseif (TSSL < TSatSL) then
 
                                     ! Assigning pressure and temperature
                                     pS = pSSL ; TS = TSSL
