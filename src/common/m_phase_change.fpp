@@ -211,7 +211,7 @@ contains
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
                                 ! checking the conditions for overheated vapor
-                                if (TSOV > TSatOV) then
+                                if ( ( .not. TSG ) .and. (TSOV > TSatOV) ) then
 
                                     ! Assigning pressure and temperature
                                     pS = pSOV ; TS = TSOV
@@ -222,7 +222,7 @@ contains
                                     print *, 'OV'
 
                                 ! checking the conditions for subcooled liquid
-                                elseif (TSSL < TSatSL) then
+                                elseif (( .not. TSG ) .and. (TSSL < TSatSL) )then
 
                                     print *, alpha_b
                                     print *, pS
