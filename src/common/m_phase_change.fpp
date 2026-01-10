@@ -764,7 +764,7 @@ contains
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
-        real(wp) :: Om, pSO, TSatSL ! underrelaxation factor
+        real(wp) :: Om, pSO, TSO, TSatSL ! underrelaxation factor
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
@@ -778,11 +778,8 @@ contains
         ! phase, and then let the algorithm run.
         
         pSO = pS
+        TSO = TS
         mOk = m0k
-
-        call s_TSat(pS, TSatSL, TS)
-
-        print *, TSatSL
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
@@ -943,6 +940,10 @@ contains
             print *, 'pSO', pSO
 
             print *, 'm0k', mOk
+
+            call s_TSat(pSO, TSatSL, TSO)
+
+            print *, TSatSL
 
             call s_real_to_str(R2D(1), R2D1s) ; call s_real_to_str(R2D(2), R2D2s)
             call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
