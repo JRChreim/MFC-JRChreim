@@ -768,7 +768,7 @@ contains
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
-        real(wp) :: Om ! underrelaxation factor
+        real(wp) :: Om, pSO ! underrelaxation factor
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
@@ -781,7 +781,7 @@ contains
         ! checking if homogeneous cavitation is expected. If yes, transfering a small amount of mass to the depleted
         ! phase, and then let the algorithm run.
         
-        print *, pS
+        pSO = pS
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
@@ -939,6 +939,8 @@ contains
             call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, m0k, ns, p_infpTg &
                                 , pS, R2D, rhoe, spread(TS, 1, num_fluids))
             
+            print *, 'pSO', pSO
+
             call s_real_to_str(R2D(1), R2D1s) ; call s_real_to_str(R2D(2), R2D2s)
             call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
             call s_int_to_str(ns, nss); call s_real_to_str(pS, pSs)
