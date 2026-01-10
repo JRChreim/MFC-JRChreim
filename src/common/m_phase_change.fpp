@@ -155,8 +155,12 @@ contains
                     TSG = alpha_b > 1.4e-3_wp
 
                     if (TSG) then
-                      print *, TSG
-                      print *, TR
+                      print *, 'TR', TR
+                      print *, 'pS<pCr', ( pS < pCr )
+                      print *, 'pS<0', ( pS < 0 )
+                      print *, 'pS+pinf>0', ( pS + minval(p_infpT) > 0.0_wp )
+                      print *, 'TIC', TIC
+                      print *, 'TSG', TSG
                     end if
 
                     ! if phase change is still necessary
