@@ -950,6 +950,8 @@ contains
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
 
+        print *, m0k
+
     end subroutine s_infinite_ptg_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine corrects the partial densities of the REACTING fluids in case one of them is negative
