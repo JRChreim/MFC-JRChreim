@@ -783,7 +783,7 @@ contains
         pSO = pS
         mOk = m0k
 
-        s_TSat(pS, TSatSL, TS)
+        call s_TSat(pS, TSatSL, TS)
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
