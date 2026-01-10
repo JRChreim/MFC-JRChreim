@@ -154,11 +154,6 @@ contains
                     end if
                     TSG = alpha_b > 1.4e-3_wp
 
-                    if (alpha_b > 1.4e-3_wp) then
-                      print *, TSG
-                      print *, alpha_b
-                    end if
-
                     ! if phase change is still necessary
                     if (TR) then
                         select case (relax_model)
@@ -800,6 +795,8 @@ contains
             ! since now both vapor and liquid exist pS > -min(pi_inf) for the 
             ! solver to converge (at least) within the pR-relaxation context
             pS = 1.0e4_wp
+
+            print *, TSG
 
         ! the metastable state is not enough to sustain phase change
         elseif (pS < 0.0_wp) then
