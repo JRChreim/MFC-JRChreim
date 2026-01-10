@@ -224,6 +224,9 @@ contains
                                 ! checking the conditions for subcooled liquid
                                 elseif (TSSL < TSatSL) then
 
+                                    print *, pS
+                                    print *, pSSL
+
                                     ! Assigning pressure and temperature
                                     pS = pSSL ; TS = TSSL
 
