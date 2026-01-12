@@ -211,10 +211,12 @@ contains
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
                                 print *, m0k
-                                print *, 'pS', pS
-                                print *, 'pSSL', pSSL
-                                print *, 'TSSL', TSSL
+                                print *, 'rhok', (pS + ps_inf)/((gs_min - 1)*cvs*TS)
+                                print *, 'pS, TS', pS, TS
+                                print *, 'pSSL, TSSL', pSSL, TSSL
                                 print *, 'TSatSL', TSatSL
+
+                                print *, 'rhoSSL', (pSSL + ps_inf)/((gs_min - 1)*cvs*TSSL)
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
