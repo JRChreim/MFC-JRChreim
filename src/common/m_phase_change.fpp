@@ -244,10 +244,10 @@ contains
                     end if
                     ! updating conservative variables after the any relaxation procedures
                     call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
-                      if (q_cons_vf(i)%sf(j, k, l) .lt. 0.0_wp ) then
-                        ! returning partial densities to what they were previous to any relaxation scheme.
-                        print *, i, q_cons_vf(i)%sf(j, k, l)
-                      end if 
+                      ! if (q_cons_vf(i)%sf(j, k, l) .lt. 0.0_wp ) then
+                      !   ! returning partial densities to what they were previous to any relaxation scheme.
+                      !   print *, i, q_cons_vf(i)%sf(j, k, l)
+                      ! end if 
                 end do
             end do
         end do
