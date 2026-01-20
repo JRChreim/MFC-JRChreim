@@ -326,6 +326,14 @@ contains
             ! energy constraint for the p-equilibrium
             if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
+              print *, 'pS', pS
+              print *, 'iSP', iSP
+              print *, 'm0k', m0k
+              print *, 'alpha0k', alpha0k
+              print *, 'alphak', alphak
+              print *, 'mek(iSP) - m0k(iSP) * qvs(iSP)', mek(iSP) - m0k(iSP) * qvs(iSP)
+              print *, 'pO + gs_min(iSP) * ps_inf(iSP)', pO + gs_min(iSP) * ps_inf(iSP)
+
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
                                 , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ))
@@ -391,7 +399,7 @@ contains
                   ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*ps_inf) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
-                  ! print *, 'pS', pS
+                  print *, 'pS', pS
                   print *, 'iSP', iSP
                   print *, 'm0k', m0k
                   print *, 'alpha0k', alpha0k
@@ -401,14 +409,6 @@ contains
 
                   print *, 'Om', Om
                   print *, 'Om Crit', ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) )
-
-                  ! print *, 'mek', mek 
-                  ! print *, 'me0k', me0k 
-                  ! print *, 'meik', meik 
-                  ! print *, 'rhoe', rhoe
-                  
-                  ! print *, 'fp', fp
-                  ! print *, 'fpp', fpp
 
                   pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
