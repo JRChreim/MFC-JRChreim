@@ -334,6 +334,12 @@ contains
               ! print *, 'mek(iSP) - m0k(iSP) * qvs(iSP)', mek(iSP) - m0k(iSP) * qvs(iSP)
               ! print *, 'pO + gs_min(iSP) * ps_inf(iSP)', pO + gs_min(iSP) * ps_inf(iSP)
 
+              print *, ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pO + gs_min(iSP) * ps_inf(iSP) )
+
+              print *, -1.0_wp * ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( ( pO + gs_min(iSP) * ps_inf(iSP) ) ** 2 )
+
+              print *, ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
+
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
                                 , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ))
@@ -361,17 +367,11 @@ contains
                 ! updating functions used in the Newton's solver. f(p)
                 fp = sum( ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pO + gs_min(iSP) * ps_inf(iSP) ) )
 
-                print *, ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pO + gs_min(iSP) * ps_inf(iSP) )
-
                 ! updating functions used in the Newton's solver. f'(p)
                 fpp = sum( -1.0_wp * ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( ( pO + gs_min(iSP) * ps_inf(iSP) ) ** 2 ) )
 
-                print *, -1.0_wp * ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( ( pO + gs_min(iSP) * ps_inf(iSP) ) ** 2 )
-
                 ! updating the relaxed pressure
                 pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
-
-                print *, ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
 
                 ! updating the underelaxation parameters.
                 ! First restriction
