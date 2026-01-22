@@ -326,32 +326,6 @@ contains
             ! energy constraint for the p-equilibrium
             if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
-              ! print *, 'pS', pS
-              ! print *, 'iSP', iSP
-              ! print *, 'm0k', m0k
-              ! print *, 'alpha0k', alpha0k
-              ! print *, 'alphak', alphak
-              ! print *, 'mek(iSP) - m0k(iSP) * qvs(iSP)', mek(iSP) - m0k(iSP) * qvs(iSP)
-              ! print *, 'pO + gs_min(iSP) * ps_inf(iSP)', pO + gs_min(iSP) * ps_inf(iSP)
-
-              print *, 'p0', (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
-              print *, rhoe 
-              print *, sum( m0k(iSP) * qvs(iSP) ) 
-              print *, sum( alpha0k(iSP) * pi_infs(iSP) )
-              print *, sum( alpha0k(iSP) * gammas(iSP) ) 
-
-              print *, ( gs_min(iSP) - 1.0_wp )
-              print *, ( mek(iSP) - m0k(iSP) * qvs(iSP) ) 
-              print *, ( pO + gs_min(iSP) * ps_inf(iSP) )
-
-              print *, -1.0_wp * ( gs_min(iSP) - 1.0_wp )
-              print *, ( mek(iSP) - m0k(iSP) * qvs(iSP) ) 
-              print *, ( ( pO + gs_min(iSP) * ps_inf(iSP) ) ** 2 )
-
-              print *, ( ( 1.0_wp - fp ) / fpp )
-              print *, 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) 
-              print *, ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) )
-
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
                                 , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ))
@@ -411,28 +385,15 @@ contains
                 ! volume fractions
                 alphak(iSP) = ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS + gs_min(iSP) * ps_inf(iSP) )
 
+                print *, 'fp, fpp', fp, fpp
+
                 ! checking if pS is within expected bounds
                 if ( ((pS <= -1.0_wp*minval( gs_min(iSP) * ps_inf(iSP) ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
 
                   ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*ps_inf) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
-                  print *, 'pS', pS
-                  print *, 'iSP', iSP
-                  print *, 'm0k', m0k
-                  print *, 'alpha0k', alpha0k
-                  print *, 'alphak', alphak
-                  print *, 'mek(iSP) - m0k(iSP) * qvs(iSP)', mek(iSP) - m0k(iSP) * qvs(iSP)
-                  print *, 'pO + gs_min(iSP) * ps_inf(iSP)', pO + gs_min(iSP) * ps_inf(iSP)
-
-                  print *, 'p0', (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
-
-                  print *, 'Om', Om
-                  print *, 'Om Crit', ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) )
-
                   pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
-
-                  print *, 'pS again', pS
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
