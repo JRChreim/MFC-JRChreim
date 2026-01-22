@@ -432,6 +432,8 @@ contains
 
                   pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
+                  print *, 'pS again', pS
+
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
                 else if (ns > max_iter) then
