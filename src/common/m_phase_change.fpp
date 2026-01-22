@@ -382,8 +382,6 @@ contains
                 ! volume fractions
                 alphak(iSP) = ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS + gs_min(iSP) * ps_inf(iSP) )
 
-                print *, 'fp, fpp', fp, fpp
-
                 ! checking if pS is within expected bounds
                 if ( ((pS <= -1.0_wp*minval( gs_min(iSP) * ps_inf(iSP) ) ) .or. (ieee_is_nan(pS))) .and. ( ns <= max_iter ) ) then
 
@@ -391,6 +389,8 @@ contains
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
                   pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
+
+                  print *, 'fp, fpp', fp, fpp
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
