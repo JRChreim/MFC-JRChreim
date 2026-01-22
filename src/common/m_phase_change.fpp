@@ -425,6 +425,8 @@ contains
                   print *, 'mek(iSP) - m0k(iSP) * qvs(iSP)', mek(iSP) - m0k(iSP) * qvs(iSP)
                   print *, 'pO + gs_min(iSP) * ps_inf(iSP)', pO + gs_min(iSP) * ps_inf(iSP)
 
+                  print *, 'p0', (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
+
                   print *, 'Om', Om
                   print *, 'Om Crit', ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) )
 
