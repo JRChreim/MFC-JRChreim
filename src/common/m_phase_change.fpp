@@ -330,6 +330,8 @@ contains
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
                                 , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ))
 
+              print *, m0k
+
               call s_real_to_str(Econst, Econsts)
               call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
 &                   . Please, check energy constraint. Econst ~'//Econsts//'. Aborting!')
