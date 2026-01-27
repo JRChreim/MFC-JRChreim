@@ -119,7 +119,7 @@ contains
                       TR = .false.  
                     end if
 
-                    if (j == 41 .and. k == 64) then
+                    if (j == 642 .and. k == 64) then
                       print *, j, k, l
                       print *, 'before'
                       print *, 'alphak', alphak
@@ -131,7 +131,7 @@ contains
 
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
-                    if (j == 41 .and. k == 64) then
+                    if (j == 642 .and. k == 64) then
                       print *, j, k, l
                       print *, 'after'
                       print *, 'alphak', alphak
