@@ -330,8 +330,6 @@ contains
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
                                 , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ))
 
-              print *, m0k
-
               call s_real_to_str(Econst, Econsts)
               call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation_k) &
 &                   . Please, check energy constraint. Econst ~'//Econsts//'. Aborting!')
@@ -393,6 +391,14 @@ contains
                   pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
                   print *, 'fp, fpp', fp, fpp
+
+                  print *, 'm0k', m0k
+
+                  print *, 'iSP', iSP
+
+                  print *, 'alpha', alpha0k, alphak
+
+                  print *, 'ps_inf', pi_infs(iSP)
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
