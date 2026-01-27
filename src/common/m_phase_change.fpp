@@ -119,21 +119,27 @@ contains
                       TR = .false.  
                     end if
 
-                    ! print *, 'before'
-                    ! print *, 'alphak', alphak
-                    ! print *, 'me0k', me0k
-                    ! print *, 'm0k', m0k
-                    ! print *, 'rM', rM
-                    ! print *, 'rho', rho
+                    if (j == 41 .and. k == 64) then
+                      print *, j, k, l
+                      print *, 'before'
+                      print *, 'alphak', alphak
+                      print *, 'me0k', me0k
+                      print *, 'm0k', m0k
+                      print *, 'rM', rM
+                      print *, 'rho', rho
+                    end if
 
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
-                    ! print *, 'after'
-                    ! print *, 'alphak', alphak
-                    ! print *, 'me0k', me0k
-                    ! print *, 'm0k', m0k
-                    ! print *, 'rM', rM
-                    ! print *, 'rho', rho
+                    if (j == 41 .and. k == 64) then
+                      print *, j, k, l
+                      print *, 'after'
+                      print *, 'alphak', alphak
+                      print *, 'me0k', me0k
+                      print *, 'm0k', m0k
+                      print *, 'rM', rM
+                      print *, 'rho', rho
+                    end if
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
                     dynE = 0.0_wp
