@@ -119,6 +119,12 @@ contains
                       TR = .false.  
                     end if
 
+                    print *, 'alphak', alphak
+                    print *, 'me0k', me0k
+                    print *, 'm0k', m0k
+                    print *, 'rM', rM
+                    print *, 'rho', rho
+
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
