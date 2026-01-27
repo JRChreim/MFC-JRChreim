@@ -388,6 +388,9 @@ contains
                   ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*ps_inf) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
+
+                  print *, 'pS', pS
+                  
                   pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
                   print *, 'fp, fpp', fp, fpp
@@ -399,6 +402,8 @@ contains
                   print *, 'alpha', alpha0k, alphak
 
                   print *, 'ps_inf', pi_infs(iSP)
+
+                  print *, 'pS', pS
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
