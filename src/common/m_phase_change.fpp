@@ -153,7 +153,6 @@ contains
                       print *, 'rhoe', rhoe
                     end if
 
-
                     ! if phase change is still necessary
                     if (TR) then
                         select case (relax_model)
@@ -1041,7 +1040,8 @@ contains
             if ( any((/ 1, 4 /) == relax_model ) ) then
                 ! this iAuxZP is only valid when we use either the old or new p-relaxations, as they are only
                 ! used with the 6-equation model. Note that they test the phisical validity of the initial conditions
-                iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
+                ! iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
+                iAuxZP( pack( iFix, ( m0k > 0 ) ) ) = 0
             else
                 ! this is used for either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
                 ! energies are not important
@@ -1051,7 +1051,7 @@ contains
 
             ! if either the volume fraction or the partial density is negative, make them positive
             alpha0k(iZP) = 0.0_wp
-            ! the greastes value of alpha0k must be one
+            ! the largest value of alpha0k must be one
             alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
             
             m0k(iZP) = 0.0_wp
