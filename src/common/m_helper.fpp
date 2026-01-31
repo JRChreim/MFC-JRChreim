@@ -148,16 +148,17 @@ contains
         ss = bub_pp%ss; pv = bub_pp%pv; vd = bub_pp%vd
         mu_l = bub_pp%mu_l; mu_v = bub_pp%mu_v; mu_g = bub_pp%mu_g
         gam_v = bub_pp%gam_v; gam_g = bub_pp%gam_g
+        cp_v = bub_pp%cp_v; cp_g = bub_pp%cp_g
+        R_v = cp_v * (gam_v - 1) / gam_v; R_g = cp_g * (gam_g - 1) / gam_g
+        Tw = bub_pp%T0ref
+        
         if (.not. polytropic) then
             if (bubbles_euler) then
                 M_v = bub_pp%M_v; M_g = bub_pp%M_g
                 k_v = bub_pp%k_v; k_g = bub_pp%k_g
             end if
-            R_v = bub_pp%R_v; R_g = bub_pp%R_g
-            Tw = bub_pp%T0ref
         end if
         if (bubbles_lagrange) then
-            cp_v = bub_pp%cp_v; cp_g = bub_pp%cp_g
             k_vl = bub_pp%k_v; k_gl = bub_pp%k_g
         end if
 
@@ -173,8 +174,8 @@ contains
         ! Nondimensional numbers
         Eu = p0ref
         Ca = Eu - pv
-        if (.not. f_is_default(bub_pp%ss)) Web = 1._wp/ss
-        if (.not. f_is_default(bub_pp%mu_l)) Re_inv = mu_l
+        if (.not. f_is_default(ss)) Web = 1._wp/ss
+        if (.not. f_is_default(mu_l)) Re_inv = mu_l
         if (.not. polytropic) Pe_c = 1._wp/vd
 
         if (bubbles_euler) then
@@ -190,6 +191,9 @@ contains
                 end if
             end if
         end if
+
+        ! mass_g0(:) = (4._wp*pi/3._wp)*(pb0(:) - pv)/(R_g*Tw)*R0(:)**3
+        ! mass_v0(:) = (4._wp*pi/3._wp)*pv/(R_v*Tw)*R0(:)**3
 
     end subroutine s_initialize_bubble_vars
 
