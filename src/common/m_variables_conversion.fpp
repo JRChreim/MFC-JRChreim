@@ -144,10 +144,7 @@ contains
             else if ((model_eqns /= 4) .and. bubbles_euler .and. oneway) then
                 pres = (energy - dyn_p - pi_inf - qv)/gamma
             else
-                pres = (pref + pi_inf)* &
-                       (energy/ &
-                        (rhoref*(1 - alf)) &
-                        )**(1/gamma + 1) - pi_inf
+                pres = (pref + pi_inf)*(energy/(rhoref*(1 - alf)))**(1/gamma + 1) - pi_inf
             end if
 
             if (hypoelasticity .and. present(G)) then
