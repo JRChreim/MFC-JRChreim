@@ -156,7 +156,8 @@ contains
                       alpha_b = q_cons_vf(alf_idx)%sf(j, k, l)
                       do cb = 1, nb
                         Rb(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
-                        ! call s_SG_trigger( alpha_b, m0k, pS, Rb(cb), q_cons_vf, TSG )
+
+                        ! call s_SG_trigger( alpha_b, m0k, pS, Rb(cb), TSG )
                         TSG = alpha_b > 1.0e-4_wp
                       end do
                     end if
@@ -1434,7 +1435,7 @@ contains
         !!  criterium, if subgrid model is activated. This is based on Fuster's
         !!  work (Stability of bubbly liquids and its connection to the process
         !!  of cavitation inception)
-    ! subroutine s_SG_trigger( alpha_b, m0k, pS, q_cons_vf, RbIn, TSG )
+    ! subroutine s_SG_trigger( alpha_b, m0k, pS, RbIn, TSG )
         ! $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
         !     & cray_inline=True) 
 
