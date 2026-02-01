@@ -638,7 +638,7 @@ contains
         real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
 
-        integer :: i, ns !< generic loop iterators
+        integer :: ns !< generic loop iterators
 
         ! auxiliary variables for the pT-equilibrium solver
         p_infpT = ps_inf
@@ -774,7 +774,7 @@ contains
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
 
         !< Generic loop iterators
-        integer :: i, ns
+        integer :: ns
 
         ! assigning the relexant pi_infs based on the previous pT-equilibrium
         p_infpTg = p_infpT
@@ -981,7 +981,6 @@ contains
         integer, intent(in) :: CT
         integer, dimension(num_fluids) :: iFix, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
         integer, dimension(:), allocatable :: iZP
-        integer :: i
         !> @}
 
         iFix = (/ (i, i=1,num_fluids) /)
@@ -1219,7 +1218,6 @@ contains
         real(wp), dimension(num_fluids) :: ek, hk, gk, sk, rhok
         real(wp) :: maxg, rho
         !< Generic loop iterator
-        integer :: i
 
         ! auxiliary calculations
         ! Thermodynamic state
@@ -1436,19 +1434,14 @@ contains
         !!  criterium, if subgrid model is activated. This is based on Fuster's
         !!  work (Stability of bubbly liquids and its connection to the process
         !!  of cavitation inception)
-        !!  @param pSat Saturation Pressure
-        !!  @param TSat Saturation Temperature
-        !!  @param TSIn equilibrium Temperature
     ! subroutine s_SG_trigger( alpha_b, m0k, pS, q_cons_vf, RbIn, TSG )
-
         ! $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
         !     & cray_inline=True) 
-    !     type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
+
     !     real(wp), intent(in)  :: alpha_b, RbIn
     !     real(wp), dimension(num_fluids), intent(in) :: m0k, Tk
     !     logical, intent(out)  :: TSG
     !     real(wp) :: Rc
-    !     integer :: i
 
     !     !! first approximation: dilute limit - Blake's critical radius
     !     Rc = sqrt( 9 * k * mass * Tb * R_g / ( 8 * ss * pi ) )
