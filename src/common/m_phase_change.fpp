@@ -288,14 +288,12 @@ contains
     end subroutine s_infinite_relaxation_k ! ----------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
-        !!  @param j generic loop iterator for x direction
-        !!  @param k generic loop iterator for y direction
-        !!  @param l generic loop iterator for z direction
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
     impure subroutine s_infinite_p_relaxation_k(alpha0k, me0k, m0k, pS, rhoe, rM, Tk)
-        !$acc routine seq
+        $:GPU_ROUTINE(function_name='s_infinite_p_relaxation_k', &
+            & parallelism='[seq]', cray_inline=True)
 
         ! initializing variables
         real(wp), intent(in) :: rhoe, rM
@@ -466,21 +464,21 @@ contains
         
     end subroutine s_infinite_p_relaxation_k ! -----------------------
 
+    ! Description: The purpose of this procedure is to infinitely relax
+    !              the pressures from the internal-energy equations to a
+    !              unique pressure, from which the corresponding volume
+    !              fraction of each phase are recomputed. For conservation
+    !              purpose, this pressure is finally corrected using the
+    !              mixture-total-energy equation.
+    ! Relaxed pressure, initial partial pressures, function f(p) and its partial
+    ! derivative df(p), isentropic partial density, sum of volume fractions,
+    ! mixture density, dynamic pressure, surface energy, specific heat ratio
+    ! function, liquid stiffness function (two variations of the last two
+    ! initializing variables
     impure subroutine s_old_infinite_p_relaxation_k(alpha0k, me0k, m0k, pS, rhoe, Tk)
-        ! Description: The purpose of this procedure is to infinitely relax
-        !              the pressures from the internal-energy equations to a
-        !              unique pressure, from which the corresponding volume
-        !              fraction of each phase are recomputed. For conservation
-        !              purpose, this pressure is finally corrected using the
-        !              mixture-total-energy equation.
+        $:GPU_ROUTINE(function_name='s_old_infinite_p_relaxation_k', &
+            & parallelism='[seq]', cray_inline=True)
 
-        ! make sure to clean all p_relaxation codes, removing unnecessary variables. It would be goo0d not to have q_cons_vf as an input variable anywhere
-
-        ! Relaxed pressure, initial partial pressures, function f(p) and its partial
-        ! derivative df(p), isentropic partial density, sum of volume fractions,
-        ! mixture density, dynamic pressure, surface energy, specific heat ratio
-        ! function, liquid stiffness function (two variations of the last two
-        ! initializing variables
         real(wp), intent(in) :: rhoe
         real(wp), intent(out) :: pS
         real(wp), dimension(num_fluids), intent(out) :: Tk
@@ -618,9 +616,6 @@ contains
     end subroutine s_old_infinite_p_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
-        !!  @param j generic loop iterator for x direction
-        !!  @param k generic loop iterator for y direction
-        !!  @param l generic loop iterator for z direction
         !!  @param MFL flag that tells whether the fluid is gas (0), liquid (1), or a mixture (2)
         !!  @param pS equilibrium pressure at the interface
         !!  @param p_infpT stiffness for the participating fluids under pT-equilibrium
@@ -629,7 +624,6 @@ contains
         !!  @param rhoe mixture energy
         !!  @param TS equilibrium temperature at the interface
     subroutine s_infinite_pt_relaxation_k(m0k, MFL, pS, p_infpT, rhoe, rM, TS)
-
         $:GPU_ROUTINE(function_name='s_infinite_pt_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
 
@@ -757,16 +751,12 @@ contains
 
     !>  This auxiliary subroutine is created to activate the pTg-equilibrium for N fluids under pT
         !!      and 2 fluids under pTg-equilibrium. There is a final common p and T during relaxation
-        !!  @param j generic loop iterator for x direction
-        !!  @param k generic loop iterator for y direction
-        !!  @param l generic loop iterator for z direction
         !!  @param pS equilibrium pressure at the interface
         !!  @param p_infpT stiffness for the participating fluids under pT-equilibrium
         !!  @param rhoe mixture energy
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TS equilibrium temperature at the interface
     subroutine s_infinite_ptg_relaxation_k(alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
-
         $:GPU_ROUTINE(function_name='s_infinite_ptg_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
 
@@ -979,9 +969,6 @@ contains
         !!      but their sum is positive. Inert phases are not corrected at this moment
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rM sum of the reacting masses
-        !!  @param j generic loop iterator for x direction
-        !!  @param k generic loop iterator for y direction
-        !!  @param l generic loop iterator for z direction
     subroutine s_correct_partial_densities(CT, alpha0k, me0k, m0k, rM, rho, TR)
         $:GPU_ROUTINE(function_name='s_correct_partial_densities', &
             & parallelism='[seq]', cray_inline=True)
@@ -1096,10 +1083,7 @@ contains
     !>  This auxiliary subroutine calculates the 2 x 2 Jacobian and, its inverse and transpose
         !!      to be used in the pTg-equilibirium procedure
         !!  @param InvJac Inverse of the Jacobian Matrix
-        !!  @param j generic loop iterator for x direction
         !!  @param Jac Jacobian Matrix
-        !!  @param k generic loop iterator for y direction
-        !!  @param l generic loop iterator for z direction
         !!  @param mCPD  sum of the total alpha*rho*cp
         !!  @param mCVGP auxiliary variable for the calculation of the matrices: alpha*rho*cv*(g-1)/press
         !!  @param mCVGP2 auxiliary variable for the calculation of the matrices: alpha*rho*cv*(g-1)/press^2
@@ -1187,9 +1171,6 @@ contains
     end subroutine s_compute_jacobian_matrix
 
     !>  This auxiliary subroutine computes the residue of the pTg-equilibrium procedure
-        !!  @param j generic loop iterator for x direction
-        !!  @param k generic loop iterator for y direction
-        !!  @param l generic loop iterator for z direction
         !!  @param mCPD  sum of the total alpha*rho*cp
         !!  @param mCVGP auxiliary variable for the calculation of the matrices: alpha*rho*cv*(g-1)/press
         !!  @param mQD sum of the total alpha*rho*qv
@@ -1409,8 +1390,9 @@ contains
     end subroutine s_TSat
 
     impure subroutine update_conservative_vars( m0k, pS, q_cons_vf, Tk )
-        
-        !$acc routine seq
+        $:GPU_ROUTINE(function_name='update_conservative_vars',parallelism='[seq]', &
+            & cray_inline=True) 
+
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp), intent(in) :: pS
         real(wp), dimension(num_fluids), intent(in) :: m0k, Tk
@@ -1459,9 +1441,10 @@ contains
         !!  @param TSIn equilibrium Temperature
     ! subroutine s_SG_trigger( alpha_b, m0k, pS, q_cons_vf, RbIn, TSG )
 
-    !     !$acc routine seq
+        ! $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
+        !     & cray_inline=True) 
     !     type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
-    !     real(wp), intent(in)  :: RbIn
+    !     real(wp), intent(in)  :: alpha_b, RbIn
     !     real(wp), dimension(num_fluids), intent(in) :: m0k, Tk
     !     logical, intent(out)  :: TSG
     !     real(wp) :: Rc
