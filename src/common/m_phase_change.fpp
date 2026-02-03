@@ -239,7 +239,7 @@ contains
                                     m0k(lp) = mOr(1) ; m0k(vp) = mOr(2)
 
                                     ! pTg-relaxation
-                                    call s_infinite_ptg_relaxation_k(alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
+                                    call s_infinite_ptg_relaxation_k(alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
                                     if ( TR .eqv. .false. ) then
                                         $:GPU_LOOP(parallelism='[seq]')
@@ -738,7 +738,7 @@ contains
         !!  @param rhoe mixture energy
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_ptg_relaxation_k(alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
+    subroutine s_infinite_ptg_relaxation_k(alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
         $:GPU_ROUTINE(function_name='s_infinite_ptg_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
 
