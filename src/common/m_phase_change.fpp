@@ -219,6 +219,7 @@ contains
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
                                 if (j == 326 .and. k == 10 ) then 
+                                  
                                   print *, m0k
                                   print *, 'rhok', (pS + ps_inf)/((gs_min - 1)*cvs*TS)
                                   print *, 'pS, TS', pS, TS
@@ -227,8 +228,8 @@ contains
                                   print *, 'p_infSL', p_infSL
                                   print *, 'p_infOV', p_infOV
                                   print *, 'TSatSL', TSatSL
-
                                   print *, 'rhoSSL', (pSSL + ps_inf)/((gs_min - 1)*cvs*TSSL)
+
                                 end if
 
                                 ! checking the conditions for overheated vapor
@@ -652,6 +653,15 @@ contains
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
         iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
         iZP = pack(iAuxZP, iAuxZP /= 0)
+
+        if (j == 326 .and. k == 10 ) then         
+          print *, MFL
+          print *, iAuxZP
+          print *, m0k
+          print *, m0k(1)
+          print *, m0k(2)
+          print *, m0k(3)
+        end if
 
         ! indices for phases that have a significant partial density
         iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
