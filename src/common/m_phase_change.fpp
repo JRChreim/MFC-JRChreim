@@ -1050,6 +1050,7 @@ contains
 
             ! if either the volume fraction or the partial density is negative, make them positive
             alpha0k(iZP) = 0.0_wp
+            
             ! the largest value of alpha0k must be one
             alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
             
