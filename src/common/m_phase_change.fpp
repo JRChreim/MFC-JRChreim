@@ -655,12 +655,16 @@ contains
         iZP = pack(iAuxZP, iAuxZP /= 0)
 
         if (j == 326 .and. k == 10 ) then         
-          print *, MFL
-          print *, iAuxZP
-          print *, m0k
-          print *, m0k(1)
-          print *, m0k(2)
-          print *, m0k(3)
+          print *, 'MFL', MFL
+          print *, 'iAuxZP', iAuxZP
+          print *, 'm0k',m0k
+          print *, 'm0k1', m0k(1)
+          print *, 'm0k2', m0k(2)
+          print *, 'm0k3', m0k(3)
+
+          print *, 'rM * mixM', rM * mixM
+          print *, 'm0k - rM * mixM', m0k - rM * mixM
+          print *, 'sgm_eps', sgm_eps
         end if
 
         ! indices for phases that have a significant partial density
@@ -677,10 +681,6 @@ contains
 
         ! sum of the total alpha*rho*q of the system
         mQ = sum( m0k(iSP) * qvs(iSP) )
-
-        if ( any((/ 1 /) == MFL ) ) then
-          print *, p_infpT
-        end if
 
         ! Checking energy constraint. In the case we are calculating the possibility of having subcooled liquid or
         ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
