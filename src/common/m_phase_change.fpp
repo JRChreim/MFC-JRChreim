@@ -218,13 +218,15 @@ contains
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
 
-                                print *, m0k
-                                print *, 'rhok', (pS + ps_inf)/((gs_min - 1)*cvs*TS)
-                                print *, 'pS, TS', pS, TS
-                                print *, 'pSSL, TSSL', pSSL, TSSL
-                                print *, 'TSatSL', TSatSL
+                                if (j == 326 .and. k == 10 ) then 
+                                  print *, m0k
+                                  print *, 'rhok', (pS + ps_inf)/((gs_min - 1)*cvs*TS)
+                                  print *, 'pS, TS', pS, TS
+                                  print *, 'pSSL, TSSL', pSSL, TSSL
+                                  print *, 'TSatSL', TSatSL
 
-                                print *, 'rhoSSL', (pSSL + ps_inf)/((gs_min - 1)*cvs*TSSL)
+                                  print *, 'rhoSSL', (pSSL + ps_inf)/((gs_min - 1)*cvs*TSSL)
+                                end if
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -1440,7 +1442,7 @@ contains
             & cray_inline=True) 
 
         real(wp), intent(in)  :: alpha_b, RbIn
-        logical, intent(out)  :: TSG
+        logical, intent(inout)  :: TSG
         real(wp) :: RBlake
 
         !! first approximation: dilute limit - Blake's critical radius for 
