@@ -281,7 +281,6 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
-    impure subroutine s_infinite_p_relaxation_k(alpha0k, me0k, m0k, pS, rhoe, rM, Tk)
     impure subroutine s_infinite_p_relaxation_k(j, k, l, alpha0k, me0k, m0k, pS, rhoe, rM, Tk)
         $:GPU_ROUTINE(function_name='s_infinite_p_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
@@ -482,6 +481,7 @@ contains
     ! initializing variables
     impure subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, me0k, m0k, pS, rhoe, Tk)
         $:GPU_ROUTINE(function_name='s_old_infinite_p_relaxation_k', &
+            & parallelism='[seq]', cray_inline=True)    
         real(wp), intent(in) :: rhoe
         real(wp), intent(out) :: pS
         real(wp), dimension(num_fluids), intent(out) :: Tk
