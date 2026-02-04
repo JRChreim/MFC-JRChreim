@@ -135,7 +135,7 @@ contains
                       print *, 'rho', rho
                     end if
 
-                    ! call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR)
+                    call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR)
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
                     dynE = 0.0_wp
