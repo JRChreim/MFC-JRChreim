@@ -651,23 +651,23 @@ contains
 
         ! indices for zero-mass phases (negligible amount of partial density). Fluids with negative partial densities should 
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
-        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k > sgm_eps ) ) ) ) = 0
         iZP = pack(iAuxZP, iAuxZP /= 0)
 
-        if (j == 326 .and. k == 10 ) then         
-          print *, 'MFL', MFL
-          print *, 'iAuxZP', iAuxZP
-          print *, 'm0k',m0k
-          print *, 'm0k1', m0k(1)
-          print *, 'm0k2', m0k(2)
-          print *, 'm0k3', m0k(3)
+        ! if (j == 326 .and. k == 10 ) then         
+        !   print *, 'MFL', MFL
+        !   print *, 'iAuxZP', iAuxZP
+        !   print *, 'm0k',m0k
+        !   print *, 'm0k1', m0k(1)
+        !   print *, 'm0k2', m0k(2)
+        !   print *, 'm0k3', m0k(3)
 
-          print *, 'rM * mixM', rM * mixM
-          print *, 'm0k - rM * mixM', m0k - rM * mixM
-          print *, 'sgm_eps', sgm_eps
-          print *, '( m0k - rM * mixM <= sgm_eps )', ( m0k - rM * mixM <= sgm_eps )
-          print *, '( m0k >= 0.0_wp )', ( m0k >= 0.0_wp )
-        end if
+        !   print *, 'rM * mixM', rM * mixM
+        !   print *, 'm0k - rM * mixM', m0k - rM * mixM
+        !   print *, 'sgm_eps', sgm_eps
+        !   print *, '( m0k - rM * mixM <= sgm_eps )', ( m0k - rM * mixM <= sgm_eps )
+        !   print *, '( m0k >= 0.0_wp )', ( m0k >= 0.0_wp )
+        ! end if
 
         ! indices for phases that have a significant partial density
         iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
