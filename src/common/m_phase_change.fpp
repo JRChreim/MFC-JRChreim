@@ -1000,23 +1000,24 @@ contains
             end if
         elseif (CT == 2) then
             ! zero phase indices. Auxiliary variable to avoid do loops - use Morgan's Law
-            ! if ( any((/ 1, 4 /) == relax_model ) ) then
-            !     ! this iAuxZP is only valid when we use either the old or new p-relaxations, as they are only
-            !     ! used with the 6-equation model. Note that they test the phisical validity of the initial conditions
-            !     ! iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
-            !     iAuxZP( pack( iFix, ( m0k >= 0 ) ) ) = 0
-            ! else
-            !     ! this is used for either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
-            !     ! energies are not important
-            !     iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) ) ) = 0
-            ! end if
-            ! iZP = pack(iAuxZP, iAuxZP /= 0)
+            if ( any((/ 1, 4 /) == relax_model ) ) then
+                ! this iAuxZP is only valid when we use either the old or new p-relaxations, as they are only
+                ! used with the 6-equation model. Note that they test the phisical validity of the initial conditions
+                ! iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
+                iAuxZP( pack( iFix, ( m0k > 0 ) ) ) = 0
+            else
+                ! this is used for either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
+                ! energies are not important
+                iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) ) ) = 0
+            end if
+            iZP = pack(iAuxZP, iAuxZP /= 0)
 
             ! if either the volume fraction or the partial density is negative, make them positive
-            alpha0k( pack( iFix, alpha0k < 0.0_wp ) ) = 0.0_wp
-           
-            m0k( pack( iFix, m0k < 0.0_wp ) ) = 0.0_wp
-            ! renormalizing all variables of interest based on alpha
+            alpha0k(iZP) = 0.0_wp
+            ! the largest value of alpha0k must be one
+            alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
+            
+            m0k(iZP) = 0.0_wp
 
             if (model_eqns == 3) then
               me0k( pack( iFix, me0k < 0.0_wp ) ) = 0.0_wp
