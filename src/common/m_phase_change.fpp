@@ -665,6 +665,8 @@ contains
           print *, 'rM * mixM', rM * mixM
           print *, 'm0k - rM * mixM', m0k - rM * mixM
           print *, 'sgm_eps', sgm_eps
+          print *, '( m0k - rM * mixM <= sgm_eps )', ( m0k - rM * mixM <= sgm_eps )
+          print *, '( m0k >= 0.0_wp )', ( m0k >= 0.0_wp )
         end if
 
         ! indices for phases that have a significant partial density
