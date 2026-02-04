@@ -157,8 +157,8 @@ contains
                       do cb = 1, nb
                         Rb(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
-                        ! call s_SG_trigger( alpha_b, m0k, pS, Rb(cb), TSG )
-                        TSG = alpha_b > 1.0e-4_wp
+                        call s_SG_trigger( alpha_b, Rb(cb), TSG )
+
                       end do
                     end if
 
@@ -1435,21 +1435,26 @@ contains
         !!  criterium, if subgrid model is activated. This is based on Fuster's
         !!  work (Stability of bubbly liquids and its connection to the process
         !!  of cavitation inception)
-    ! subroutine s_SG_trigger( alpha_b, m0k, pS, RbIn, TSG )
-        ! $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
-        !     & cray_inline=True) 
+    subroutine s_SG_trigger( alpha_b, RbIn, TSG )
+        $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
+            & cray_inline=True) 
 
-    !     real(wp), intent(in)  :: alpha_b, RbIn
-    !     real(wp), dimension(num_fluids), intent(in) :: m0k, Tk
-    !     logical, intent(out)  :: TSG
-    !     real(wp) :: Rc
+        real(wp), intent(in)  :: alpha_b, RbIn
+        logical, intent(out)  :: TSG
+        real(wp) :: RBlake
 
-    !     !! first approximation: dilute limit - Blake's critical radius
-    !     Rc = sqrt( 9 * k * mass * Tb * R_g / ( 8 * ss * pi ) )
+        !! first approximation: dilute limit - Blake's critical radius for 
+        !! either mono or polydisperse bubbles, since they are into the dilute
+        !! limit
+        ! RBlake = sqrt( 9 * k * mass * Tb * R_g / ( 8 * ss * pi ) )
 
-    !     ! TSG = alpha_b > 1.0e-4_wp
+        ! if ( RbIn > RBlake ) then
+        !   TSG = .true.
+        ! end if
 
-    ! end subroutine s_SG_trigger
+        TSG = alpha_b > 1.0e-4_wp
+
+    end subroutine s_SG_trigger
 
     impure subroutine s_real_to_str(rl, res)
         real(wp), intent(in) :: rl
