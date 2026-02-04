@@ -42,7 +42,7 @@ module m_phase_change
     !> @}
 
     !< Generic loop iterators
-    integer i, cb, j, k, l
+    integer i, cb, j, k, l, ns
 
     $:GPU_DECLARE(create='[A,B,C,D]')
 
@@ -495,8 +495,6 @@ contains
         integer, dimension(num_fluids) :: iVar, iFix !< auxiliary index for choosing appropiate values for conditional sums
         character(20) :: nss, pSs
         !> @}
-
-        integer :: ns !< generic loop iterators
         
         iFix = (/ (i, i=1,num_fluids) /)
 
@@ -644,8 +642,6 @@ contains
         real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
 
-        integer :: ns !< generic loop iterators
-
         ! auxiliary variables for the pT-equilibrium solver
         p_infpT = ps_inf
 
@@ -778,9 +774,6 @@ contains
         real(wp) :: Om, pSO, TSO, TSatSL ! underrelaxation factor
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
-
-        !< Generic loop iterators
-        integer :: ns
 
         ! assigning the relexant pi_infs based on the previous pT-equilibrium
         p_infpTg = p_infpT
@@ -1325,9 +1318,6 @@ contains
         real(wp), intent(in) :: pSat, TSIn
         real(wp) :: dFdT, FT, Om !< auxiliary variables
         character(20) :: nss, pSatS, TSatS
-
-        ! Generic loop iterators
-        integer :: ns
 
         ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
         ! phisically sustained (p = 0, T = 0)
