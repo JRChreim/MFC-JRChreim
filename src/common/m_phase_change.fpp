@@ -223,6 +223,9 @@ contains
                                   print *, 'rhok', (pS + ps_inf)/((gs_min - 1)*cvs*TS)
                                   print *, 'pS, TS', pS, TS
                                   print *, 'pSSL, TSSL', pSSL, TSSL
+                                  print *, 'p_infpT', p_infpT
+                                  print *, 'p_infSL', p_infSL
+                                  print *, 'p_infOV', p_infOV
                                   print *, 'TSatSL', TSatSL
 
                                   print *, 'rhoSSL', (pSSL + ps_inf)/((gs_min - 1)*cvs*TSSL)
