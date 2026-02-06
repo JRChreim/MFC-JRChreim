@@ -122,15 +122,15 @@ contains
                       TR = .false.  
                     end if
 
-                    ! if (j == 634 .and. k == 64) then
-                    !   print *, j, k, l
-                    !   print *, 'before'
-                    !   print *, 'alphak', alphak
-                    !   print *, 'me0k', me0k
-                    !   print *, 'm0k', m0k
-                    !   print *, 'rM', rM
-                    !   print *, 'rho', rho
-                    ! end if
+                    if (j == 637 .and. k == 65) then
+                      print *, j, k, l
+                      print *, 'before'
+                      print *, 'alphak', alphak
+                      print *, 'me0k', me0k
+                      print *, 'm0k', m0k
+                      print *, 'rM', rM
+                      print *, 'rho', rho
+                    end if
 
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
@@ -145,16 +145,16 @@ contains
                     ! This calulation is performed as the total energy minus the kinetic one as energy it is preserved at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
 
-                    ! if (j == 634 .and. k == 64) then
-                    !   print *, j, k, l
-                    !   print *, 'after'
-                    !   print *, 'alphak', alphak
-                    !   print *, 'me0k', me0k
-                    !   print *, 'm0k', m0k
-                    !   print *, 'rM', rM
-                    !   print *, 'rho', rho
-                    !   print *, 'rhoe', rhoe
-                    ! end if
+                    if (j == 637 .and. k == 65) then
+                      print *, j, k, l
+                      print *, 'after'
+                      print *, 'alphak', alphak
+                      print *, 'me0k', me0k
+                      print *, 'm0k', m0k
+                      print *, 'rM', rM
+                      print *, 'rho', rho
+                      print *, 'rhoe', rhoe
+                    end if
 
                     ! if phase change is still necessary
                     if (TR) then
