@@ -122,19 +122,6 @@ contains
                       TR = .false.  
                     end if
 
-                    if (j == 637 .and. k == 65) then
-                      print *, 'before'
-                      print *, j, k, l
-                      do i = 1, sys_size
-                        print *, q_cons_vf(i)%sf(j, k, l)
-                      end do
-                      print *, 'alphak', alphak
-                      print *, 'me0k', me0k
-                      print *, 'm0k', m0k
-                      print *, 'rM', rM
-                      print *, 'rho', rho
-                    end if
-
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
@@ -147,20 +134,6 @@ contains
                     ! calculating the internal mixture energy that MUST be preserved throughout pT- and pTg-relaxation procedures
                     ! This calulation is performed as the total energy minus the kinetic one as energy it is preserved at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
-
-                    if (j == 637 .and. k == 65) then                    
-                      print *, 'after'
-                      print *, j, k, l
-                      do i = 1, sys_size
-                        print *, q_cons_vf(i)%sf(j, k, l)
-                      end do
-                      print *, 'alphak', alphak
-                      print *, 'me0k', me0k
-                      print *, 'm0k', m0k
-                      print *, 'rM', rM
-                      print *, 'rho', rho
-                      print *, 'rhoe', rhoe
-                    end if
 
                     ! if phase change is still necessary
                     if (TR) then
@@ -274,14 +247,6 @@ contains
                     end if
                     ! updating conservative variables after the any relaxation procedures
                     call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
-
-                    if (j == 637 .and. k == 65) then                    
-                      print *, 'consevative spitted out'
-                      print *, j, k, l
-                      do i = 1, sys_size
-                        print *, q_cons_vf(i)%sf(j, k, l)
-                      end do
-                    end if
                 end do
             end do
         end do
