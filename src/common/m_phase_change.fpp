@@ -274,6 +274,14 @@ contains
                     end if
                     ! updating conservative variables after the any relaxation procedures
                     call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+
+                    if (j == 637 .and. k == 65) then                    
+                      print *, 'consevative spitted out'
+                      print *, j, k, l
+                      do i = 1, sys_size
+                        print *, q_cons_vf(i)%sf(j, k, l)
+                      end do
+                    end if
                 end do
             end do
         end do
