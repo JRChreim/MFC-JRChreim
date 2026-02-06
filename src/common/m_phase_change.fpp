@@ -118,6 +118,8 @@ contains
                         end if
                     end do
 
+                    ! check is the total number of NaN partial densities is == num_fluids. In this case, we assume
+                    ! the solver will fail irrespective of the relaxation. There is no magic
                     if ( count( ieee_is_nan( m0k ) ) == num_fluids ) then
                       TR = .false.  
                     end if
@@ -287,11 +289,11 @@ contains
 
         ! indices for zero-mass phases (negligible amount of partial density). Fluids with negative partial densities should 
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
-        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM < sgm_eps ) .and. ( m0k > 0.0_wp ) ) ) ) = 0
         iZP = pack(iAuxZP, iAuxZP /= 0)
 
         ! indices for phases that have a significant partial density
-        iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM < sgm_eps ) .and. ( m0k > 0.0_wp ) ) ) ) = 0
         iSP = pack(iAuxSP, iAuxSP /= 0)
 
         ! Re-distributing the initial internal energies such that rhoe = rhoe6E. This step might be unecessary in the future
@@ -397,8 +399,7 @@ contains
 
                   print *, 'pS', pS
                   
-                  pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
-
+                  pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) )
                   if ( pS < -1.0_wp * minval( gs_min(iSP) * ps_inf(iSP) ) ) then
                     pS = -1.0_wp * minval( gs_min(iSP) * ps_inf(iSP) ) + ptgalpha_eps * 101325
                   end if
@@ -467,8 +468,9 @@ contains
     ! function, liquid stiffness function (two variations of the last two
     ! initializing variables
     impure subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, me0k, m0k, pS, rhoe, Tk)
+    
         $:GPU_ROUTINE(function_name='s_old_infinite_p_relaxation_k', &
-            & parallelism='[seq]', cray_inline=True)    
+            & parallelism='[seq]', cray_inline=True)
         real(wp), intent(in) :: rhoe
         real(wp), intent(out) :: pS
         real(wp), dimension(num_fluids), intent(out) :: Tk
@@ -514,7 +516,7 @@ contains
         pk( pack( iVar, iVar /= 0 ) ) = ( ( mek( pack( iVar, iVar /= 0 ) ) &
         - mk( pack( iVar, iVar /= 0 ) ) * qvs( pack( iVar, iVar /= 0 ) ) ) /      &
         alphak( pack( iVar, iVar /= 0 ) ) - pi_infs( pack( iVar, iVar /= 0 ) ) ) &
-        / fluid_pp( pack( iVar, iVar /= 0 ) )%gamma               
+        / gammas( pack( iVar, iVar /= 0 ) )               
 
         ! auxiliry variable to avoid do loops. Disregarding pressures that are not physical
         iVar = iFix ; iVar( pack( iFix, .not. ( pk < -(1.0_wp - ptgalpha_eps)*ps_inf + ptgalpha_eps ) ) ) = 0
@@ -644,24 +646,23 @@ contains
 
         ! indices for zero-mass phases (negligible amount of partial density). Fluids with negative partial densities should 
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
-        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM < sgm_eps ) .and. ( m0k > 0.0_wp ) ) ) ) = 0
         iZP = pack(iAuxZP, iAuxZP /= 0)
 
         ! indices for phases that have a significant partial density
-        iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM <= sgm_eps ) .and. ( m0k >= 0.0_wp ) ) ) ) = 0
+        iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM < sgm_eps ) .and. ( m0k > 0.0_wp ) ) ) ) = 0
         iSP = pack(iAuxSP, iAuxSP /= 0)
 
         ! this value is rather arbitrary, as I am interested in MINVAL( ps_inf ) for the solver.
         ! This way, I am ensuring this value will not be selected.
         p_infpT(iZP) = 2 * maxval( ps_inf )
         
-        ! if ( ( bubbles_euler .eqv. .false. ) .or. ( bubbles_euler .and. (i /= num_fluids) ) ) then
-          ! sum of the total alpha*rho*cp of the system
-          mCP = sum( m0k * cvs * gs_min )
+        ! sum of the total alpha*rho*cp of the system. Note that these variables already dismiss the subgrid fluid
+        ! physical parameters
+        mCP = sum( m0k(iSP) * cvs(iSP) * gs_min(iSP) )
 
-          ! sum of the total alpha*rho*q of the system
-          mQ = sum( m0k * qvs )
-        ! end if
+        ! sum of the total alpha*rho*q of the system
+        mQ = sum( m0k(iSP) * qvs(iSP) )
 
         ! Checking energy constraint. In the case we are calculating the possibility of having subcooled liquid or
         ! overheated vapor, the energy constraint might not be satisfied, as are hypothetically transferring all the 
@@ -763,7 +764,7 @@ contains
         real(wp), intent(inout) :: pS, TS, rM
         real(wp), intent(in) :: rhoe
         integer, intent(in) :: j, k, l
-        logical, intent(inout) :: TR
+        logical, intent(inout) :: TR ! triggering parameters
         real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
@@ -851,15 +852,13 @@ contains
             mCP = sum( m0k * cvs * gs_min )
 
             ! mCP - the contribution from the reacting phases
-            mCPD = mCP - m0k(lp) * cvs(lp) * gs_min(lp) &
-                       - m0k(vp) * cvs(vp) * gs_min(vp)
+            mCPD = mCP - m0k(lp) * cvs(lp) * gs_min(lp) - m0k(vp) * cvs(vp) * gs_min(vp)
 
             ! sum of the total alpha*rho*q of the system
             mQ = sum( m0k * qvs )
 
             ! mQ - the contribution from the reacting phases
-            mQD = mQ - m0k(lp) * qvs(lp) &
-                     - m0k(vp) * qvs(vp)
+            mQD = mQ - m0k(lp) * qvs(lp) - m0k(vp) * qvs(vp)
 
             ! mCVG - the contribution from the reacting phases
             mCVGP = sum( m0k * cvs * ( gs_min - 1 ) / ( pS + ps_inf ) ) &
@@ -872,7 +871,7 @@ contains
                   - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
-            call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
+            call s_compute_jacobian_matrix(InvJac, Jac, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
 
             ! calculating correction array for Newton's method
             DeltamP = matmul(InvJac, R2D)
@@ -1350,8 +1349,6 @@ contains
                 ns = ns + 1
 
                 ! calculating residual
-                ! FT = A + B / TSat + C * log( TSat ) + D * log( ( pSat + ps_inf( lp ) ) ) - log( pSat + ps_inf( vp ) )
-                
                 FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
                            *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
                            + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
@@ -1359,8 +1356,6 @@ contains
                      + qvs(lp) - qvs(vp)
 
                 ! calculating the jacobian
-                ! dFdT = - B / ( TSat ** 2) + C / TSat
-
                 dFdT = &
                     -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TSat) &
                     - (qvps(lp) - qvps(vp)) &
@@ -1389,8 +1384,9 @@ contains
     end subroutine s_TSat
 
     subroutine update_conservative_vars(j, k, l, m0k, pS, q_cons_vf, Tk )
-        
-        !$acc routine seq
+      
+      $:GPU_ROUTINE(function_name='update_conservative_vars',parallelism='[seq]', &
+            & cray_inline=True) 
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp), intent(in) :: pS
         real(wp), dimension(num_fluids), intent(in) :: m0k, Tk
