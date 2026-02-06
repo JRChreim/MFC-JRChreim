@@ -31,7 +31,7 @@ module m_phase_change
     integer, parameter :: max_iter = 1e4_wp             !< max # of iterations
     real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
     real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
-    real(wp), parameter :: mixM = 0*sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    real(wp), parameter :: mixM = sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
     integer, parameter :: lp = 1                        !< index for the liquid phase of the reacting fluid
     integer, parameter :: vp = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
@@ -40,9 +40,6 @@ module m_phase_change
     !> @{
     real(wp) :: A, B, C, D
     !> @}
-
-    !< Generic loop iterators
-    integer i, cb, j, k, l, ns
 
     $:GPU_DECLARE(create='[A,B,C,D]')
 
@@ -94,15 +91,13 @@ contains
         $:GPU_DECLARE(create='[mOr]')
 
         !< Generic loop iterators
+        integer :: i, j, k, l
 
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL, &
-            & rhoe,rhoeT,dynE,rhos,rho,rM,TR, &
-            & p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk, &
-            & mOr]')
+        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rhos,rho,rM,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,mOr,rhok,Tk]')
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -126,7 +121,13 @@ contains
                         end if
                     end do
 
-                    call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR)
+                    ! check is the total number of NaN partial densities is == num_fluids. In this case, we assume
+                    ! the solver will fail irrespective of the relaxation. There is no magic
+                    if ( count( ieee_is_nan( m0k ) ) == num_fluids ) then
+                      TR = .false.  
+                    end if
+
+                    call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
                     dynE = 0.0_wp
@@ -139,13 +140,7 @@ contains
                     ! This calulation is performed as the total energy minus the kinetic one as energy it is preserved at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
 
-                    ! phase change triggers
-        
-                    ! if the fluids have positive partial density
-                    if ( count( ieee_is_nan( m0k ) ) == num_fluids ) then
-                      TR = .false.  
-                    end if
-
+                    !! phase change triggers
                     ! For Interface Capturing (enough alphak)
                     TIC = (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps)
 
@@ -166,16 +161,16 @@ contains
                     if (TR) then
                         select case (relax_model)
                         case (1) ! (old) p-equilibrium
-                            call s_old_infinite_p_relaxation_k(alphak, me0k, m0k, pS, rhoe, Tk)                            
+                            call s_old_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, Tk)                            
                         case (4) ! p-equilibrium
-                            call s_infinite_p_relaxation_k(alphak, me0k, m0k, pS, rhoe, rM, Tk)
+                            call s_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, rM, Tk)
                         case (5) ! pT-equilibrium
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
-                            call s_infinite_pt_relaxation_k(m0k, 2, pS, p_infpT, rhoe, rM, TS)
+                            call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
                         case (6) ! pT-pTg equilibrium
                             ! pT-equilibrium as rhe initial condition
-                            call s_infinite_pt_relaxation_k(m0k, 2, pS, p_infpT, rhoe, rM, TS)
+                            call s_infinite_pt_relaxation_k(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
                             Tk = spread(TS, 1, num_fluids)
 
                             ! updating the densities and volume fractions used for thresholds
@@ -203,7 +198,7 @@ contains
                                 m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
 
                                 ! calling pT-equilibrium for overheated vapor, which is MFL = 0
-                                call s_infinite_pt_relaxation_k(m0k, 0, pSOV, p_infOV, rhoe, rM, TSOV)
+                                call s_infinite_pt_relaxation_k(j, k, l, m0k, 0, pSOV, p_infOV, rhoe, rM, TSOV)
 
                                 ! calculating Saturation temperature
                                 call s_TSat(pSOV, TSatOV, TSOV)
@@ -213,24 +208,10 @@ contains
                                 m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
 
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1                       
-                                call s_infinite_pt_relaxation_k(m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
+                                call s_infinite_pt_relaxation_k(j, k, l, m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
 
                                 ! calculating Saturation temperature
                                 call s_TSat(pSSL, TSatSL, TSSL)
-
-                                if (j == 326 .and. k == 10 ) then 
-                                  
-                                  print *, m0k
-                                  print *, 'rhok', (pS + ps_inf)/((gs_min - 1)*cvs*TS)
-                                  print *, 'pS, TS', pS, TS
-                                  print *, 'pSSL, TSSL', pSSL, TSSL
-                                  print *, 'p_infpT', p_infpT
-                                  print *, 'p_infSL', p_infSL
-                                  print *, 'p_infOV', p_infOV
-                                  print *, 'TSatSL', TSatSL
-                                  print *, 'rhoSSL', (pSSL + ps_inf)/((gs_min - 1)*cvs*TSSL)
-
-                                end if
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -256,7 +237,7 @@ contains
                                     m0k(lp) = mOr(1) ; m0k(vp) = mOr(2)
 
                                     ! pTg-relaxation
-                                    call s_infinite_ptg_relaxation_k(alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
+                                    call s_infinite_ptg_relaxation_k(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
                                     if ( TR .eqv. .false. ) then
                                         $:GPU_LOOP(parallelism='[seq]')
@@ -287,7 +268,7 @@ contains
                         end do
                     end if
                     ! updating conservative variables after the any relaxation procedures
-                    call update_conservative_vars( m0k, pS, q_cons_vf, Tk ) 
+                    call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
                 end do
             end do
         end do
@@ -295,10 +276,13 @@ contains
     end subroutine s_infinite_relaxation_k ! ----------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
+        !!  @param j generic loop iterator for x direction
+        !!  @param k generic loop iterator for y direction
+        !!  @param l generic loop iterator for z direction
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
-    impure subroutine s_infinite_p_relaxation_k(alpha0k, me0k, m0k, pS, rhoe, rM, Tk)
+    impure subroutine s_infinite_p_relaxation_k(j, k, l, alpha0k, me0k, m0k, pS, rhoe, rM, Tk)
         $:GPU_ROUTINE(function_name='s_infinite_p_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
 
@@ -307,8 +291,9 @@ contains
         real(wp), intent(out) :: pS
         real(wp), dimension(num_fluids), intent(out) :: Tk
         real(wp), dimension(num_fluids), intent(in)  :: alpha0k, me0k, m0k
+        integer, intent(in) :: j, k, l
 
-        real(wp) :: fp, fpp, pO !< variables for the Newton Solver
+        real(wp) :: fp, fpp !< variables for the Newton Solver
         real(wp) :: Econst, Om, TS !< auxiliary variables
         real(wp), dimension(num_fluids) :: alphak, mek, meik
         character(20) :: nss, pSs, Econsts
@@ -317,7 +302,7 @@ contains
         integer, dimension(:), allocatable :: iSP, iZP
         
         integer :: mF !< multiplying factor for the tolerance of the solver
-        integer :: na, ns, nsL !< generic loop iterators
+        integer :: i, na, ns, nsL !< generic loop iterators
 
         ! indices for all the fluids/phases
         iFix = (/ (i, i=1,num_fluids) /) 
@@ -337,6 +322,10 @@ contains
         ! initial conditions for starting the solver. For pressure, as long as the initial guess
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
         pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
+
+        if ( pS < -1.0_wp * minval( gs_min(iSP) * ps_inf(iSP) ) ) then
+          pS = -1.0_wp * minval( gs_min(iSP) * ps_inf(iSP) ) + ptgalpha_eps * 101325
+        end if
 
         ! internal energies - first estimate
         mek = meik * ( 1 + ptgalpha_eps )
@@ -363,8 +352,8 @@ contains
             ! energy constraint for the p-equilibrium
             if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
-              call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /) &
-                                , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), m0k, nsL, ps_inf &
+              call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
                                 , pS, (/ sum( mek ) - rhoe, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ))
 
               call s_real_to_str(Econst, Econsts)
@@ -384,17 +373,14 @@ contains
                 ! increasing counter
                 ns = ns + 1
 
-                ! updating old pressure
-                pO = pS
-
                 ! updating functions used in the Newton's solver. f(p)
-                fp = sum( ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pO + gs_min(iSP) * ps_inf(iSP) ) )
+                fp = sum( alphak(iSP) )
 
                 ! updating functions used in the Newton's solver. f'(p)
-                fpp = sum( -1.0_wp * ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( ( pO + gs_min(iSP) * ps_inf(iSP) ) ** 2 ) )
+                fpp = sum( -1.0_wp * alphak(iSP) / ( pS + gs_min(iSP) * ps_inf(iSP) ) )
 
                 ! updating the relaxed pressure
-                pS = pO + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pO + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
+                pS = pS + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pS + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
 
                 ! updating the underelaxation parameters.
                 ! First restriction
@@ -428,8 +414,10 @@ contains
                   ! In case the newton-Raphson procedure for pS makes it <= -1.0_wp*minval(gs_min*ps_inf) due to the
                   ! estimates for the fluid internal energies, restart the pressure so that the solver can continue.
                   ! keep an eye on this, as it has not been tested
-
-                  pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
+                  pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) )
+                  if ( pS < -1.0_wp * minval( gs_min(iSP) * ps_inf(iSP) ) ) then
+                    pS = -1.0_wp * minval( gs_min(iSP) * ps_inf(iSP) ) + ptgalpha_eps * 101325
+                  end if
 
                   print *, 'pS restarted due to unphysical values pressures during the Newton solver. ns = ', ns, 'Continuing...'
 
@@ -445,8 +433,8 @@ contains
                     
                     else
 
-                      call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /) &
-                                        , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), m0k, ns, ps_inf &
+                      call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                        , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                         , pS, (/fp - 1.0_wp, 0.0_wp/), rhoe, alphak * (pS + ps_inf) / ( (gs_min - 1.0_wp) * m0k * cvs ) )
 
                       call s_real_to_str(pS, pSs)
@@ -482,20 +470,23 @@ contains
     ! mixture density, dynamic pressure, surface energy, specific heat ratio
     ! function, liquid stiffness function (two variations of the last two
     ! initializing variables
-    impure subroutine s_old_infinite_p_relaxation_k(alpha0k, me0k, m0k, pS, rhoe, Tk)
+    impure subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, me0k, m0k, pS, rhoe, Tk)
         $:GPU_ROUTINE(function_name='s_old_infinite_p_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
-
         real(wp), intent(in) :: rhoe
         real(wp), intent(out) :: pS
         real(wp), dimension(num_fluids), intent(out) :: Tk
         real(wp), dimension(num_fluids), intent(in) :: alpha0k, me0k, m0k
+
+        integer, intent(in) :: j, k, l
 
         real(wp) :: fp, fpp, mQ, pO !< variables for the Newton Solver
         real(wp), dimension(num_fluids) :: alphak, mek, mk, pk, rhok, num, den, drhodp
         integer, dimension(num_fluids) :: iVar, iFix !< auxiliary index for choosing appropiate values for conditional sums
         character(20) :: nss, pSs
         !> @}
+
+        integer :: i, ns !< generic loop iterators
         
         iFix = (/ (i, i=1,num_fluids) /)
 
@@ -587,8 +578,8 @@ contains
                 ! checking if pressure is within expected bounds
                 if ((pS <= -1.0_wp*minval(gs_min*ps_inf)) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
 
-                  call s_whistleblower((/ -fp/fpp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /) &
-                                    , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), m0k, ns, ps_inf &
+                  call s_whistleblower((/ -fp/fpp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                    , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                     , pS, (/fp, 0.0_wp/), rhoe, Tk)
 
                   call s_real_to_str(pS, pSs)
@@ -621,6 +612,9 @@ contains
     end subroutine s_old_infinite_p_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
+        !!  @param j generic loop iterator for x direction
+        !!  @param k generic loop iterator for y direction
+        !!  @param l generic loop iterator for z direction
         !!  @param MFL flag that tells whether the fluid is gas (0), liquid (1), or a mixture (2)
         !!  @param pS equilibrium pressure at the interface
         !!  @param p_infpT stiffness for the participating fluids under pT-equilibrium
@@ -628,7 +622,7 @@ contains
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_pt_relaxation_k(m0k, MFL, pS, p_infpT, rhoe, rM, TS)
+    subroutine s_infinite_pt_relaxation_k(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS)
         $:GPU_ROUTINE(function_name='s_infinite_pt_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
 
@@ -637,11 +631,13 @@ contains
         real(wp), dimension(num_fluids), intent(out) :: p_infpT
         real(wp), intent(in) :: rhoe, rM
         real(wp), intent(in), dimension(num_fluids) :: m0k
-        integer, intent(in) :: MFL
+        integer, intent(in) :: j, k, l, MFL
         integer, dimension(num_fluids) :: iFix, iAuxSP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
         integer, dimension(:), allocatable :: iSP, iZP
         real(wp) :: gp, gpp, hp, pO, mCP, mQ !< variables for the Newton Solver
         character(20) :: nss, pSs, Econsts
+
+        integer :: i, ns !< generic loop iterators
 
         ! auxiliary variables for the pT-equilibrium solver
         p_infpT = ps_inf
@@ -651,23 +647,8 @@ contains
 
         ! indices for zero-mass phases (negligible amount of partial density). Fluids with negative partial densities should 
         ! not be present at this point, since they have already been corrected at the first call of s_correct_partial_densities
-        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM < sgm_eps ) .and. ( m0k > sgm_eps ) ) ) ) = 0
+        iAuxZP = iFix ; iAuxZP( pack( iFix, .not. ( ( m0k - rM * mixM < sgm_eps ) .and. ( m0k > 0.0_wp ) ) ) ) = 0
         iZP = pack(iAuxZP, iAuxZP /= 0)
-
-        if (j == 326 .and. k == 10 ) then         
-          print *, 'MFL', MFL
-          print *, 'iAuxZP', iAuxZP
-          print *, 'm0k',m0k
-          print *, 'm0k1', m0k(1)
-          print *, 'm0k2', m0k(2)
-          print *, 'm0k3', m0k(3)
-
-          print *, 'rM * mixM', rM * mixM
-          print *, 'm0k - rM * mixM', m0k - rM * mixM
-          print *, 'sgm_eps', sgm_eps
-          print *, '( m0k - rM * mixM < sgm_eps )', ( m0k - rM * mixM < sgm_eps )
-          print *, '( m0k > 0.0_wp )', ( m0k > 0.0_wp )
-        end if
 
         ! indices for phases that have a significant partial density
         iAuxSP = iFix ; iAuxSP( pack( iFix, ( ( m0k - rM * mixM < sgm_eps ) .and. ( m0k > 0.0_wp ) ) ) ) = 0
@@ -698,8 +679,8 @@ contains
                 return
 #ifndef MFC_OpenACC
             else
-                call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /) &
-                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), m0k, ns, ps_inf &
+                call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                   , 0.0_wp, (/0.0_wp, 0.0_wp/), rhoe, spread(0.0_wp, 1, num_fluids))                                      
 
                 call s_real_to_str(rhoe - mQ - minval(ps_inf(iSP)), Econsts)
@@ -747,8 +728,8 @@ contains
 #ifndef MFC_OpenACC
             if ((pS <= -1.0_wp*minval(ps_inf(iSP))) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
 
-              call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /) &
-                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), m0k, ns, ps_inf &
+              call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
+                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                 , pS, (/abs( gp - 1.0_wp ), 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
 
               call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
@@ -760,17 +741,21 @@ contains
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
-
+        
     end subroutine s_infinite_pt_relaxation_k ! -----------------------
 
     !>  This auxiliary subroutine is created to activate the pTg-equilibrium for N fluids under pT
         !!      and 2 fluids under pTg-equilibrium. There is a final common p and T during relaxation
+        !!  @param j generic loop iterator for x direction
+        !!  @param k generic loop iterator for y direction
+        !!  @param l generic loop iterator for z direction
         !!  @param pS equilibrium pressure at the interface
         !!  @param p_infpT stiffness for the participating fluids under pT-equilibrium
         !!  @param rhoe mixture energy
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_ptg_relaxation_k(alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
+    subroutine s_infinite_ptg_relaxation_k(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
+
         $:GPU_ROUTINE(function_name='s_infinite_ptg_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
 
@@ -778,14 +763,18 @@ contains
         real(wp), dimension(num_fluids), intent(in) :: p_infpT
         real(wp), intent(inout) :: pS, TS, rM
         real(wp), intent(in) :: rhoe
+        integer, intent(in) :: j, k, l
         logical, intent(inout) :: TR, TSG ! triggering parameters
-        real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk, mOk
+        real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
-        real(wp) :: Om, pSO, TSO, TSatSL ! underrelaxation factor
+        real(wp) :: Om ! underrelaxation factor
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s 
+
+        !< Generic loop iterators
+        integer :: i, ns
 
         ! assigning the relexant pi_infs based on the previous pT-equilibrium
         p_infpTg = p_infpT
@@ -793,17 +782,13 @@ contains
         ! checking if homogeneous cavitation is expected. If yes, transfering a small amount of mass to the depleted
         ! phase, and then let the algorithm run.
         
-        pSO = pS
-        TSO = TS
-        mOk = m0k
-
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
         if ( ( (pS < -1.47e10_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp)) ) .or. &
         TSG ) then
 
             ! transfer a bit of mass to the deficient phase, enforce phase change
-            call s_correct_partial_densities(1, alphak, me0k, m0k, rM, rho, TR)
+            call s_correct_partial_densities(1, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
             ! The following changes do not have a strong physicial rationale. So keep an eye on them,
             ! as they might be a weakness of the solver
@@ -953,14 +938,6 @@ contains
             call s_whistleblower(DeltamP, InvJac, Jac, m0k, ns, p_infpTg &
                                 , pS, R2D, rhoe, spread(TS, 1, num_fluids))
             
-            print *, 'pSO', pSO
-
-            print *, 'm0k', mOk
-
-            call s_TSat(pSO, TSatSL, TSO)
-
-            print *, TSatSL
-
             call s_real_to_str(R2D(1), R2D1s) ; call s_real_to_str(R2D(2), R2D2s)
             call s_real_to_str(rhoe - mQ - minval(p_infpTg), Econsts)
             call s_int_to_str(ns, nss); call s_real_to_str(pS, pSs)
@@ -980,7 +957,10 @@ contains
         !!      but their sum is positive. Inert phases are not corrected at this moment
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rM sum of the reacting masses
-    subroutine s_correct_partial_densities(CT, alpha0k, me0k, m0k, rM, rho, TR)
+        !!  @param j generic loop iterator for x direction
+        !!  @param k generic loop iterator for y direction
+        !!  @param l generic loop iterator for z direction
+    subroutine s_correct_partial_densities(CT, alpha0k, me0k, m0k, rM, rho, TR, i, j, k, l)
         $:GPU_ROUTINE(function_name='s_correct_partial_densities', &
             & parallelism='[seq]', cray_inline=True)
 
@@ -989,9 +969,10 @@ contains
         real(wp), dimension(num_fluids), intent(inout) :: alpha0k, me0k, m0k
         real(wp), intent(out) :: rM, rho
         logical, intent(inout) :: TR
-        integer, intent(in) :: CT
+        integer, intent(in) :: CT, j, k, l
         integer, dimension(num_fluids) :: iFix, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
         integer, dimension(:), allocatable :: iZP
+        integer :: i
         !> @}
 
         iFix = (/ (i, i=1,num_fluids) /)
@@ -1056,7 +1037,8 @@ contains
 
             ! if either the volume fraction or the partial density is negative, make them positive
             alpha0k(iZP) = 0.0_wp
-            ! the greastes value of alpha0k must be one
+            
+            ! the largest value of alpha0k must be one
             alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
             
             m0k(iZP) = 0.0_wp
@@ -1068,8 +1050,8 @@ contains
               ! me0k = me0k / sum(alpha0k)
             end if
 
-            ! this one must be the last correction as, from this point on, sum(alpha0k) == 1
-            ! and the other variables would not benefit from the proportional adjustment
+            ! renormalizing alpha. This should be the last correction, as the
+            ! other variables would not benefit from the proportional adjustment
             alpha0k = alpha0k / sum(alpha0k)
             
             ! continue relaxation
@@ -1093,19 +1075,23 @@ contains
     !>  This auxiliary subroutine calculates the 2 x 2 Jacobian and, its inverse and transpose
         !!      to be used in the pTg-equilibirium procedure
         !!  @param InvJac Inverse of the Jacobian Matrix
+        !!  @param j generic loop iterator for x direction
         !!  @param Jac Jacobian Matrix
+        !!  @param k generic loop iterator for y direction
+        !!  @param l generic loop iterator for z direction
         !!  @param mCPD  sum of the total alpha*rho*cp
         !!  @param mCVGP auxiliary variable for the calculation of the matrices: alpha*rho*cv*(g-1)/press
         !!  @param mCVGP2 auxiliary variable for the calculation of the matrices: alpha*rho*cv*(g-1)/press^2
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TJac Transpose of the Jacobian Matrix
-    subroutine s_compute_jacobian_matrix(InvJac, Jac, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
+    subroutine s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
         $:GPU_ROUTINE(function_name='s_compute_jacobian_matrix', &
             & parallelism='[seq]', cray_inline=True)
 
         real(wp), dimension(num_fluids), intent(in) :: m0k
         real(wp), intent(in) :: pS, mCPD, mCVGP, mCVGP2, rM
+        integer, intent(in) :: j, k, l
         real(wp), dimension(2, 2), intent(out) :: Jac, InvJac, TJac
         real(wp) :: TS, dFdT, dTdm, dTdp ! mass of the reacting fluid, total reacting mass, and auxiliary variables
 
@@ -1181,6 +1167,9 @@ contains
     end subroutine s_compute_jacobian_matrix
 
     !>  This auxiliary subroutine computes the residue of the pTg-equilibrium procedure
+        !!  @param j generic loop iterator for x direction
+        !!  @param k generic loop iterator for y direction
+        !!  @param l generic loop iterator for z direction
         !!  @param mCPD  sum of the total alpha*rho*cp
         !!  @param mCVGP auxiliary variable for the calculation of the matrices: alpha*rho*cv*(g-1)/press
         !!  @param mQD sum of the total alpha*rho*qv
@@ -1188,12 +1177,13 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param rhoe mixture energy
         !!  @param R2D (2D) residue array
-    subroutine s_compute_pTg_residual(m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+    subroutine s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
         $:GPU_ROUTINE(function_name='s_compute_pTg_residual', &
             & parallelism='[seq]', cray_inline=True)
 
         real(wp), dimension(num_fluids), intent(in) :: m0k
         real(wp), intent(in) :: pS, rhoe, mCPD, mCVGP, mQD, rM
+        integer, intent(in) :: j, k, l
         real(wp), dimension(2), intent(out) :: R2D
         real(wp) :: TS !< mass of the reacting liquid, total reacting mass, equilibrium temperature
 
@@ -1219,16 +1209,17 @@ contains
     end subroutine s_compute_pTg_residual
 
     ! SUBROUTINE CREATED TO TELL ME WHERE THE ERROR IN THE PT- AND PTG-EQUILIBRIUM SOLVERS IS
-    impure subroutine s_whistleblower(DeltamP, InvJac, Jac, mk, ns, p_inf, pS, R2D, rhoe, Tk) ! ----------------
+    impure subroutine s_whistleblower(DeltamP, InvJac, j, Jac, k, l, mk, ns, p_inf, pS, R2D, rhoe, Tk) ! ----------------
 
         real(wp), dimension(2, 2), intent(in) :: Jac, InvJac
         real(wp), dimension(num_fluids), intent(in) :: mk, p_inf, Tk
         real(wp), dimension(2), intent(in) :: R2D, DeltamP
         real(wp), intent(in) :: pS, rhoe
-        integer, intent(in) :: ns
+        integer, intent(in) :: j, k, l, ns
         real(wp), dimension(num_fluids) :: ek, hk, gk, sk, rhok
         real(wp) :: maxg, rho
         !< Generic loop iterator
+        integer :: i
 
         ! auxiliary calculations
         ! Thermodynamic state
@@ -1322,7 +1313,7 @@ contains
         !!  @param pSat Saturation Pressure
         !!  @param TSat Saturation Temperature
         !!  @param TSIn equilibrium Temperature
-    impure subroutine s_TSat(pSat, TSat, TSIn)
+    subroutine s_TSat(pSat, TSat, TSIn)
         $:GPU_ROUTINE(function_name='s_TSat',parallelism='[seq]', &
             & cray_inline=True)
 
@@ -1330,6 +1321,9 @@ contains
         real(wp), intent(in) :: pSat, TSIn
         real(wp) :: dFdT, FT, Om !< auxiliary variables
         character(20) :: nss, pSatS, TSatS
+
+        ! Generic loop iterators
+        integer :: ns
 
         ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
         ! phisically sustained (p = 0, T = 0)
@@ -1357,8 +1351,6 @@ contains
                 ns = ns + 1
 
                 ! calculating residual
-                ! FT = A + B / TSat + C * log( TSat ) + D * log( ( pSat + ps_inf( lp ) ) ) - log( pSat + ps_inf( vp ) )
-                
                 FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
                            *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
                            + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
@@ -1366,8 +1358,6 @@ contains
                      + qvs(lp) - qvs(vp)
 
                 ! calculating the jacobian
-                ! dFdT = - B / ( TSat ** 2) + C / TSat
-
                 dFdT = &
                     -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TSat) &
                     - (qvps(lp) - qvps(vp)) &
@@ -1385,7 +1375,7 @@ contains
                     call s_real_to_str(TSat, TSatS)
                     call s_real_to_str(pSat, pSatS)
                     call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
-&                     ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
+                    & ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
 
                 end if
 #endif
@@ -1395,14 +1385,16 @@ contains
 
     end subroutine s_TSat
 
-    impure subroutine update_conservative_vars( m0k, pS, q_cons_vf, Tk )
-        $:GPU_ROUTINE(function_name='update_conservative_vars',parallelism='[seq]', &
+    subroutine update_conservative_vars(j, k, l, m0k, pS, q_cons_vf, Tk )
+      
+      $:GPU_ROUTINE(function_name='update_conservative_vars',parallelism='[seq]', &
             & cray_inline=True) 
-
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp), intent(in) :: pS
         real(wp), dimension(num_fluids), intent(in) :: m0k, Tk
+        integer, intent(in) :: j, k, l
         real(wp), dimension(num_fluids) :: sk, hk, gk, ek, rhok
+        integer :: i
 
         ! Thermodynamic state calculations
         ! entropy
@@ -1420,7 +1412,7 @@ contains
         ! internal energy
         ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
 
-        ! calculating volume fractions, internal energies, and total entropy
+        ! assigning volume fractions, internal energies, and total entropy
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
       
