@@ -322,6 +322,10 @@ contains
         ! is in (-min(gs_min*ps_inf), +infty), a solution should be found.
         pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
 
+        if ( pS < -1.0_wp * min( gs_min(iSP) * ps_inf(iSP) ) ) then
+          pS = 1E4 
+        end if
+
         ! internal energies - first estimate
         mek = meik * ( 1 + ptgalpha_eps )
         
@@ -415,6 +419,10 @@ contains
                   print *, 'pS', pS
                   
                   pS = (rhoe - sum( m0k(iSP) * qvs(iSP) ) - sum( alpha0k(iSP) * pi_infs(iSP) ) ) / sum( alpha0k(iSP) * gammas(iSP) ) 
+
+                  if ( pS < -1.0_wp * min( gs_min(iSP) * ps_inf(iSP) ) ) then
+                    pS = 1E4 
+                  end if
 
                   print *, 'fp, fpp', fp, fpp
 
