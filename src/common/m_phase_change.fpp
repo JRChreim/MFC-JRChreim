@@ -91,7 +91,7 @@ contains
         $:GPU_DECLARE(create='[mOr]')
 
         !< Generic loop iterators
-        integer :: i, j, k, l
+        integer :: cb, i, j, k, l
 
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
