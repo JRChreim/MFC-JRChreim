@@ -123,8 +123,11 @@ contains
                     end if
 
                     if (j == 637 .and. k == 65) then
-                      print *, j, k, l
                       print *, 'before'
+                      print *, j, k, l
+                      do i = 1, sys_size
+                        print *, q_cons_vf(i)%sf(j, k, l)
+                      end do
                       print *, 'alphak', alphak
                       print *, 'me0k', me0k
                       print *, 'm0k', m0k
@@ -145,9 +148,12 @@ contains
                     ! This calulation is performed as the total energy minus the kinetic one as energy it is preserved at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
 
-                    if (j == 637 .and. k == 65) then
-                      print *, j, k, l
+                    if (j == 637 .and. k == 65) then                    
                       print *, 'after'
+                      print *, j, k, l
+                      do i = 1, sys_size
+                        print *, q_cons_vf(i)%sf(j, k, l)
+                      end do
                       print *, 'alphak', alphak
                       print *, 'me0k', me0k
                       print *, 'm0k', m0k
