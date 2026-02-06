@@ -122,7 +122,7 @@ contains
                       TR = .false.  
                     end if
 
-                    if (j == 642 .and. k == 64) then
+                    if (j == 634 .and. k == 64) then
                       print *, j, k, l
                       print *, 'before'
                       print *, 'alphak', alphak
@@ -145,7 +145,7 @@ contains
                     ! This calulation is performed as the total energy minus the kinetic one as energy it is preserved at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
 
-                    if (j == 642 .and. k == 64) then
+                    if (j == 634 .and. k == 64) then
                       print *, j, k, l
                       print *, 'after'
                       print *, 'alphak', alphak
