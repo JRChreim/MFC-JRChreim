@@ -471,6 +471,7 @@ contains
     ! function, liquid stiffness function (two variations of the last two
     ! initializing variables
     impure subroutine s_old_infinite_p_relaxation_k(j, k, l, alpha0k, me0k, m0k, pS, rhoe, Tk)
+    
         $:GPU_ROUTINE(function_name='s_old_infinite_p_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
         real(wp), intent(in) :: rhoe
@@ -623,6 +624,7 @@ contains
         !!  @param rhoe mixture energy
         !!  @param TS equilibrium temperature at the interface
     subroutine s_infinite_pt_relaxation_k(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS)
+
         $:GPU_ROUTINE(function_name='s_infinite_pt_relaxation_k', &
             & parallelism='[seq]', cray_inline=True)
 
@@ -873,7 +875,7 @@ contains
                   - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
-            call s_compute_jacobian_matrix(InvJac, Jac, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
+            call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
 
             ! calculating correction array for Newton's method
             DeltamP = matmul(InvJac, R2D)
@@ -914,7 +916,7 @@ contains
 
             ! calculating residuals, which are (i) the difference between the Gibbs Free energy of the gas and the liquid
             ! and (ii) the energy before and after the phase-change process.
-            call s_compute_pTg_residual(m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
           ! updating common temperature
           TS = (rhoe + pS - mQ)/mCP
