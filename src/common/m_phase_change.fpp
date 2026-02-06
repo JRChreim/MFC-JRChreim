@@ -937,7 +937,7 @@ contains
 #ifndef MFC_OpenACC
           if (ieee_is_nan(norm2(R2D)) .or. (ns > max_iter)) then
 
-            call s_whistleblower(DeltamP, InvJac, Jac, m0k, ns, p_infpTg &
+            call s_whistleblower(DeltamP, InvJac, j, Jac, k, l, m0k, ns, p_infpTg &
                                 , pS, R2D, rhoe, spread(TS, 1, num_fluids))
             
             call s_real_to_str(R2D(1), R2D1s) ; call s_real_to_str(R2D(2), R2D2s)
