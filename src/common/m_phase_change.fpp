@@ -152,7 +152,7 @@ contains
                       do cb = 1, nb
 
                         ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
-                        mass_b(cb) = rho0 * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
+                        mass_b(cb) = rho0ref * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
 
                         R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
@@ -1454,7 +1454,7 @@ contains
         !! first approximation: dilute limit - Blake's critical radius for 
         !! either mono or polydisperse bubbles, since they are into the dilute
         !! limit
-        RBlake = ( 3.0_wp * K * R_g * rho0 / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * K - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * K ) )
+        RBlake = ( 3.0_wp * K * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * K - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * K ) )
         
         TSG = RIn_b > RBlake 
         ! TSG = alpha_b > 1.0e-4_wp
