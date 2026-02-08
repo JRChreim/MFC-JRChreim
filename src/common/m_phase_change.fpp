@@ -28,12 +28,12 @@ module m_phase_change
 
     !> @name Parameters for the first order transition phase change
     !> @{
-    integer, parameter :: max_iter = 1e4_wp             !< max # of iterations
-    real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
-    real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
-    real(wp), parameter :: mixM = sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
-    integer, parameter :: lp = 1                        !< index for the liquid phase of the reacting fluid
-    integer, parameter :: vp = 2                        !< index for the vapor phase of the reacting fluid
+    integer, parameter  :: max_iter = 1e4_wp                   !< max # of iterations
+    real(wp), parameter :: pCr      = 4.94e7_wp                !< Critical water pressure
+    real(wp), parameter :: TCr      = 385.05_wp + 273.15_wp    !< Critical water temperature
+    real(wp), parameter :: mixM     = 0*sgm_eps                !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    integer, parameter  :: lp       = 1                        !< index for the liquid phase of the reacting fluid
+    integer, parameter  :: vp       = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
 
     !> @name Gibbs free energy phase change parameters
