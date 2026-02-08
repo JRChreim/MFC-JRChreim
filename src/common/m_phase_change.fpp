@@ -82,7 +82,7 @@ contains
         $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
         $:GPU_DECLARE(create='[rhoe,dynE,rhos,rho,rM,TR]')
 
-        real(wp), dimension(nb) :: Rb !< Radii of the subgrid component, used in case icsg is activated
+        real(wp), dimension(nb) :: mass_b, R_b !< subgrid variables, used in case icsg is activated
 
         real(wp), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alphak, me0k, m0k, rhok, Tk
         $:GPU_DECLARE(create='[p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
@@ -150,9 +150,13 @@ contains
                     if (bubbles_euler) then
                       alpha_b = q_cons_vf(alf_idx)%sf(j, k, l)
                       do cb = 1, nb
-                        Rb(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
-                        call s_SG_trigger( alpha_b, Rb(cb), TSG )
+                        ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
+                        mass_b(cb) = rho0 * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
+
+                        R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
+
+                        call s_SG_trigger( alpha_b, mass_b(cb), R_b(cb), TSG )
 
                       end do
                     end if
@@ -1436,24 +1440,24 @@ contains
         !!  criterium, if subgrid model is activated. This is based on Fuster's
         !!  work (Stability of bubbly liquids and its connection to the process
         !!  of cavitation inception)
-    subroutine s_SG_trigger( alpha_b, RbIn, TSG )
+    subroutine s_SG_trigger( alpha_b, massIn_b, RIn_b, TSG )
         $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
             & cray_inline=True) 
 
-        real(wp), intent(in)  :: alpha_b, RbIn
+        real(wp), intent(in)  :: alpha_b, massIn_b, RIn_b
         logical, intent(inout)  :: TSG
-        real(wp) :: RBlake
+        real(wp) :: RBlake, K
+
+        ! polytropic coefficient. For the moment, Assuming isentropic only
+        K = gam_g
 
         !! first approximation: dilute limit - Blake's critical radius for 
         !! either mono or polydisperse bubbles, since they are into the dilute
         !! limit
-        ! RBlake = sqrt( 9 * k * mass * Tb * R_g / ( 8 * ss * pi ) )
-
-        ! if ( RbIn > RBlake ) then
-        !   TSG = .true.
-        ! end if
-
-        TSG = alpha_b > 1.0e-4_wp
+        RBlake = ( 3.0_wp * K * R_g * rho0 / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * K - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * K ) )
+        
+        TSG = RIn_b > RBlake 
+        ! TSG = alpha_b > 1.0e-4_wp
 
     end subroutine s_SG_trigger
 
