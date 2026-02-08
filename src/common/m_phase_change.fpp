@@ -1455,11 +1455,13 @@ contains
         !! either mono or polydisperse bubbles, since they are into the dilute
         !! limit
         RBlake = ( 3.0_wp * K * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * K - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * K ) )
-        
-        print *, RBlake
-        print *, RIn_b
 
         TSG = RIn_b > RBlake 
+
+        if (TSG) then
+          print *, 'RBlake', RBlake
+          print *, 'RIn_b', RIn_b
+        end if 
         ! TSG = alpha_b > 1.0e-4_wp
 
     end subroutine s_SG_trigger
