@@ -1458,11 +1458,11 @@ contains
 
         TSG = RIn_b > RBlake 
 
-        if (TSG) then
-          print *, 'RBlake', RBlake
-          print *, 'RIn_b', RIn_b
-        end if 
-        TSG = alpha_b > 1.0e-4_wp
+        ! if (TSG) then
+        !   print *, 'RBlake', RBlake
+        !   print *, 'RIn_b', RIn_b
+        ! end if 
+        ! TSG = alpha_b > 1.0e-4_wp
 
     end subroutine s_SG_trigger
 
