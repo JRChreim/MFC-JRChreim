@@ -1,14 +1,11 @@
 !>
-!! @file m_variables_conversion.f90
+!! @file
 !! @brief Contains module m_variables_conversion
 
 #:include 'macros.fpp'
 #:include 'case.fpp'
 
-!> @brief This module consists of subroutines used in the conversion of the
-!!              conservative variables into the primitive ones and vice versa. In
-!!              addition, the module also contains the subroutines used to obtain
-!!              the mixture variables and the subroutines used to compute pressure.
+!> @brief Conservative-to-primitive variable conversion, mixture property evaluation, and pressure computation
 module m_variables_conversion
 
     use m_derived_types        !< Definitions of the derived types
@@ -72,12 +69,15 @@ contains
         !!      Replaces a procedure pointer.
         !!  @param q_vf Conservative or primitive variables
         !!  @param i First-coordinate cell index
-        !!  @param j First-coordinate cell index
-        !!  @param k First-coordinate cell index
+        !!  @param j Second-coordinate cell index
+        !!  @param k Third-coordinate cell index
         !!  @param rho Density
         !!  @param gamma Specific heat ratio function
         !!  @param pi_inf Liquid stiffness function
         !!  @param qv Fluid reference energy
+        !!  @param Re_K Reynolds number (optional)
+        !!  @param G_K Shear modulus (optional)
+        !!  @param G Shear moduli of the fluids (optional)
     subroutine s_convert_to_mixture_variables(q_vf, i, j, k, &
                                               rho, gamma, pi_inf, qv, Re_K, G_K, G)
 
@@ -107,12 +107,16 @@ contains
         !! @param gamma Specific Heat Ratio
         !! @param rho Density
         !! @param qv fluid reference energy
+        !! @param rhoYks Species partial densities
         !! @param pres Pressure to calculate
+        !! @param T Temperature
         !! @param stress Shear Stress
         !! @param mom Momentum
+        !! @param G Shear modulus (optional)
+        !! @param pres_mag Magnetic pressure (optional)
     subroutine s_compute_pressure(energy, alf, dyn_p, pi_inf, gamma, rho, qv, rhoYks, pres, T, stress, mom, G, pres_mag)
         $:GPU_ROUTINE(function_name='s_compute_pressure',parallelism='[seq]', &
-            & cray_inline=True)
+            & cray_noinline=True)
 
         real(stp), intent(in) :: energy, alf
         real(wp), intent(in) :: dyn_p
@@ -124,10 +128,10 @@ contains
 
         ! Chemistry
         real(wp), dimension(1:num_species), intent(in) :: rhoYks
+        real(wp), dimension(1:num_species) :: Y_rs
         real(wp) :: E_e
         real(wp) :: e_Per_Kg, Pdyn_Per_Kg
         real(wp) :: T_guess
-        real(wp), dimension(1:num_species) :: Y_rs
 
         integer :: s !< Generic loop iterator
 
@@ -238,6 +242,9 @@ contains
         !! @param gamma specific heat ratio
         !! @param pi_inf liquid stiffness
         !! @param qv fluid reference energy
+        !! @param Re_K Reynolds number (optional)
+        !! @param G_K Shear modulus (optional)
+        !! @param G Shear moduli of the fluids (optional)
     subroutine s_convert_species_to_mixture_variables(q_vf, k, l, r, rho, &
                                                       gamma, pi_inf, qv, Re_K, G_K, G)
 
@@ -252,8 +259,8 @@ contains
 
         real(wp), optional, dimension(2), intent(out) :: Re_K
         real(wp), optional, intent(out) :: G_K
-        real(wp), optional, dimension(num_fluids), intent(in) :: G
         real(wp), dimension(num_fluids) :: alpha_rho_K, alpha_K !<
+        real(wp), optional, dimension(num_fluids), intent(in) :: G
 
         integer :: i, j !< Generic loop iterator
 
@@ -313,18 +320,25 @@ contains
 
     end subroutine s_convert_species_to_mixture_variables
 
+    !> @brief GPU-accelerated conversion of species volume fractions and partial densities to mixture density, gamma, pi_inf, and qv.
     subroutine s_convert_species_to_mixture_variables_acc(rho_K, &
                                                           gamma_K, pi_inf_K, qv_K, &
                                                           alpha_K, alpha_rho_K, Re_K, &
                                                           G_K, G)
         $:GPU_ROUTINE(function_name='s_convert_species_to_mixture_variables_acc', &
-            & parallelism='[seq]', cray_inline=True)
+            & parallelism='[seq]', cray_noinline=True)
 
         real(wp), intent(out) :: rho_K, gamma_K, pi_inf_K, qv_K
-        real(wp), dimension(num_fluids), intent(inout) :: alpha_rho_K, alpha_K !<
+        #:if not MFC_CASE_OPTIMIZATION and USING_AMD
+            real(wp), dimension(3), intent(inout) :: alpha_rho_K, alpha_K !<
+            real(wp), optional, dimension(3), intent(in) :: G
+        #:else
+            real(wp), dimension(num_fluids), intent(inout) :: alpha_rho_K, alpha_K !<
+            real(wp), optional, dimension(num_fluids), intent(in) :: G
+        #:endif
         real(wp), dimension(2), intent(out) :: Re_K
         real(wp), optional, intent(out) :: G_K
-        real(wp), optional, dimension(num_fluids), intent(in) :: G
+        real(wp) :: alpha_K_sum
 
         integer :: i, j !< Generic loop iterators
 
@@ -340,11 +354,13 @@ contains
             qv_K = qvs(1)
         else
             if (mpp_lim) then
+                alpha_K_sum = 0._wp
                 do i = 1, num_fluids
                     alpha_rho_K(i) = max(0._wp, alpha_rho_K(i))
                     alpha_K(i) = min(max(0._wp, alpha_K(i)), 1._wp)
+                    alpha_K_sum = alpha_K_sum + alpha_K(i)
                 end do
-                alpha_K = alpha_K/max(sum(alpha_K), sgm_eps)
+                alpha_K = alpha_K/max(alpha_K_sum, sgm_eps)
             end if
             rho_K = 0._wp; gamma_K = 0._wp; pi_inf_K = 0._wp; qv_K = 0._wp
             do i = 1, num_fluids
@@ -496,7 +512,7 @@ contains
 
     end subroutine s_initialize_variables_conversion_module
 
-    !Initialize mv at the quadrature nodes based on the initialized moments and sigma
+    !> @brief Initializes bubble mass-vapor values at quadrature nodes from the conserved moment statistics.
     subroutine s_initialize_mv(qK_cons_vf, mv)
 
         type(scalar_field), dimension(sys_size), intent(in) :: qK_cons_vf
@@ -529,7 +545,7 @@ contains
 
     end subroutine s_initialize_mv
 
-    !Initialize pb at the quadrature nodes using isothermal relations (Preston model)
+    !> @brief Initializes bubble internal pressures at quadrature nodes using isothermal relations from the Preston model.
     subroutine s_initialize_pb(qK_cons_vf, mv, pb)
         type(scalar_field), dimension(sys_size), intent(in) :: qK_cons_vf
 
@@ -565,11 +581,9 @@ contains
     !> The following procedure handles the conversion between
         !!      the conservative variables and the primitive variables.
         !! @param qK_cons_vf Conservative variables
+        !! @param q_T_sf Temperature scalar field
         !! @param qK_prim_vf Primitive variables
-        !! @param gm_alphaK_vf Gradient magnitude of the volume fraction
-        !! @param ix Index bounds in first coordinate direction
-        !! @param iy Index bounds in second coordinate direction
-        !! @param iz Index bounds in third coordinate direction
+        !! @param ibounds Index bounds in each coordinate direction
     subroutine s_convert_conservative_to_primitive_variables(qK_cons_vf, &
                                                              q_T_sf, &
                                                              qK_prim_vf, &
@@ -579,13 +593,17 @@ contains
         type(scalar_field), intent(inout) :: q_T_sf
         type(scalar_field), dimension(sys_size), intent(inout) :: qK_prim_vf
         type(int_bounds_info), dimension(1:3), intent(in) :: ibounds
-
-        real(wp), dimension(num_fluids) :: alpha_K, alpha_rho_K
+        #:if USING_AMD and not MFC_CASE_OPTIMIZATION
+            real(wp), dimension(3) :: alpha_K, alpha_rho_K
+            real(wp), dimension(3) :: nRtmp
+            real(wp) :: rhoYks(1:10)
+        #:else
+            real(wp), dimension(num_fluids) :: alpha_K, alpha_rho_K
+            real(wp), dimension(nb) :: nRtmp
+            real(wp) :: rhoYks(1:num_species)
+        #:endif
         real(wp), dimension(2) :: Re_K
         real(wp) :: rho_K, gamma_K, pi_inf_K, qv_K, dyn_pres_K
-        real(wp), dimension(nb) :: nRtmp
-
-        real(wp) :: rhoYks(1:num_species)
 
         real(wp) :: vftmp, nbub_sc
 
@@ -834,11 +852,11 @@ contains
                     end if
 
                     if (hypoelasticity) then
+                        if (cont_damage) G_K = G_K*max((1._wp - qK_cons_vf(damage_idx)%sf(j, k, l)), 0._wp)
                         $:GPU_LOOP(parallelism='[seq]')
                         do i = strxb, strxe
                             ! subtracting elastic contribution for pressure calculation
                             if (G_K > verysmall) then
-                                if (cont_damage) G_K = G_K*max((1._wp - qK_cons_vf(damage_idx)%sf(j, k, l)), 0._wp)
                                 qK_prim_vf(E_idx)%sf(j, k, l) = qK_prim_vf(E_idx)%sf(j, k, l) - &
                                                                 ((qK_prim_vf(i)%sf(j, k, l)**2._wp)/(4._wp*G_K))/gamma_K
                                 ! Double for shear stresses
@@ -870,6 +888,7 @@ contains
 
                     if (cont_damage) qK_prim_vf(damage_idx)%sf(j, k, l) = qK_cons_vf(damage_idx)%sf(j, k, l)
 
+                    if (hyper_cleaning) qK_prim_vf(psi_idx)%sf(j, k, l) = qK_cons_vf(psi_idx)%sf(j, k, l)
 #ifdef MFC_POST_PROCESS
                     if (bubbles_lagrange) qK_prim_vf(beta_idx)%sf(j, k, l) = qK_cons_vf(beta_idx)%sf(j, k, l)
 #endif
@@ -883,12 +902,8 @@ contains
 
     !>  The following procedure handles the conversion between
         !!      the primitive variables and the conservative variables.
-        !!  @param qK_prim_vf Primitive variables
-        !!  @param qK_cons_vf Conservative variables
-        !!  @param gm_alphaK_vf Gradient magnitude of the volume fractions
-        !!  @param ix Index bounds in the first coordinate direction
-        !!  @param iy Index bounds in the second coordinate direction
-        !!  @param iz Index bounds in the third coordinate direction
+        !!  @param q_prim_vf Primitive variables
+        !!  @param q_cons_vf Conservative variables
     impure subroutine s_convert_primitive_to_conservative_variables(q_prim_vf, &
                                                                     q_cons_vf)
 
@@ -1088,8 +1103,6 @@ contains
                             nbub = 3._wp*q_prim_vf(alf_idx)%sf(j, k, l)/(4._wp*pi*R3tmp)
                         end if
 
-                        if (j == 0 .and. k == 0 .and. l == 0) print *, 'In convert, nbub:', nbub
-
                         do i = bub_idx%beg, bub_idx%end
                             q_cons_vf(i)%sf(j, k, l) = q_prim_vf(i)%sf(j, k, l)*nbub
                         end do
@@ -1110,11 +1123,10 @@ contains
                     end if
 
                     if (hypoelasticity) then
+                        if (cont_damage) G = G*max((1._wp - q_prim_vf(damage_idx)%sf(j, k, l)), 0._wp)
                         do i = strxb, strxe
                             ! adding elastic contribution
                             if (G > verysmall) then
-                                if (cont_damage) G = G*max((1._wp - q_prim_vf(damage_idx)%sf(j, k, l)), 0._wp)
-
                                 q_cons_vf(E_idx)%sf(j, k, l) = q_cons_vf(E_idx)%sf(j, k, l) + &
                                                                (q_prim_vf(i)%sf(j, k, l)**2._wp)/(4._wp*G)
                                 ! Double for shear stresses
@@ -1140,6 +1152,8 @@ contains
 
                     if (cont_damage) q_cons_vf(damage_idx)%sf(j, k, l) = q_prim_vf(damage_idx)%sf(j, k, l)
 
+                    if (hyper_cleaning) q_cons_vf(psi_idx)%sf(j, k, l) = q_prim_vf(psi_idx)%sf(j, k, l)
+
                 end do
             end do
         end do
@@ -1157,28 +1171,38 @@ contains
         !!  @param qK_prim_vf Primitive variables
         !!  @param FK_vf Flux variables
         !!  @param FK_src_vf Flux source variables
-        !!  @param ix Index bounds in the first coordinate direction
-        !!  @param iy Index bounds in the second coordinate direction
-        !!  @param iz Index bounds in the third coordinate direction
+        !!  @param is1 Index bounds in the first coordinate direction
+        !!  @param is2 Index bounds in the second coordinate direction
+        !!  @param is3 Index bounds in the third coordinate direction
+        !!  @param s2b Starting boundary index in the second coordinate direction
+        !!  @param s3b Starting boundary index in the third coordinate direction
     subroutine s_convert_primitive_to_flux_variables(qK_prim_vf, &
                                                      FK_vf, &
                                                      FK_src_vf, &
                                                      is1, is2, is3, s2b, s3b)
 
         integer, intent(in) :: s2b, s3b
-        real(wp), dimension(0:, s2b:, s3b:, 1:), intent(in) :: qK_prim_vf
-        real(wp), dimension(0:, s2b:, s3b:, 1:), intent(inout) :: FK_vf
-        real(wp), dimension(0:, s2b:, s3b:, advxb:), intent(inout) :: FK_src_vf
+        real(wp), dimension(0:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:), intent(in) :: qK_prim_vf
+        real(wp), dimension(0:, idwbuff(2)%beg:, idwbuff(3)%beg:, 1:), intent(inout) :: FK_vf
+        real(wp), dimension(0:, idwbuff(2)%beg:, idwbuff(3)%beg:, advxb:), intent(inout) :: FK_src_vf
 
         type(int_bounds_info), intent(in) :: is1, is2, is3
 
         ! Partial densities, density, velocity, pressure, energy, advection
         ! variables, the specific heat ratio and liquid stiffness functions,
         ! the shear and volume Reynolds numbers and the Weber numbers
-        real(wp), dimension(num_fluids) :: alpha_rho_K
-        real(wp), dimension(num_fluids) :: alpha_K
+        #:if not MFC_CASE_OPTIMIZATION and USING_AMD
+            real(wp), dimension(3) :: alpha_rho_K
+            real(wp), dimension(3) :: alpha_K
+            real(wp), dimension(3) :: vel_K
+            real(wp), dimension(10) :: Y_K
+        #:else
+            real(wp), dimension(num_fluids) :: alpha_rho_K
+            real(wp), dimension(num_fluids) :: alpha_K
+            real(wp), dimension(num_vels) :: vel_K
+            real(wp), dimension(num_species) :: Y_K
+        #:endif
         real(wp) :: rho_K
-        real(wp), dimension(num_vels) :: vel_K
         real(wp) :: vel_K_sum
         real(wp) :: pres_K
         real(wp) :: E_K
@@ -1187,7 +1211,6 @@ contains
         real(wp) :: qv_K
         real(wp), dimension(2) :: Re_K
         real(wp) :: G_K
-        real(wp), dimension(num_species) :: Y_K
         real(wp) :: T_K, mix_mol_weight, R_gas
 
         integer :: i, j, k, l !< Generic loop iterators
@@ -1312,11 +1335,16 @@ contains
     !>  This subroutine computes partial densities and volume fractions
     subroutine s_compute_species_fraction(q_vf, k, l, r, alpha_rho_K, alpha_K)
         $:GPU_ROUTINE(function_name='s_compute_species_fraction', &
-            & parallelism='[seq]', cray_inline=True)
+            & parallelism='[seq]', cray_noinline=True)
         type(scalar_field), dimension(sys_size), intent(in) :: q_vf
         integer, intent(in) :: k, l, r
-        real(wp), dimension(num_fluids), intent(out) :: alpha_rho_K, alpha_K
+        #:if not MFC_CASE_OPTIMIZATION and USING_AMD
+            real(wp), dimension(3), intent(out) :: alpha_rho_K, alpha_K
+        #:else
+            real(wp), dimension(num_fluids), intent(out) :: alpha_rho_K, alpha_K
+        #:endif
         integer :: i
+        real(wp) :: alpha_K_sum
 
         if (num_fluids == 1) then
             alpha_rho_K(1) = q_vf(contxb)%sf(k, l, r)
@@ -1342,17 +1370,20 @@ contains
         end if
 
         if (mpp_lim) then
+            alpha_K_sum = 0._wp
             do i = 1, num_fluids
                 alpha_rho_K(i) = max(0._wp, alpha_rho_K(i))
                 alpha_K(i) = min(max(0._wp, alpha_K(i)), 1._wp)
+                alpha_K_sum = alpha_K_sum + alpha_K(i)
             end do
-            alpha_K = alpha_K/max(sum(alpha_K), 1.e-16_wp)
+            alpha_K = alpha_K/max(alpha_K_sum, 1.e-16_wp)
         end if
 
         if (num_fluids == 1 .and. bubbles_euler) alpha_K(1) = q_vf(advxb)%sf(k, l, r)
 
     end subroutine s_compute_species_fraction
 
+    !> @brief Deallocates fluid property arrays and post-processing fields allocated during module initialization.
     impure subroutine s_finalize_variables_conversion_module()
 
         ! Deallocating the density, the specific heat ratio function and the
@@ -1376,14 +1407,18 @@ contains
     end subroutine s_finalize_variables_conversion_module
 
 #ifndef MFC_PRE_PROCESS
+    !> @brief Computes the speed of sound from thermodynamic state variables, supporting multiple equation-of-state models.
     subroutine s_compute_speed_of_sound(pres, rho, gamma, pi_inf, H, adv, vel_sum, c_c, c, qv)
-        $:GPU_ROUTINE(function_name='s_compute_speed_of_sound', &
-            & parallelism='[seq]', cray_inline=True)
+        $:GPU_ROUTINE(parallelism='[seq]')
 
         real(wp), intent(in) :: pres
         real(wp), intent(in) :: rho, gamma, pi_inf, qv
         real(wp), intent(in) :: H
-        real(wp), dimension(num_fluids), intent(in) :: adv
+        #:if not MFC_CASE_OPTIMIZATION and USING_AMD
+            real(wp), dimension(3), intent(in) :: adv
+        #:else
+            real(wp), dimension(num_fluids), intent(in) :: adv
+        #:endif
         real(wp), intent(in) :: vel_sum
         real(wp), intent(in) :: c_c
         real(wp), intent(out) :: c
@@ -1442,9 +1477,10 @@ contains
 #endif
 
 #ifndef MFC_PRE_PROCESS
+    !> @brief Computes the fast magnetosonic wave speed from the sound speed, density, and magnetic field components.
     subroutine s_compute_fast_magnetosonic_speed(rho, c, B, norm, c_fast, h)
         $:GPU_ROUTINE(function_name='s_compute_fast_magnetosonic_speed', &
-            & parallelism='[seq]', cray_inline=True)
+            & parallelism='[seq]', cray_noinline=True)
 
         real(wp), intent(in) :: B(3), rho, c
         real(wp), intent(in) :: h ! only used for relativity

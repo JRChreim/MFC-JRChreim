@@ -1,10 +1,11 @@
 import os, json, glob, typing, dataclasses
 
-import pyrometheus as pyro
-import cantera     as ct
+# Note: pyrometheus and cantera are imported lazily in the methods that need them
+# to avoid slow startup times for commands that don't use chemistry features
+# Note: build is imported lazily to avoid circular import with build.py
 
 from ..printer import cons
-from ..        import common, build
+from ..        import common
 from ..state   import ARGS, ARG, gpuConfigOptions
 from ..case    import Case
 from ..        import case_validator
@@ -20,6 +21,7 @@ class MFCInputFile(Case):
         self.dirpath  = dirpath
 
     def generate_inp(self, target) -> None:
+        from .. import build  # pylint: disable=import-outside-toplevel
         target = build.get_target(target)
 
         # Save .inp input file
@@ -34,7 +36,10 @@ class MFCInputFile(Case):
         cons.print("Writing a (new) custom case.fpp file.")
         common.file_write(fpp_path, contents, True)
 
-    def get_cantera_solution(self) -> ct.Solution:
+    def get_cantera_solution(self):
+        # Lazy import to avoid slow startup for commands that don't need chemistry
+        import cantera as ct  # pylint: disable=import-outside-toplevel
+
         if self.params.get("chemistry", 'F') == 'T':
             cantera_file = self.params["cantera_file"]
 
@@ -58,6 +63,9 @@ class MFCInputFile(Case):
         raise common.MFCException(f"Cantera file '{cantera_file}' not found. Searched: {', '.join(candidates)}.")
 
     def generate_fpp(self, target) -> None:
+        # Lazy import to avoid slow startup for commands that don't need chemistry
+        import pyrometheus as pyro  # pylint: disable=import-outside-toplevel
+
         if target.isDependency:
             return
 
@@ -82,13 +90,44 @@ class MFCInputFile(Case):
             directive_str = None
 
         # Write the generated Fortran code to the m_thermochem.f90 file with the chosen precision
+        sol = self.get_cantera_solution()
+
+        thermochem_code = pyro.FortranCodeGenerator().generate(
+            "m_thermochem",
+            sol,
+            pyro.CodeGenerationOptions(scalar_type = real_type, directive_offload = directive_str)
+        )
+
+        # CCE 19.0.0 workaround: pyrometheus generates !DIR$ INLINEALWAYS for Cray+ACC
+        # but omits !$acc routine seq, so thermochem routines are not registered as
+        # OpenACC device routines. Replace with plain !$acc routine seq (no INLINEALWAYS).
+        # This patch can be removed once pyrometheus upstream correctly emits !$acc routine seq
+        # for Cray+OpenACC (the broken macro originates in pyrometheus's code generator).
+        if directive_str == 'acc':
+            old_macro = (
+                "#ifdef _CRAYFTN\n#define GPU_ROUTINE(name) !DIR$ INLINEALWAYS name\n"
+                "#else\n#define GPU_ROUTINE(name) !$acc routine seq\n#endif"
+            )
+            new_macro = "#define GPU_ROUTINE(name) !$acc routine seq"
+            patched = thermochem_code.replace(old_macro, new_macro)
+            if patched == thermochem_code:
+                if new_macro in thermochem_code:
+                    pass  # pyrometheus already emits the correct form; no patch needed
+                else:
+                    raise common.MFCException(
+                        "CCE 19.0.0 workaround: pyrometheus output format changed — "
+                        "Cray+ACC GPU_ROUTINE macro patch did not apply. "
+                        "Update the pattern in toolchain/mfc/run/input.py."
+                    )
+            else:
+                cons.print("[yellow]Warning: Applied CCE 19.0.0 workaround patch to pyrometheus-generated "
+                           "m_thermochem.f90 (replaced _CRAYFTN GPU_ROUTINE macro with !$acc routine seq). "
+                           "Remove this patch once pyrometheus emits correct Cray+ACC directives upstream.[/yellow]")
+            thermochem_code = patched
+
         common.file_write(
             os.path.join(modules_dir, "m_thermochem.f90"),
-            pyro.FortranCodeGenerator().generate(
-                "m_thermochem",
-                self.get_cantera_solution(),
-                pyro.CodeGenerationOptions(scalar_type = real_type, directive_offload = directive_str)
-            ),
+            thermochem_code,
             True
         )
 
@@ -97,13 +136,21 @@ class MFCInputFile(Case):
 
     def validate_constraints(self, target) -> None:
         """Validate case parameter constraints for a given target stage"""
+        from .. import build  # pylint: disable=import-outside-toplevel
         target_obj = build.get_target(target)
         stage = target_obj.name
 
         try:
-            case_validator.validate_case_constraints(self.params, stage)
+            warnings = case_validator.validate_case_constraints(self.params, stage)
         except case_validator.CaseConstraintError as e:
             raise common.MFCException(f"Case validation failed for {stage}:\n{e}") from e
+
+        if warnings:
+            cons.print()
+            cons.print("[bold yellow]Physics warnings:[/bold yellow]")
+            for warning in warnings:
+                cons.print(f"  [yellow]- {warning}[/yellow]")
+            cons.print()
 
     # Generate case.fpp & [target.name].inp
     def generate(self, target) -> None:
@@ -114,6 +161,7 @@ class MFCInputFile(Case):
         self.generate_fpp(target)
 
     def clean(self, _targets) -> None:
+        from .. import build  # pylint: disable=import-outside-toplevel
         targets = [build.get_target(target) for target in _targets]
 
         files = set()
@@ -181,8 +229,13 @@ def load(filepath: str = None, args: typing.List[str] = None, empty_data: dict =
             raise common.MFCException(f"Input file {filename} terminated with a non-zero exit code. Please make sure running the file doesn't produce any errors.")
     elif filename.endswith(".json"):
         json_str = common.file_read(filename)
+    elif filename.endswith((".yaml", ".yml")):
+        import yaml  # pylint: disable=import-outside-toplevel
+        with open(filename, 'r') as f:
+            dictionary = yaml.safe_load(f)
+        json_str = json.dumps(dictionary)
     else:
-        raise common.MFCException("Unrecognized input file format. Only .py and .json files are supported. Please check the README and sample cases in the examples directory.")
+        raise common.MFCException("Unrecognized input file format. Supported: .py, .json, .yaml, .yml. Please check the README and sample cases in the examples directory.")
 
     try:
         dictionary = json.loads(json_str)

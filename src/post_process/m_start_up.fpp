@@ -1,13 +1,10 @@
 #:include 'macros.fpp'
 
 !>
-!! @file m_start_up.f90
+!! @file
 !! @brief  Contains module m_start_up
 
-!> @brief This module contains the subroutines that read in and check the
-!!              consistency of the user provided inputs. This module also allocates, initializes and
-!!              deallocates the relevant variables and sets up the time stepping,
-!!              MPI decomposition and I/O procedures
+!> @brief Reads and validates user inputs, allocates variables, and configures MPI decomposition and I/O for post-processing
 
 module m_start_up
 
@@ -112,7 +109,7 @@ contains
             relax_model, cf_wrt, sigma, adv_n, ib, num_ibs, &
             cfl_adap_dt, cfl_const_dt, t_save, t_stop, n_start, &
             cfl_target, surface_tension, bubbles_lagrange, &
-            sim_data, hyperelasticity, Bx0, relativity, cont_damage, &
+            sim_data, hyperelasticity, Bx0, relativity, cont_damage, hyper_cleaning, &
             num_bc_patches, igr, igr_order, down_sample, recon_type, &
             muscl_order, lag_header, lag_txt_wrt, lag_db_wrt, &
             lag_id_wrt, lag_pos_wrt, lag_pos_prev_wrt, lag_vel_wrt, &
@@ -200,6 +197,7 @@ contains
 
     end subroutine s_check_input_file
 
+    !> @brief Load grid and conservative data for a time step, fill ghost-cell buffers, and convert to primitive variables.
     impure subroutine s_perform_time_step(t_step)
 
         integer, intent(inout) :: t_step
@@ -234,6 +232,7 @@ contains
 
     end subroutine s_perform_time_step
 
+    !> @brief Derive requested flow quantities from primitive variables and write them to the formatted database files.
     impure subroutine s_save_data(t_step, varname, pres, c, H)
 
         integer, intent(inout) :: t_step
@@ -600,6 +599,14 @@ contains
             varname(:) = ' '
         end if
 
+        if (hyper_cleaning) then
+            q_sf = q_cons_vf(psi_idx)%sf(x_beg:x_end, y_beg:y_end, z_beg:z_end)
+            write (varname, '(A)') 'psi'
+            call s_write_variable_to_formatted_database_file(varname, t_step)
+
+            varname(:) = ' '
+        end if
+
         ! Adding the pressure to the formatted database file
         if (pres_wrt .or. prim_vars_wrt) then
             q_sf(:, :, :) = q_prim_vf(E_idx)%sf(x_beg:x_end, y_beg:y_end, z_beg:z_end)
@@ -885,6 +892,7 @@ contains
 
     end subroutine s_save_data
 
+    !> @brief Transpose 3-D complex data from x-pencil to y-pencil layout via MPI_Alltoall.
     subroutine s_mpi_transpose_x2y
         complex(c_double_complex), allocatable :: sendbuf(:), recvbuf(:)
         integer :: dest_rank, src_rank
@@ -925,6 +933,7 @@ contains
 
     end subroutine s_mpi_transpose_x2y
 
+    !> @brief Transpose 3-D complex data from y-pencil to z-pencil layout via MPI_Alltoall.
     subroutine s_mpi_transpose_y2z
         complex(c_double_complex), allocatable :: sendbuf(:), recvbuf(:)
         integer :: dest_rank, src_rank
@@ -965,6 +974,7 @@ contains
 
     end subroutine s_mpi_transpose_y2z
 
+    !> @brief Initialize all post-process sub-modules, set up I/O pointers, and prepare FFTW plans and MPI communicators.
     impure subroutine s_initialize_modules
         ! Computation of parameters, allocation procedures, and/or any other tasks
         ! needed to properly setup the modules
@@ -1065,6 +1075,7 @@ contains
 #endif
     end subroutine s_initialize_modules
 
+    !> @brief Perform a distributed forward 3-D FFT using pencil decomposition with FFTW and MPI transposes.
     subroutine s_mpi_FFT_fwd
 
         integer :: j, k, l
@@ -1133,11 +1144,11 @@ contains
 
     end subroutine s_mpi_FFT_fwd
 
+    !> @brief Set up the MPI environment, read and broadcast user inputs, and decompose the computational domain.
     impure subroutine s_initialize_mpi_domain
 
         num_dims = 1 + min(1, n) + min(1, p)
 
-#ifdef MFC_MPI
         ! Initialization of the MPI environment
         call s_mpi_initialize()
 
@@ -1155,16 +1166,15 @@ contains
 
         ! Broadcasting the user inputs to all of the processors and performing the
         ! parallel computational domain decomposition. Neither procedure has to be
-        ! carried out if the simulation is in fact not truly executed in parallel.
+        ! carried out if the post-process is in fact not truly executed in parallel.
         call s_mpi_bcast_user_inputs()
         call s_initialize_parallel_io()
         call s_mpi_decompose_computational_domain()
         call s_check_inputs_fft()
 
-#endif
-
     end subroutine s_initialize_mpi_domain
 
+    !> @brief Destroy FFTW plans, free MPI communicators, and finalize all post-process sub-modules.
     impure subroutine s_finalize_modules
         ! Disassociate pointers for serial and parallel I/O
         s_read_data_files => null()

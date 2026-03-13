@@ -2,9 +2,10 @@
 #:include 'macros.fpp'
 
 !>
-!! @file m_helper.f90
+!! @file
 !! @brief Contains module m_helper
 
+!> @brief Utility routines for bubble model setup, coordinate transforms, array sampling, and special functions
 module m_helper
 
     use m_derived_types        !< Definitions of the derived types
@@ -33,9 +34,8 @@ module m_helper
               s_print_2D_array, &
               f_xor, &
               f_logical_to_int, &
-              unassociated_legendre, &
               associated_legendre, &
-              spherical_harmonic_func, &
+              real_ylm, &
               double_factorial, &
               factorial, &
               f_cut_on, &
@@ -49,6 +49,7 @@ contains
         !! @param vftmp is the void fraction
         !! @param Rtmp is the  bubble radii
         !! @param ntmp is the output number bubble density
+        !! @param weights is the quadrature weights
     subroutine s_comp_n_from_prim(vftmp, Rtmp, ntmp, weights)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), intent(in) :: vftmp
@@ -63,6 +64,7 @@ contains
 
     end subroutine s_comp_n_from_prim
 
+    !> @brief Computes the bubble number density from the conservative void fraction and weighted bubble radii.
     subroutine s_comp_n_from_cons(vftmp, nRtmp, ntmp, weights)
         $:GPU_ROUTINE(parallelism='[seq]')
         real(wp), intent(in) :: vftmp
@@ -77,6 +79,7 @@ contains
 
     end subroutine s_comp_n_from_cons
 
+    !> @brief Prints a 2D real array to standard output, optionally dividing each element by a given scalar.
     impure subroutine s_print_2D_array(A, div)
 
         real(wp), dimension(:, :), intent(in) :: A
@@ -272,6 +275,7 @@ contains
 
     end subroutine s_transcoeff
 
+    !> @brief Converts an integer to its trimmed string representation.
     elemental subroutine s_int_to_str(i, res)
 
         integer, intent(in) :: i
@@ -328,6 +332,8 @@ contains
     !! @return The cross product of the two vectors.
     pure function f_cross(a, b) result(c)
 
+        $:GPU_ROUTINE(parallelism='[seq]')
+
         real(wp), dimension(3), intent(in) :: a, b
         real(wp), dimension(3) :: c
 
@@ -350,7 +356,8 @@ contains
     end subroutine s_swap
 
     !> This procedure creates a transformation matrix.
-    !! @param  p Parameters for the transformation.
+    !! @param param Parameters for the transformation.
+    !! @param center Optional center point for the transformation.
     !! @return Transformation matrix.
     function f_create_transform_matrix(param, center) result(out_matrix)
 
@@ -428,6 +435,7 @@ contains
     !> This procedure transforms a triangle by a matrix, one vertex at a time.
     !! @param triangle Triangle to transform.
     !! @param matrix   Transformation matrix.
+    !! @param matrix_n Normal transformation matrix.
     subroutine s_transform_triangle(triangle, matrix, matrix_n)
 
         type(t_triangle), intent(inout) :: triangle
@@ -444,8 +452,9 @@ contains
     end subroutine s_transform_triangle
 
     !> This procedure transforms a model by a matrix, one triangle at a time.
-    !! @param model  Model to transform.
-    !! @param matrix Transformation matrix.
+    !! @param model    Model to transform.
+    !! @param matrix   Transformation matrix.
+    !! @param matrix_n Normal transformation matrix.
     subroutine s_transform_model(model, matrix, matrix_n)
 
         type(t_model), intent(inout) :: model
@@ -500,7 +509,7 @@ contains
     end function f_xor
 
     !> This procedure converts logical to 1 or 0.
-    !! @param perdicate A Logical argument.
+    !! @param predicate A Logical argument.
     !! @return 1 if .true., 0 if .false..
     elemental function f_logical_to_int(predicate) result(int)
 
@@ -514,72 +523,66 @@ contains
         end if
     end function f_logical_to_int
 
-    !> This function generates the unassociated legendre poynomials
-    !! @param x is the input value
-    !! @param l is the degree
-    !! @return P is the unassociated legendre polynomial evaluated at x
-    recursive function unassociated_legendre(x, l) result(result_P)
+    !> Real spherical harmonic Y_lm(theta, phi). theta = polar angle from +z (acos(z/r)),
+    !! phi = atan2(y,x). Uses associated Legendre P_l^|m|(cos theta). Standard normalisation.
+    function real_ylm(theta, phi, l, m) result(Y)
+        integer, intent(in) :: l, m
+        real(wp), intent(in) :: theta, phi
+        real(wp) :: Y, x, prefac
+        integer :: m_abs
 
-        integer, intent(in) :: l
-        real(wp), intent(in) :: x
-        real(wp) :: result_P
-
-        if (l == 0) then
-            result_P = 1._wp
-        else if (l == 1) then
-            result_P = x
+        m_abs = abs(m)
+        if (m_abs > l) then
+            Y = 0._wp
+            return
+        end if
+        x = cos(theta)
+        prefac = sqrt((2*l + 1)*real(factorial(l - m_abs), wp)/real(factorial(l + m_abs), wp)/(4._wp*pi))
+        if (m == 0) then
+            Y = prefac*associated_legendre(x, l, 0)
+        else if (m > 0) then
+            Y = prefac*sqrt(2._wp)*associated_legendre(x, l, m_abs)*cos(m*phi)
         else
-            result_P = ((2*l - 1)*x*unassociated_legendre(x, l - 1) - (l - 1)*unassociated_legendre(x, l - 2))/l
+            Y = prefac*sqrt(2._wp)*associated_legendre(x, l, m_abs)*sin(m_abs*phi)
         end if
+    end function real_ylm
 
-    end function unassociated_legendre
-
-    !> This function calculates the spherical harmonic function evaluated at x and phi
-    !! @param x is the x coordinate
-    !! @param phi is the phi coordinate
-    !! @param l is the degree
-    !! @param m_order is the order
-    !! @return Y is the spherical harmonic function evaluated at x and phi
-    recursive function spherical_harmonic_func(x, phi, l, m_order) result(Y)
-
-        integer, intent(in) :: l, m_order
-        real(wp), intent(in) :: x, phi
-        real(wp) :: Y, prefactor, local_pi
-
-        local_pi = acos(-1._wp)
-        prefactor = sqrt((2*l + 1)/(4*local_pi)*factorial(l - m_order)/factorial(l + m_order)); 
-        if (m_order == 0) then
-            Y = prefactor*associated_legendre(x, l, m_order); 
-        elseif (m_order > 0) then
-            Y = (-1._wp)**m_order*sqrt(2._wp)*prefactor*associated_legendre(x, l, m_order)*cos(m_order*phi); 
-        end if
-
-    end function spherical_harmonic_func
-
-    !> This function generates the associated legendre polynomials evaluated
-    !! at x with inputs l and m
-    !! @param x is the input value
-    !! @param l is the degree
-    !! @param m_order is the order
-    !! @return P is the associated legendre polynomial evaluated at x
+    !> Associated Legendre polynomial P_l^m(x) (Ferrers function, Condon-Shortley phase).
+    !! Valid for integer l >= 0, 0 <= m <= l, and x in [-1,1]. Returns 0 for |m| > l or l < 0.
+    !! Formulas: DLMF 14.10.3 (recurrence in degree), Wikipedia "Associated Legendre polynomials"
+    !! (P_l^l and P_l^{l-1} identities). Recurrence: (l-m)P_l^m = (2l-1)x P_{l-1}^m - (l+m-1)P_{l-2}^m.
+    !! @param x argument (typically cos(theta)), should be in [-1,1]
+    !! @param l degree (>= 0)
+    !! @param m_order order (0 <= m_order <= l)
+    !! @return result_P P_l^m(x)
     recursive function associated_legendre(x, l, m_order) result(result_P)
 
         integer, intent(in) :: l, m_order
         real(wp), intent(in) :: x
         real(wp) :: result_P
+        real(wp) :: one_minus_x2
+
+        ! Out-of-domain: P_l^m = 0 for |m| > l or l < 0 (standard convention)
+        if (l < 0 .or. m_order < 0 .or. m_order > l) then
+            result_P = 0._wp
+            return
+        end if
 
         if (m_order <= 0 .and. l <= 0) then
-            result_P = 1; 
+            result_P = 1._wp
         elseif (l == 1 .and. m_order <= 0) then
-            result_P = x; 
+            result_P = x
         elseif (l == 1 .and. m_order == 1) then
-            result_P = -(1 - x**2)**(1._wp/2._wp); 
+            one_minus_x2 = max(0._wp, 1._wp - x**2)
+            result_P = -sqrt(one_minus_x2)
         elseif (m_order == l) then
-            result_P = (-1)**l*double_factorial(2*l - 1)*(1 - x**2)**(l/2); 
+            ! P_l^l(x) = (-1)^l (2l-1)!! (1-x^2)^(l/2). Use real exponent for odd l
+            one_minus_x2 = max(0._wp, 1._wp - x**2)
+            result_P = (-1)**l*real(double_factorial(2*l - 1), wp)*one_minus_x2**(0.5_wp*real(l, wp))
         elseif (m_order == l - 1) then
-            result_P = x*(2*l - 1)*associated_legendre(x, l - 1, l - 1); 
+            result_P = x*(2*l - 1)*associated_legendre(x, l - 1, l - 1)
         else
-            result_P = ((2*l - 1)*x*associated_legendre(x, l - 1, m_order) - (l + m_order - 1)*associated_legendre(x, l - 2, m_order))/(l - m_order); 
+            result_P = ((2*l - 1)*x*associated_legendre(x, l - 1, m_order) - (l + m_order - 1)*associated_legendre(x, l - 2, m_order))/(l - m_order)
         end if
 
     end function associated_legendre
@@ -659,6 +662,7 @@ contains
 
     end function f_gx
 
+    !> @brief Downsamples conservative variable fields by a factor of 3 in each direction using volume averaging.
     subroutine s_downsample_data(q_cons_vf, q_cons_temp, m_ds, n_ds, p_ds, m_glb_ds, n_glb_ds, p_glb_ds)
 
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf, q_cons_temp
@@ -700,6 +704,7 @@ contains
 
     end subroutine s_downsample_data
 
+    !> @brief Upsamples conservative variable fields from a coarsened grid back to the original resolution using interpolation.
     subroutine s_upsample_data(q_cons_vf, q_cons_temp)
 
         type(scalar_field), intent(inout), dimension(sys_size) :: q_cons_vf, q_cons_temp

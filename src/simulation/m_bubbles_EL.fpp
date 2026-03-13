@@ -1,10 +1,10 @@
 !>
-!! @file m_bubbles_EL.fpp
-!! @brief Contains module m_bubbles_EL
+!! @file
+!! @brief Contains module @ref m_bubbles_el "m_bubbles_EL"
 
 #:include 'macros.fpp'
 
-!> @brief This module is used to to compute the volume-averaged bubble model
+!> @brief Tracks Lagrangian bubbles and couples their dynamics to the Eulerian flow via volume averaging
 module m_bubbles_EL
 
     use m_global_parameters             !< Definitions of the global parameters
@@ -521,10 +521,7 @@ contains
     end subroutine s_restart_bubbles
 
     !>  Contains the bubble dynamics subroutines.
-        !! @param q_cons_vf Conservative variables
         !! @param q_prim_vf Primitive variables
-        !! @param rhs_vf Calculated change of conservative variables
-        !! @param t_step Current time step
         !! @param stage Current stage in the time-stepper algorithm
     subroutine s_compute_bubble_EL_dynamics(q_prim_vf, stage)
 
@@ -537,7 +534,11 @@ contains
         real(wp) :: myR, myV, myBeta_c, myBeta_t, myR0, myPbdot, myMvdot
         real(wp) :: myPinf, aux1, aux2, myCson, myRho
         real(wp) :: gamma, pi_inf, qv
-        real(wp), dimension(contxe) :: myalpha_rho, myalpha
+        #:if not MFC_CASE_OPTIMIZATION and USING_AMD
+            real(wp), dimension(3) :: myalpha_rho, myalpha
+        #:else
+            real(wp), dimension(num_fluids) :: myalpha_rho, myalpha
+        #:endif
         real(wp), dimension(2) :: Re
         integer, dimension(3) :: cell
 
@@ -551,7 +552,7 @@ contains
         ! Subgrid p_inf model based on Maeda and Colonius (2018).
         if (lag_params%pressure_corrector) then
             ! Calculate velocity potentials (valid for one bubble per cell)
-            $:GPU_PARALLEL_LOOP(private='[k,cell]')
+            $:GPU_PARALLEL_LOOP(private='[k,cell,paux,preterm1,term2,Romega,myR0,myR,myV,myPb,pint,term1_fac]')
             do k = 1, nBubs
                 call s_get_pinf(k, q_prim_vf, 2, paux, cell, preterm1, term2, Romega)
                 myR0 = bub_R0(k)
@@ -573,7 +574,7 @@ contains
 
         ! Radial motion model
         adap_dt_stop_max = 0
-        $:GPU_PARALLEL_LOOP(private='[k,i,myalpha_rho,myalpha,Re,cell]', &
+        $:GPU_PARALLEL_LOOP(private='[k,i,myalpha_rho,myalpha,Re,cell,myVapFlux,preterm1, term2, paux, pint, Romega, term1_fac,myR_m, mygamma_m, myPb, myMass_n, myMass_v,myR, myV, myBeta_c, myBeta_t, myR0, myPbdot, myMvdot,myPinf, aux1, aux2, myCson, myRho,gamma,pi_inf,qv,dmalf, dmntait, dmBtait, dm_bub_adv_src, dm_divu,adap_dt_stop]', &
             & reduction='[[adap_dt_stop_max]]',reductionOp='[MAX]', &
             & copy='[adap_dt_stop_max]',copyin='[stage]')
         do k = 1, nBubs
@@ -760,7 +761,6 @@ contains
     end subroutine s_compute_bubbles_EL_source
 
     !>  This procedure computes the speed of sound from a given driving pressure
-        !! @param bub_id Bubble id
         !! @param q_prim_vf Primitive variables
         !! @param pinf Driving pressure
         !! @param cell Bubble cell
@@ -778,9 +778,14 @@ contains
         real(wp), intent(out) :: cson
 
         real(wp) :: E, H
-        real(wp), dimension(num_dims) :: vel
+        #:if not MFC_CASE_OPTIMIZATION and USING_AMD
+            real(wp), dimension(3) :: vel
+        #:else
+            real(wp), dimension(num_dims) :: vel
+        #:endif
         integer :: i
 
+        vel(:) = 0._wp
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_dims
             vel(i) = q_prim_vf(i + contxe)%sf(cell(1), cell(2), cell(3))
@@ -837,6 +842,8 @@ contains
         !! @param ptype 1: p at infinity, 2: averaged P at the bubble location
         !! @param f_pinfl Driving pressure
         !! @param cell Bubble cell
+        !! @param preterm1 Pre-computed term 1
+        !! @param term2 Computed term 2
         !! @param Romega Control volume radius
     subroutine s_get_pinf(bub_id, q_prim_vf, ptype, f_pinfl, cell, preterm1, term2, Romega)
         $:GPU_ROUTINE(function_name='s_get_pinf',parallelism='[seq]', &
@@ -1375,7 +1382,7 @@ contains
     end subroutine s_gradient_dir
 
     !> Subroutine that writes on each time step the changes of the lagrangian bubbles.
-        !!  @param q_time Current time
+        !!  @param qtime Current time
     impure subroutine s_write_lag_particles(qtime)
 
         real(wp), intent(in) :: qtime
@@ -1433,7 +1440,7 @@ contains
     !>  Subroutine that writes some useful statistics related to the volume fraction
             !!       of the particles (void fraction) in the computatioational domain
             !!       on each time step.
-            !!  @param q_time Current time
+            !!  @param qtime Current time
     impure subroutine s_write_void_evol(qtime)
 
         real(wp), intent(in) :: qtime
@@ -1525,8 +1532,7 @@ contains
         integer(KIND=MPI_OFFSET_KIND) :: disp
         integer :: view
         integer, dimension(2) :: gsizes, lsizes, start_idx_part
-        integer, dimension(num_procs) :: part_order, part_ord_mpi
-        integer, dimension(num_procs) :: proc_bubble_counts
+        integer, allocatable :: proc_bubble_counts(:)
         real(wp), dimension(1:1, 1:lag_io_vars) :: dummy
         dummy = 0._wp
 
@@ -1540,6 +1546,8 @@ contains
         end if
 
         if (.not. parallel_io) return
+
+        allocate (proc_bubble_counts(num_procs))
 
         lsizes(1) = bub_id
         lsizes(2) = lag_io_vars
@@ -1651,6 +1659,8 @@ contains
 
             call MPI_FILE_CLOSE(ifile, ierr)
         end if
+
+        deallocate (proc_bubble_counts)
 
 #endif
 

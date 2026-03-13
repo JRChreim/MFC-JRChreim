@@ -14,8 +14,256 @@ Based on the constraints enforced in:
 # pylint: disable=too-many-lines
 # Justification: Comprehensive validator covering all MFC parameter constraints
 
-from typing import Dict, Any, List
+import re
+from typing import Dict, Any, List, Set
+from functools import lru_cache
 from .common import MFCException
+from .params.definitions import CONSTRAINTS
+from .state import CFG
+
+
+# Physics documentation for check methods.
+# Each entry maps a check method name to metadata used by gen_physics_docs.py
+# to auto-generate docs/documentation/physics_constraints.md.
+# See the contributing guide for how to add entries.
+PHYSICS_DOCS = {
+    # --- Thermodynamic Constraints ---
+    "check_stiffened_eos": {
+        "title": "Stiffened EOS Positivity",
+        "category": "Thermodynamic Constraints",
+        "math": r"\Gamma > 0, \quad \Pi_\infty \geq 0, \quad c_v \geq 0",
+        "explanation": "The equation-of-state parameters must satisfy basic positivity requirements for thermodynamic stability.",
+        "references": ["Wilfong26"],
+    },
+    "check_eos_parameter_sanity": {
+        "title": "EOS Parameter Sanity (Transformed Gamma)",
+        "category": "Thermodynamic Constraints",
+        "math": r"\Gamma = \frac{1}{\gamma - 1}",
+        "explanation": (
+            "MFC uses the transformed stiffened gas parameter. "
+            "A common mistake is entering the physical gamma (e.g., 1.4 for air) "
+            "instead of the transformed value 1/(gamma-1) = 2.5."
+        ),
+        "references": ["Wilfong26", "Allaire02"],
+    },
+    "check_patch_physics": {
+        "title": "Patch Initial Condition Constraints",
+        "category": "Thermodynamic Constraints",
+        "math": r"p > 0, \quad \alpha_i \rho_i \geq 0, \quad 0 \leq \alpha_i \leq 1",
+        "explanation": (
+            "All initial patch pressures must be strictly positive. "
+            "Partial densities must be non-negative. "
+            "Volume fractions must be in [0,1]."
+        ),
+    },
+    # --- Mixture Constraints ---
+    "check_volume_fraction_sum": {
+        "title": "Volume Fraction Sum",
+        "category": "Mixture Constraints",
+        "math": r"\sum_{i=1}^{N_f} \alpha_i = 1",
+        "explanation": "For multi-component models, volume fractions must satisfy the mixture constraint.",
+        "exceptions": [
+            "Single-fluid Euler-Euler bubble models (alpha represents void fraction)",
+            "Lagrangian bubble models (Lagrangian phase not tracked on Euler grid)",
+            "IBM cases (alpha acts as level-set indicator)",
+            "Alter patches and hard-coded IC patches (values computed at runtime)",
+            "Analytical expressions (cannot validate statically)",
+        ],
+    },
+    "check_alpha_rho_consistency": {
+        "title": "Alpha-Rho Consistency",
+        "category": "Mixture Constraints",
+        "math": r"\alpha_j = 0 \Rightarrow \alpha_j \rho_j = 0, \quad \alpha_j > 0 \Rightarrow \alpha_j \rho_j > 0",
+        "explanation": (
+            "Warns about physically inconsistent combinations: "
+            "density assigned to an absent phase, or a present phase with zero density."
+        ),
+    },
+    # --- Domain and Geometry ---
+    "check_domain_bounds": {
+        "title": "Domain Bounds",
+        "category": "Domain and Geometry",
+        "math": r"x_{\mathrm{end}} > x_{\mathrm{beg}}, \quad y_{\mathrm{end}} > y_{\mathrm{beg}}, \quad z_{\mathrm{end}} > z_{\mathrm{beg}}",
+        "explanation": "Each active spatial dimension must have positive extent.",
+    },
+    "check_simulation_domain": {
+        "title": "Dimensionality",
+        "category": "Domain and Geometry",
+        "math": r"m > 0, \quad n \geq 0, \quad p \geq 0",
+        "explanation": (
+            "The x-direction must have cells. Cannot have z without y. "
+            "Cylindrical coordinates require odd p."
+        ),
+    },
+    "check_patch_within_domain": {
+        "title": "Patch Within Domain",
+        "category": "Domain and Geometry",
+        "explanation": (
+            "For patches with centroid + length geometry, the bounding box must not be "
+            "entirely outside the computational domain. Skipped when grid stretching is active."
+        ),
+    },
+    # --- Velocity and Dimensional Consistency ---
+    "check_velocity_components": {
+        "title": "Velocity Components in Inactive Dimensions",
+        "category": "Velocity and Dimensional Consistency",
+        "math": r"n = 0 \Rightarrow v_2 = 0, \quad p = 0 \Rightarrow v_3 = 0",
+        "explanation": "Setting velocity components in dimensions that do not exist is almost certainly a mistake.",
+        "exceptions": ["MHD simulations (transverse velocity couples to magnetic field in 1D)"],
+    },
+    # --- Model Equations ---
+    "check_model_eqns_and_num_fluids": {
+        "title": "Model Equation Selection",
+        "category": "Model Equations",
+        "explanation": (
+            "Model 1: gamma-law single-fluid. "
+            "Model 2: five-equation (Allaire). "
+            "Model 3: six-equation (Saurel). "
+            "Model 4: four-equation (single-component with bubbles)."
+        ),
+        "references": ["Wilfong26", "Allaire02", "Saurel09"],
+    },
+    # --- Boundary Conditions ---
+    "check_boundary_conditions": {
+        "title": "Boundary Condition Compatibility",
+        "category": "Boundary Conditions",
+        "explanation": (
+            "Periodicity must match on both ends. Valid BC values range from -1 to -17. "
+            "Cylindrical coordinates have specific BC requirements at the axis."
+        ),
+    },
+    # --- Bubble Physics ---
+    "check_bubbles_euler": {
+        "title": "Euler-Euler Bubble Model",
+        "category": "Bubble Physics",
+        "explanation": (
+            "Requires nb >= 1, positive reference quantities. "
+            "Polydisperse requires odd nb > 1 and poly_sigma > 0. QBMM requires nnode = 4."
+        ),
+        "references": ["Bryngelson21"],
+    },
+    "check_bubbles_euler_simulation": {
+        "title": "Bubble Simulation Constraints",
+        "category": "Bubble Physics",
+        "explanation": (
+            "Requires HLLC Riemann solver and arithmetic average. "
+            "Five-equation model does not support Gilmore bubble_model."
+        ),
+    },
+    "check_bubbles_lagrange": {
+        "title": "Euler-Lagrange Bubble Model",
+        "category": "Bubble Physics",
+        "explanation": "2D/3D only. Requires polytropic = F and thermal = 3. Not compatible with model_eqns = 3.",
+    },
+    # --- Numerical Schemes ---
+    "check_weno": {
+        "title": "WENO Reconstruction",
+        "category": "Numerical Schemes",
+        "explanation": (
+            "weno_order must be 1, 3, 5, or 7. Grid must have enough cells. "
+            "Only one of mapped_weno, wenoz, teno can be active."
+        ),
+    },
+    "check_muscl": {
+        "title": "MUSCL Reconstruction",
+        "category": "Numerical Schemes",
+        "explanation": "muscl_order must be 1 or 2. Second order requires muscl_lim in {1,2,3,4,5}.",
+    },
+    "check_time_stepping": {
+        "title": "Time Stepping",
+        "category": "Numerical Schemes",
+        "explanation": (
+            "time_stepper in {1,2,3}. Fixed dt must be positive. "
+            "CFL-based modes require cfl_target in (0,1]."
+        ),
+    },
+    "check_viscosity": {
+        "title": "Viscosity",
+        "category": "Numerical Schemes",
+        "math": r"\mathrm{Re}_1 > 0, \quad \mathrm{Re}_2 > 0",
+        "explanation": "Reynolds numbers must be positive. Not supported with model_eqns = 1.",
+    },
+    # --- Feature Compatibility ---
+    "check_mhd": {
+        "title": "Magnetohydrodynamics (MHD)",
+        "category": "Feature Compatibility",
+        "explanation": (
+            "Requires model_eqns = 2, num_fluids = 1, HLL or HLLD Riemann solver. "
+            "No relativity with HLLD."
+        ),
+    },
+    "check_surface_tension": {
+        "title": "Surface Tension",
+        "category": "Feature Compatibility",
+        "explanation": "Requires model_eqns 2 or 3, num_fluids = 2.",
+    },
+    "check_hypoelasticity": {
+        "title": "Hypoelasticity",
+        "category": "Feature Compatibility",
+        "explanation": "Requires model_eqns = 2, HLL Riemann solver.",
+    },
+    "check_phase_change": {
+        "title": "Phase Change",
+        "category": "Feature Compatibility",
+        "explanation": "Model 2: relax_model 5 or 6. Model 3: relax_model 1, 4, 5, or 6.",
+    },
+    "check_alt_soundspeed": {
+        "title": "Alternative Sound Speed",
+        "category": "Feature Compatibility",
+        "explanation": "Requires model_eqns = 2, num_fluids 2 or 3, HLLC solver. Incompatible with bubbles.",
+    },
+    "check_igr": {
+        "title": "Iterative Generalized Riemann (IGR)",
+        "category": "Feature Compatibility",
+        "explanation": (
+            "Requires model_eqns = 2. Incompatible with characteristic BCs, "
+            "bubbles, MHD, and elastic models."
+        ),
+    },
+    # --- Acoustic Sources ---
+    "check_acoustic_source": {
+        "title": "Acoustic Sources",
+        "category": "Acoustic Sources",
+        "explanation": (
+            "Dimension-specific support types. Pulse type in {1,2,3,4}. "
+            "Non-planar sources require foc_length and aperture."
+        ),
+    },
+    # --- Post-Processing ---
+    "check_vorticity": {
+        "title": "Vorticity Output",
+        "category": "Post-Processing",
+        "explanation": "omega_wrt requires at least 2D (n > 0). 3D components require p > 0. Requires fd_order.",
+    },
+    "check_fft": {
+        "title": "FFT Output",
+        "category": "Post-Processing",
+        "explanation": (
+            "Requires 3D with all periodic boundaries. "
+            "Global dimensions must be even. Incompatible with cylindrical coordinates."
+        ),
+    },
+}
+
+
+@lru_cache(maxsize=1)
+def _get_logical_params_from_registry() -> Set[str]:
+    """
+    Get all LOG-type parameter names from the registry.
+
+    This replaces the hardcoded logical_params list with a dynamic lookup,
+    ensuring all LOG parameters are validated without manual maintenance.
+
+    Returns:
+        Set of parameter names that have LOG type.
+    """
+    from .params import REGISTRY  # pylint: disable=import-outside-toplevel
+    from .params.schema import ParamType  # pylint: disable=import-outside-toplevel
+
+    return {
+        name for name, param in REGISTRY.all_params.items()
+        if param.param_type == ParamType.LOG
+    }
 
 
 class CaseConstraintError(MFCException):
@@ -28,6 +276,7 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
     def __init__(self, params: Dict[str, Any]):
         self.params = params
         self.errors: List[str] = []
+        self.warnings: List[str] = []
 
     def get(self, key: str, default=None):
         """Get parameter value with default"""
@@ -41,6 +290,42 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
         """Assert that condition is False, otherwise add error"""
         if condition:
             self.errors.append(message)
+
+    def warn(self, condition: bool, message: str):
+        """Add a non-fatal warning if condition is True"""
+        if condition:
+            self.warnings.append(message)
+
+    def _validate_logical(self, key: str):
+        """Validate that a parameter is a valid Fortran logical ('T' or 'F')."""
+        val = self.get(key)
+        if val is not None and val not in ('T', 'F'):
+            self.errors.append(
+                f"{key} must be 'T' or 'F', got '{val}'"
+            )
+
+    def check_parameter_types(self):
+        """Validate parameter types before other checks.
+
+        This catches invalid values early with clear error messages,
+        rather than letting them cause confusing failures later.
+
+        LOG parameters are discovered dynamically from the registry,
+        eliminating the need to maintain a hardcoded list.
+        """
+        # Validate all LOG-type parameters from registry
+        logical_params = _get_logical_params_from_registry()
+        for param in logical_params:
+            if param in self.params:  # Only validate params that are set
+                self._validate_logical(param)
+
+        # Required domain parameters when m > 0
+        m = self.get('m')
+        if m is not None and m > 0:
+            self.prohibit(not self.is_set('x_domain%beg'),
+                         "x_domain%beg must be set when m > 0")
+            self.prohibit(not self.is_set('x_domain%end'),
+                         "x_domain%end must be set when m > 0")
 
     # ===================================================================
     # Common Checks (All Stages)
@@ -92,6 +377,10 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
     def check_igr(self):
         """Checks constraints regarding IGR order"""
         igr = self.get('igr', 'F') == 'T'
+        igr_pres_lim = self.get('igr_pres_lim', 'F') == 'T'
+
+        self.prohibit(igr_pres_lim and not igr,
+                     "igr_pres_lim requires igr to be enabled")
 
         if not igr:
             return
@@ -100,7 +389,6 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
         m = self.get('m', 0)
         n = self.get('n', 0)
         p = self.get('p', 0)
-
         self.prohibit(igr_order not in [None, 3, 5],
                      "igr_order must be 3 or 5")
         if igr_order:
@@ -139,6 +427,10 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
     def check_muscl(self):
         """Check constraints regarding MUSCL order"""
         recon_type = self.get('recon_type', 1)
+        int_comp = self.get('int_comp', 'F') == 'T'
+
+        self.prohibit(int_comp and recon_type != 2,
+                     "int_comp (THINC interface compression) requires recon_type = 2 (MUSCL)")
 
         # MUSCL_TYPE = 2
         if recon_type != 2:
@@ -232,7 +524,7 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                 self.prohibit(bc_z_end is not None and bc_z_end not in [-1, -2],
                              "bc_z%end must be -1 (periodic) or -2 (reflective) for 3D cylindrical coordinates")
 
-    def check_bubbles_euler(self):
+    def check_bubbles_euler(self):  # pylint: disable=too-many-locals
         """Checks constraints on bubble parameters"""
         bubbles_euler = self.get('bubbles_euler', 'F') == 'T'
 
@@ -262,12 +554,53 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                      "Bubble models untested with pi-gamma model (model_eqns = 1)")
         self.prohibit(model_eqns == 4 and rhoref is None,
                      "rhoref must be set if using bubbles_euler with model_eqns = 4")
+        self.prohibit(rhoref is not None and rhoref <= 0,
+                     "rhoref (reference density) must be positive")
         self.prohibit(model_eqns == 4 and pref is None,
                      "pref must be set if using bubbles_euler with model_eqns = 4")
+        self.prohibit(pref is not None and pref <= 0,
+                     "pref (reference pressure) must be positive")
         self.prohibit(model_eqns == 4 and num_fluids != 1,
                      "4-equation model (model_eqns = 4) is single-component and requires num_fluids = 1")
         self.prohibit(cyl_coord,
                      "Bubble models untested in cylindrical coordinates")
+
+        # === BUBBLE PHYSICS PARAMETERS ===
+        # Validate bubble reference parameters (bub_pp%)
+        R0ref = self.get('bub_pp%R0ref')
+        p0ref = self.get('bub_pp%p0ref')
+        rho0ref = self.get('bub_pp%rho0ref')
+        T0ref = self.get('bub_pp%T0ref')
+
+        if R0ref is not None:
+            self.prohibit(R0ref <= 0,
+                         "bub_pp%R0ref (reference bubble radius) must be positive")
+        if p0ref is not None:
+            self.prohibit(p0ref <= 0,
+                         "bub_pp%p0ref (reference pressure) must be positive")
+        if rho0ref is not None:
+            self.prohibit(rho0ref <= 0,
+                         "bub_pp%rho0ref (reference density) must be positive")
+        if T0ref is not None:
+            self.prohibit(T0ref <= 0,
+                         "bub_pp%T0ref (reference temperature) must be positive")
+
+        # Viscosities must be non-negative
+        mu_l = self.get('bub_pp%mu_l')
+        mu_g = self.get('bub_pp%mu_g')
+        mu_v = self.get('bub_pp%mu_v')
+
+        if mu_l is not None:
+            self.prohibit(mu_l < 0, "bub_pp%mu_l (liquid viscosity) must be non-negative")
+        if mu_g is not None:
+            self.prohibit(mu_g < 0, "bub_pp%mu_g (gas viscosity) must be non-negative")
+        if mu_v is not None:
+            self.prohibit(mu_v < 0, "bub_pp%mu_v (vapor viscosity) must be non-negative")
+
+        # Surface tension must be non-negative
+        ss = self.get('bub_pp%ss')
+        if ss is not None:
+            self.prohibit(ss < 0, "bub_pp%ss (surface tension) must be non-negative")
 
     def check_qbmm_and_polydisperse(self):
         """Checks constraints on QBMM and polydisperse bubble parameters"""
@@ -352,8 +685,8 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
 
         self.prohibit(ib and n <= 0,
                      "Immersed Boundaries do not work in 1D (requires n > 0)")
-        self.prohibit(ib and (num_ibs <= 0 or num_ibs > 10),
-                     "num_ibs must be between 1 and num_patches_max (10)")
+        self.prohibit(ib and (num_ibs <= 0 or num_ibs > 1000),
+                     "num_ibs must be between 1 and num_patches_max (1000)")
         self.prohibit(not ib and num_ibs > 0,
                      "num_ibs is set, but ib is not enabled")
 
@@ -478,20 +811,31 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
     def check_time_stepping(self):
         """Checks time stepping parameters (simulation/post-process)"""
         cfl_dt = self.get('cfl_dt', 'F') == 'T'
+        cfl_adap_dt = self.get('cfl_adap_dt', 'F') == 'T'
+        adap_dt = self.get('adap_dt', 'F') == 'T'
         time_stepper = self.get('time_stepper')
 
         # Check time_stepper bounds
         self.prohibit(time_stepper is not None and (time_stepper < 1 or time_stepper > 3),
                      "time_stepper must be 1, 2, or 3")
 
-        if cfl_dt:
+        # CFL-based variable dt modes (use t_stop/t_save for termination)
+        # Note: adap_dt is NOT included here - it uses t_step_* for termination
+        variable_dt = cfl_dt or cfl_adap_dt
+
+        # dt validation (applies to all modes if dt is set)
+        dt = self.get('dt')
+        self.prohibit(dt is not None and dt <= 0,
+                     "dt must be positive")
+
+        if variable_dt:
             cfl_target = self.get('cfl_target')
             t_stop = self.get('t_stop')
             t_save = self.get('t_save')
             n_start = self.get('n_start')
 
-            self.prohibit(cfl_target is not None and (cfl_target < 0 or cfl_target > 1),
-                         "cfl_target must be between 0 and 1")
+            self.prohibit(cfl_target is not None and (cfl_target <= 0 or cfl_target > 1),
+                         "cfl_target must be in (0, 1]")
             self.prohibit(t_stop is not None and t_stop <= 0,
                          "t_stop must be positive")
             self.prohibit(t_save is not None and t_save <= 0,
@@ -500,21 +844,29 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                          "t_save must be <= t_stop")
             self.prohibit(n_start is not None and n_start < 0,
                          "n_start must be non-negative")
-        else:
-            t_step_start = self.get('t_step_start')
-            t_step_stop = self.get('t_step_stop')
-            t_step_save = self.get('t_step_save')
-            dt = self.get('dt')
+        # t_step_* validation (applies to fixed and adap_dt modes)
+        t_step_start = self.get('t_step_start')
+        t_step_stop = self.get('t_step_stop')
+        t_step_save = self.get('t_step_save')
 
-            self.prohibit(t_step_start is not None and t_step_start < 0,
-                         "t_step_start must be non-negative")
-            self.prohibit(t_step_stop is not None and t_step_start is not None and t_step_stop <= t_step_start,
-                         "t_step_stop must be > t_step_start")
-            self.prohibit(t_step_save is not None and t_step_stop is not None and t_step_start is not None and
-                         t_step_save > t_step_stop - t_step_start,
-                         "t_step_save must be <= (t_step_stop - t_step_start)")
-            self.prohibit(dt is not None and dt <= 0,
-                         "dt must be positive")
+        self.prohibit(t_step_start is not None and t_step_start < 0,
+                     "t_step_start must be non-negative")
+        self.prohibit(t_step_stop is not None and t_step_stop < 0,
+                     "t_step_stop must be non-negative")
+        self.prohibit(t_step_stop is not None and t_step_start is not None and t_step_stop <= t_step_start,
+                     "t_step_stop must be > t_step_start")
+        self.prohibit(t_step_save is not None and t_step_save <= 0,
+                     "t_step_save must be positive")
+        self.prohibit(t_step_save is not None and t_step_stop is not None and t_step_start is not None and
+                     t_step_save > t_step_stop - t_step_start,
+                     "t_step_save must be <= (t_step_stop - t_step_start)")
+
+        if not variable_dt:
+            # dt is required in pure fixed dt mode (not cfl_dt, not cfl_adap_dt)
+            # adap_dt mode uses dt as initial value, so it's optional
+            uses_fixed_stepping = self.is_set('t_step_start') or self.is_set('t_step_stop')
+            self.prohibit(uses_fixed_stepping and not adap_dt and not self.is_set('dt'),
+                         "dt must be set when using fixed time stepping (t_step_start/t_step_stop)")
 
     def check_finite_difference(self):
         """Checks constraints on finite difference parameters"""
@@ -676,22 +1028,22 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
         mhd = self.get('mhd', 'F') == 'T'
         riemann_solver = self.get('riemann_solver')
         relativity = self.get('relativity', 'F') == 'T'
-        powell = self.get('powell', 'F') == 'T'
+        hyper_cleaning = self.get('hyper_cleaning', 'F') == 'T'
+        wave_speeds = self.get('wave_speeds')
         n = self.get('n', 0)
-        fd_order = self.get('fd_order')
 
         self.prohibit(mhd and riemann_solver is not None and riemann_solver not in [1, 4],
                      "MHD simulations require riemann_solver = 1 (HLL) or riemann_solver = 4 (HLLD)")
+        self.prohibit(mhd and wave_speeds is not None and wave_speeds == 2,
+                     "MHD requires wave_speeds = 1")
         self.prohibit(riemann_solver == 4 and not mhd,
                      "HLLD (riemann_solver = 4) is only available for MHD simulations")
         self.prohibit(riemann_solver == 4 and relativity,
                      "HLLD is not available for RMHD (relativity)")
-        self.prohibit(powell and not mhd,
-                     "Powell's method requires mhd to be enabled")
-        self.prohibit(powell and n is not None and n == 0,
-                     "Powell's method is not supported for 1D simulations")
-        self.prohibit(powell and fd_order is None,
-                     "fd_order must be set if Powell's method is enabled")
+        self.prohibit(hyper_cleaning and not mhd,
+                     "Hyperbolic cleaning requires mhd to be enabled")
+        self.prohibit(hyper_cleaning and n is not None and n == 0,
+                     "Hyperbolic cleaning is not supported for 1D simulations")
 
 
     def check_igr_simulation(self):  # pylint: disable=too-many-locals
@@ -869,6 +1221,11 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                 wave_set = wavelength is not None
                 self.prohibit(freq_set == wave_set,
                              f"One and only one of acoustic({jstr})%frequency or wavelength must be specified for pulse = {pulse}")
+                # Physics: frequency and wavelength must be positive
+                self.prohibit(frequency is not None and frequency <= 0,
+                             f"acoustic({jstr})%frequency must be positive")
+                self.prohibit(wavelength is not None and wavelength <= 0,
+                             f"acoustic({jstr})%wavelength must be positive")
 
             if pulse == 2:
                 time_set = gauss_sigma_time is not None
@@ -877,6 +1234,11 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                              f"One and only one of acoustic({jstr})%gauss_sigma_time or gauss_sigma_dist must be specified for pulse = 2")
                 self.prohibit(delay is None,
                              f"acoustic({jstr})%delay must be specified for pulse = 2 (Gaussian)")
+                # Physics: gaussian parameters must be positive
+                self.prohibit(gauss_sigma_time is not None and gauss_sigma_time <= 0,
+                             f"acoustic({jstr})%gauss_sigma_time must be positive")
+                self.prohibit(gauss_sigma_dist is not None and gauss_sigma_dist <= 0,
+                             f"acoustic({jstr})%gauss_sigma_dist must be positive")
 
             if pulse == 4:
                 self.prohibit(bb_num_freq is None,
@@ -1082,6 +1444,10 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
     def check_hyperelasticity(self):
         """Checks hyperelasticity constraints"""
         hyperelasticity = self.get('hyperelasticity', 'F') == 'T'
+        pre_stress = self.get('pre_stress', 'F') == 'T'
+
+        self.prohibit(pre_stress and not hyperelasticity,
+                     "pre_stress requires hyperelasticity to be enabled")
 
         if not hyperelasticity:
             return
@@ -1255,6 +1621,109 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
             self.prohibit(elliptic_smoothing_iters < 1,
                          "elliptic_smoothing_iters must be positive")
 
+    def _is_numeric(self, value) -> bool:
+        """Check if value is numeric (not a string expression)."""
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    def check_patch_physics(self):  # pylint: disable=too-many-locals,too-many-branches
+        """Checks physics constraints on patch initial conditions (pre-process).
+
+        Validates that initial conditions are physically meaningful:
+        - Pressure must be positive (thermodynamic requirement)
+        - Density (alpha_rho) must be positive
+        - Volume fractions must sum appropriately and be in [0, 1]
+        - Geometric dimensions must be positive
+
+        Note: String values (analytical expressions like "0.5*sin(x)") are
+        evaluated at runtime by Fortran and cannot be validated here.
+        """
+        num_patches = self.get('num_patches', 0)
+        num_fluids = self.get('num_fluids', 1)
+        bubbles_euler = self.get('bubbles_euler', 'F') == 'T'
+        num_ibs = self.get('num_ibs', 0) or 0  # IBM (Immersed Boundary Method)
+
+        if not self._is_numeric(num_patches) or num_patches <= 0:
+            return
+
+        for i in range(1, num_patches + 1):
+            istr = str(i)
+            geometry = self.get(f'patch_icpp({i})%geometry')
+
+            # Skip if patch not defined
+            if geometry is None:
+                continue
+
+            # Skip thermodynamic validation for special patches:
+            # - alter_patch patches (modifications to other patches)
+            # - hcid patches (hard-coded initial conditions computed at runtime)
+            hcid = self.get(f'patch_icpp({i})%hcid')
+            alter_patches = [self.get(f'patch_icpp({i})%alter_patch({j})') == 'T'
+                           for j in range(1, num_patches + 1)]
+            is_special = hcid is not None or any(alter_patches)
+
+            # === THERMODYNAMICS ===
+            # Pressure must be positive for physical stability
+            # (skip for special patches where values are computed differently)
+            if not is_special:
+                pres = self.get(f'patch_icpp({i})%pres')
+                if pres is not None and self._is_numeric(pres):
+                    self.prohibit(pres <= 0,
+                                 f"patch_icpp({istr})%pres must be positive (got {pres})")
+
+            # === FLUID PROPERTIES ===
+            # (skip for special patches where values are computed differently)
+            if not is_special:
+                for j in range(1, num_fluids + 1):
+                    jstr = str(j)
+
+                    # Volume fraction must be in [0, 1] (or non-negative for IBM cases)
+                    alpha = self.get(f'patch_icpp({i})%alpha({j})')
+                    if alpha is not None and self._is_numeric(alpha):
+                        self.prohibit(alpha < 0,
+                                     f"patch_icpp({istr})%alpha({jstr}) must be non-negative (got {alpha})")
+                        # For non-IBM cases, alpha should be in [0, 1]
+                        if num_ibs == 0:
+                            self.prohibit(alpha > 1,
+                                         f"patch_icpp({istr})%alpha({jstr}) must be <= 1 (got {alpha})")
+
+                    # Density (alpha_rho) must be non-negative
+                    # Note: alpha_rho = 0 is allowed for vacuum regions and numerical convenience
+                    alpha_rho = self.get(f'patch_icpp({i})%alpha_rho({j})')
+                    if alpha_rho is not None and self._is_numeric(alpha_rho):
+                        self.prohibit(alpha_rho < 0,
+                                     f"patch_icpp({istr})%alpha_rho({jstr}) must be non-negative (got {alpha_rho})")
+
+            # === GEOMETRY ===
+            # Patch dimensions must be positive (except in cylindrical coords where
+            # length_y/length_z can be sentinel values like -1000000.0)
+            length_x = self.get(f'patch_icpp({i})%length_x')
+            length_y = self.get(f'patch_icpp({i})%length_y')
+            length_z = self.get(f'patch_icpp({i})%length_z')
+            radius = self.get(f'patch_icpp({i})%radius')
+            cyl_coord = self.get('cyl_coord', 'F') == 'T'
+
+            if length_x is not None and self._is_numeric(length_x):
+                self.prohibit(length_x <= 0,
+                             f"patch_icpp({istr})%length_x must be positive (got {length_x})")
+            # In cylindrical coordinates, length_y and length_z can be negative sentinel values
+            if length_y is not None and self._is_numeric(length_y) and not cyl_coord:
+                self.prohibit(length_y <= 0,
+                             f"patch_icpp({istr})%length_y must be positive (got {length_y})")
+            if length_z is not None and self._is_numeric(length_z) and not cyl_coord:
+                self.prohibit(length_z <= 0,
+                             f"patch_icpp({istr})%length_z must be positive (got {length_z})")
+            if radius is not None and self._is_numeric(radius):
+                self.prohibit(radius <= 0,
+                             f"patch_icpp({istr})%radius must be positive (got {radius})")
+
+            # === BUBBLES ===
+            # Bubble radius must be positive
+            if bubbles_euler:
+                r0 = self.get(f'patch_icpp({i})%r0')
+                if r0 is not None and self._is_numeric(r0):
+                    self.prohibit(r0 <= 0,
+                                 f"patch_icpp({istr})%r0 must be positive (got {r0})")
+
     def check_bc_patches(self):  # pylint: disable=too-many-branches,too-many-statements
         """Checks boundary condition patch geometry (pre-process)"""
         num_bc_patches = self.get('num_bc_patches', 0)
@@ -1329,6 +1798,10 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
         if precision is not None:
             self.prohibit(precision not in [1, 2],
                          "precision must be 1 or 2")
+            self.prohibit(
+                precision == 2 and CFG().single,
+                "precision = 2 (double output) requires MFC built without --single"
+            )
 
     def check_vorticity(self):
         """Checks vorticity parameters (post-process)"""
@@ -1573,12 +2046,335 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                      "None of the flow variables have been selected for post-process")
 
     # ===================================================================
+    # Cross-Cutting Physics Checks
+    # ===================================================================
+
+    def check_domain_bounds(self):
+        """Checks that domain end > domain begin for each active dimension"""
+        x_beg = self.get('x_domain%beg')
+        x_end = self.get('x_domain%end')
+        if self._is_numeric(x_beg) and self._is_numeric(x_end):
+            self.prohibit(x_end <= x_beg,
+                         f"x_domain%end ({x_end}) must be greater than x_domain%beg ({x_beg})")
+
+        n = self.get('n', 0)
+        if self._is_numeric(n) and n > 0:
+            y_beg = self.get('y_domain%beg')
+            y_end = self.get('y_domain%end')
+            if self._is_numeric(y_beg) and self._is_numeric(y_end):
+                self.prohibit(y_end <= y_beg,
+                             f"y_domain%end ({y_end}) must be greater than y_domain%beg ({y_beg})")
+
+        p = self.get('p', 0)
+        if self._is_numeric(p) and p > 0:
+            z_beg = self.get('z_domain%beg')
+            z_end = self.get('z_domain%end')
+            if self._is_numeric(z_beg) and self._is_numeric(z_end):
+                self.prohibit(z_end <= z_beg,
+                             f"z_domain%end ({z_end}) must be greater than z_domain%beg ({z_beg})")
+
+    def check_volume_fraction_sum(self):  # pylint: disable=too-many-locals
+        """Warns if volume fractions do not sum to 1 for multi-component models.
+
+        For model_eqns in [2, 3, 4], the mixture constraint sum(alpha_j) = 1
+        must hold. Skips patches with analytical expressions, alter_patch,
+        hcid, bubbles_euler single-fluid cases (where alpha represents
+        the void fraction, not a partition of unity), and bubbles_lagrange
+        cases (where the Lagrangian phase is not tracked on the Euler grid).
+        """
+        model_eqns = self.get('model_eqns')
+        if model_eqns not in [2, 3, 4]:
+            return
+
+        num_patches = self.get('num_patches', 0)
+        num_fluids = self.get('num_fluids', 1)
+        bubbles_euler = self.get('bubbles_euler', 'F') == 'T'
+        bubbles_lagrange = self.get('bubbles_lagrange', 'F') == 'T'
+
+        # For bubbles_euler with single fluid, alpha is the void fraction
+        # and does not need to sum to 1
+        if bubbles_euler and num_fluids == 1:
+            return
+
+        # For bubbles_lagrange, the Lagrangian phase volume is not
+        # represented in the Eulerian volume fractions
+        if bubbles_lagrange:
+            return
+
+        # IBM cases use alpha as a level-set indicator, not a physical
+        # volume fraction, so the sum-to-1 constraint does not apply
+        num_ibs = self.get('num_ibs', 0) or 0
+        if num_ibs > 0:
+            return
+
+        if not self._is_numeric(num_patches) or num_patches <= 0 or not self._is_numeric(num_fluids):
+            return
+
+        for i in range(1, num_patches + 1):
+            geometry = self.get(f'patch_icpp({i})%geometry')
+            if geometry is None:
+                continue
+
+            # Skip special patches
+            hcid = self.get(f'patch_icpp({i})%hcid')
+            if hcid is not None:
+                continue
+            alter_patches = [self.get(f'patch_icpp({i})%alter_patch({j})') == 'T'
+                           for j in range(1, num_patches + 1)]
+            if any(alter_patches):
+                continue
+
+            # Collect alpha values, skip if any are analytical expressions
+            alphas = []
+            has_expression = False
+            for j in range(1, num_fluids + 1):
+                alpha = self.get(f'patch_icpp({i})%alpha({j})')
+                if alpha is None:
+                    has_expression = True
+                    break
+                if not self._is_numeric(alpha):
+                    has_expression = True
+                    break
+                alphas.append(alpha)
+
+            if has_expression or len(alphas) != num_fluids:
+                continue
+
+            alpha_sum = sum(alphas)
+            self.warn(abs(alpha_sum - 1.0) > 1e-6,
+                     f"patch_icpp({i}): volume fractions sum to {alpha_sum:.8g}, expected 1.0")
+
+    def check_alpha_rho_consistency(self):
+        """Warns about inconsistent alpha/alpha_rho pairs.
+
+        Catches common mistakes:
+        - alpha(j) = 0 but alpha_rho(j) != 0 (density in absent phase)
+        - alpha(j) > 0 but alpha_rho(j) = 0 (present phase has zero density)
+        """
+        num_patches = self.get('num_patches', 0)
+        num_fluids = self.get('num_fluids', 1)
+
+        if not self._is_numeric(num_patches) or num_patches <= 0 or not self._is_numeric(num_fluids):
+            return
+
+        for i in range(1, num_patches + 1):
+            geometry = self.get(f'patch_icpp({i})%geometry')
+            if geometry is None:
+                continue
+
+            # Skip special patches
+            hcid = self.get(f'patch_icpp({i})%hcid')
+            if hcid is not None:
+                continue
+            alter_patches = [self.get(f'patch_icpp({i})%alter_patch({j})') == 'T'
+                           for j in range(1, num_patches + 1)]
+            if any(alter_patches):
+                continue
+
+            for j in range(1, num_fluids + 1):
+                alpha = self.get(f'patch_icpp({i})%alpha({j})')
+                alpha_rho = self.get(f'patch_icpp({i})%alpha_rho({j})')
+
+                if alpha is None or alpha_rho is None:
+                    continue
+                if not self._is_numeric(alpha) or not self._is_numeric(alpha_rho):
+                    continue
+
+                self.warn(alpha == 0 and alpha_rho != 0,
+                         f"patch_icpp({i}): alpha({j}) = 0 but alpha_rho({j}) = {alpha_rho} "
+                         f"(density in absent phase)")
+                self.warn(alpha > 1e-10 and alpha_rho == 0,
+                         f"patch_icpp({i}): alpha({j}) = {alpha} but alpha_rho({j}) = 0 "
+                         f"(present phase has zero density)")
+
+    def check_patch_within_domain(self):  # pylint: disable=too-many-locals
+        """Checks that centroid+length patches are not entirely outside the domain.
+
+        Only applies to geometry types whose bounding box is fully determined
+        by centroid and length (line segments=1, rectangles=3, cuboids=9).
+        Skipped when grid stretching is active because the physical domain
+        extents are transformed and the domain bounds are not directly comparable.
+        """
+        num_patches = self.get('num_patches', 0)
+        if not self._is_numeric(num_patches) or num_patches <= 0:
+            return
+
+        # Skip when any grid stretching is active — domain bounds don't map
+        # directly to physical coordinates in stretched grids
+        if (self.get('stretch_x', 'F') == 'T' or
+                self.get('stretch_y', 'F') == 'T' or
+                self.get('stretch_z', 'F') == 'T'):
+            return
+
+        x_beg = self.get('x_domain%beg')
+        x_end = self.get('x_domain%end')
+        n = self.get('n', 0)
+        p = self.get('p', 0)
+        y_beg = self.get('y_domain%beg') if self._is_numeric(n) and n > 0 else None
+        y_end = self.get('y_domain%end') if self._is_numeric(n) and n > 0 else None
+        z_beg = self.get('z_domain%beg') if self._is_numeric(p) and p > 0 else None
+        z_end = self.get('z_domain%end') if self._is_numeric(p) and p > 0 else None
+
+        # Pre-check domain bounds are numeric (could be analytical expressions)
+        x_bounds_ok = (x_beg is not None and x_end is not None
+                       and self._is_numeric(x_beg) and self._is_numeric(x_end))
+        y_bounds_ok = (y_beg is not None and y_end is not None
+                       and self._is_numeric(y_beg) and self._is_numeric(y_end))
+        z_bounds_ok = (z_beg is not None and z_end is not None
+                       and self._is_numeric(z_beg) and self._is_numeric(z_end))
+
+        for i in range(1, num_patches + 1):
+            geometry = self.get(f'patch_icpp({i})%geometry')
+            if geometry is None:
+                continue
+
+            # Only check patches whose bounding box is fully determined
+            # by centroid + length (line segments=1, rectangles=3, cuboids=9)
+            if geometry not in [1, 3, 9]:
+                continue
+
+            xc = self.get(f'patch_icpp({i})%x_centroid')
+            lx = self.get(f'patch_icpp({i})%length_x')
+
+            has_x = xc is not None and lx is not None
+            if (has_x and x_bounds_ok
+                    and self._is_numeric(xc) and self._is_numeric(lx)):
+                patch_x_lo = xc - lx / 2.0
+                patch_x_hi = xc + lx / 2.0
+                self.prohibit(patch_x_hi < x_beg or patch_x_lo > x_end,
+                             f"patch_icpp({i}): x-extent [{patch_x_lo}, {patch_x_hi}] "
+                             f"is entirely outside domain [{x_beg}, {x_end}]")
+
+            if geometry in [3, 9] and y_bounds_ok:
+                yc = self.get(f'patch_icpp({i})%y_centroid')
+                ly = self.get(f'patch_icpp({i})%length_y')
+                if (yc is not None and ly is not None
+                        and self._is_numeric(yc) and self._is_numeric(ly)):
+                    patch_y_lo = yc - ly / 2.0
+                    patch_y_hi = yc + ly / 2.0
+                    self.prohibit(patch_y_hi < y_beg or patch_y_lo > y_end,
+                                 f"patch_icpp({i}): y-extent [{patch_y_lo}, {patch_y_hi}] "
+                                 f"is entirely outside domain [{y_beg}, {y_end}]")
+
+            if geometry == 9 and z_bounds_ok:
+                zc = self.get(f'patch_icpp({i})%z_centroid')
+                lz = self.get(f'patch_icpp({i})%length_z')
+                if (zc is not None and lz is not None
+                        and self._is_numeric(zc) and self._is_numeric(lz)):
+                    patch_z_lo = zc - lz / 2.0
+                    patch_z_hi = zc + lz / 2.0
+                    self.prohibit(patch_z_hi < z_beg or patch_z_lo > z_end,
+                                 f"patch_icpp({i}): z-extent [{patch_z_lo}, {patch_z_hi}] "
+                                 f"is entirely outside domain [{z_beg}, {z_end}]")
+
+    def check_eos_parameter_sanity(self):
+        """Warns if EOS gamma parameter looks like raw physical gamma.
+
+        MFC uses the transformed parameter Gamma = 1/(gamma-1), not the
+        physical specific heat ratio gamma directly. Common mistake:
+        entering gamma=1.4 (physical) instead of gamma=1/(1.4-1)=2.5.
+
+        - gamma < 0.1 implies physical gamma > 11 (unusual)
+        - gamma > 1000 implies physical gamma ≈ 1.001 (unusual)
+        """
+        num_fluids = self.get('num_fluids')
+        model_eqns = self.get('model_eqns')
+
+        if not self._is_numeric(num_fluids) or model_eqns == 1:
+            return
+
+        for i in range(1, int(num_fluids) + 1):
+            gamma = self.get(f'fluid_pp({i})%gamma')
+            if gamma is None or not self._is_numeric(gamma) or gamma <= 0:
+                continue
+
+            # gamma = 1/(physical_gamma - 1), so physical_gamma = 1/gamma + 1
+            physical_gamma = 1.0 / gamma + 1.0
+
+            self.warn(gamma < 0.1,
+                     f"fluid_pp({i})%gamma = {gamma} implies physical gamma = {physical_gamma:.2f} "
+                     f"(unusually high). MFC uses the transformed parameter Gamma = 1/(gamma-1)")
+            self.warn(gamma > 1000,
+                     f"fluid_pp({i})%gamma = {gamma} implies physical gamma = {physical_gamma:.6f} "
+                     f"(very close to 1). Did you enter the physical gamma instead of 1/(gamma-1)?")
+
+    def check_velocity_components(self):
+        """Checks that velocity components are not set in inactive dimensions.
+
+        vel(2) must be zero in 1D (n=0), vel(3) must be zero in 1D/2D (p=0).
+        Exempts MHD simulations where transverse velocity components are
+        physically meaningful even in 1D (they carry transverse momentum
+        coupled to the magnetic field).
+        """
+        n = self.get('n', 0)
+        p = self.get('p', 0)
+        num_patches = self.get('num_patches', 0)
+        mhd = self.get('mhd', 'F') == 'T'
+
+        if not self._is_numeric(num_patches) or num_patches <= 0:
+            return
+
+        # MHD simulations legitimately use transverse velocities in 1D
+        if mhd:
+            return
+
+        n_is_1d = self._is_numeric(n) and n == 0
+        p_is_2d = self._is_numeric(p) and p == 0
+
+        for i in range(1, num_patches + 1):
+            geometry = self.get(f'patch_icpp({i})%geometry')
+            if geometry is None:
+                continue
+
+            if n_is_1d:
+                vel2 = self.get(f'patch_icpp({i})%vel(2)')
+                if vel2 is not None and self._is_numeric(vel2):
+                    self.prohibit(vel2 != 0,
+                                 f"patch_icpp({i})%vel(2) = {vel2} but n = 0 (1D simulation)")
+
+            if p_is_2d:
+                vel3 = self.get(f'patch_icpp({i})%vel(3)')
+                if vel3 is not None and self._is_numeric(vel3):
+                    self.prohibit(vel3 != 0,
+                                 f"patch_icpp({i})%vel(3) = {vel3} but p = 0 (1D/2D simulation)")
+
+    # ===================================================================
+    # Build-Flag Compatibility Checks
+    # ===================================================================
+
+    def check_build_flags(self):
+        """Checks case parameters against the active build configuration.
+
+        These catch incompatibilities between case settings and how the
+        MFC binaries were compiled (--mpi/--no-mpi, --single, etc.)
+        before any binary is invoked.
+        """
+        parallel_io = self.get('parallel_io', 'F') == 'T'
+        self.prohibit(
+            parallel_io and not CFG().mpi,
+            "parallel_io = T requires MFC built with --mpi"
+        )
+
+    def check_geometry_precision_simulation(self):
+        """Checks that 3D cylindrical geometry is not used with --single builds."""
+        cyl_coord = self.get('cyl_coord', 'F') == 'T'
+        p = self.get('p', 0)
+        self.prohibit(
+            CFG().single and cyl_coord and p > 0,
+            "Fully 3D cylindrical geometry (cyl_coord = T, p > 0) is not supported "
+            "in single precision (--single)"
+        )
+
+    # ===================================================================
     # Main Validation Entry Points
     # ===================================================================
 
     def validate_common(self):
         """Validate parameters common to all stages"""
+        self.check_parameter_types()  # Type validation first
+        self.check_build_flags()
         self.check_simulation_domain()
+        self.check_domain_bounds()
         self.check_model_eqns_and_num_fluids()
         self.check_igr()
         self.check_weno()
@@ -1592,12 +2388,14 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
         self.check_phase_change()
         self.check_ibm()
         self.check_stiffened_eos()
+        self.check_eos_parameter_sanity()
         self.check_surface_tension()
         self.check_mhd()
 
     def validate_simulation(self):
         """Validate simulation-specific parameters"""
         self.validate_common()
+        self.check_geometry_precision_simulation()
         self.check_finite_difference()
         self.check_time_stepping()
         self.check_riemann_solver()
@@ -1627,6 +2425,11 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
         self.check_perturb_density()
         self.check_chemistry()
         self.check_misc_pre_process()
+        self.check_patch_physics()
+        self.check_volume_fraction_sum()
+        self.check_alpha_rho_consistency()
+        self.check_patch_within_domain()
+        self.check_velocity_components()
         self.check_bc_patches()
 
     def validate_post_process(self):
@@ -1660,6 +2463,7 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
             CaseConstraintError: If any constraint violations are found
         """
         self.errors = []
+        self.warnings = []
 
         if stage == 'simulation':
             self.validate_simulation()
@@ -1670,22 +2474,65 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
         else:
             # No stage-specific constraints for auxiliary targets like 'syscheck'.
             # Silently skip validation rather than treating this as an error.
-            return
+            return []
 
         if self.errors:
-            error_msg = "Case parameter constraint violations:\n" + "\n".join(f"  • {err}" for err in self.errors)
+            error_msg = self._format_errors()
             raise CaseConstraintError(error_msg)
 
+        return self.warnings
 
-def validate_case_constraints(params: Dict[str, Any], stage: str = 'simulation'):
+    def _format_errors(self) -> str:
+        """Format errors with enhanced context and suggestions."""
+        lines = ["[bold red]Case parameter constraint violations:[/bold red]\n"]
+
+        for i, err in enumerate(self.errors, 1):
+            lines.append(f"  [bold]{i}.[/bold] {err}")
+
+            # Add helpful hints for common errors
+            err_lower = err.lower()
+            if "must be positive" in err_lower or "must be set" in err_lower:
+                lines.append("     [dim]Check that this required parameter is defined in your case file[/dim]")
+                continue
+            if "boundary" in err_lower or "bc_" in err_lower:
+                lines.append("     [dim]Common BC values: -1 (periodic), -2 (reflective), -3 (extrapolation)[/dim]")
+                continue
+
+            # Auto-generate hints from CONSTRAINTS with value_labels
+            for param_name, constraint in CONSTRAINTS.items():
+                if not re.search(r'\b' + re.escape(param_name.lower()) + r'\b', err_lower):
+                    continue
+                choices = constraint.get("choices")
+                if not choices:
+                    continue
+                labels = constraint.get("value_labels", {})
+                if labels:
+                    items = [f"{v} ({labels[v]})" if v in labels else str(v)
+                             for v in choices]
+                    hint = f"Valid values: {', '.join(items)}"
+                else:
+                    hint = f"Valid values: {choices}"
+                lines.append(f"     [dim]{hint}[/dim]")
+                break
+
+        lines.append("")
+        lines.append("[dim]Tip: Run './mfc.sh validate case.py' for detailed validation[/dim]")
+
+        return "\n".join(lines)
+
+
+def validate_case_constraints(params: Dict[str, Any], stage: str = 'simulation') -> List[str]:
     """Convenience function to validate case parameters
 
     Args:
         params: Dictionary of case parameters
         stage: One of 'simulation', 'pre_process', or 'post_process'
 
+    Returns:
+        List of warning messages (non-fatal issues)
+
     Raises:
         CaseConstraintError: If any constraint violations are found
     """
     validator = CaseValidator(params)
-    validator.validate(stage)
+    return validator.validate(stage) or []

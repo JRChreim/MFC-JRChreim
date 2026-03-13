@@ -1,16 +1,11 @@
 !>
-!! @file m_global_parameters.f90
+!! @file
 !! @brief Contains module m_global_parameters
 
 #:include 'case.fpp'
 #:include 'macros.fpp'
 
-!> @brief The module contains all of the parameters describing the program
-!!              logistics, the computational domain and the simulation algorithm.
-!!              Additionally, for the volume fraction model, physical parameters
-!!              of each of the fluids present in the flow are located here. They
-!!              include stiffened gas equation of state parameters, the Reynolds
-!!              numbers and the Weber numbers.
+!> @brief Global parameters for the computational domain, fluid properties, and simulation algorithm configuration
 module m_global_parameters
 
 #ifdef MFC_MPI
@@ -188,6 +183,7 @@ module m_global_parameters
     logical :: shear_stress  !< Shear stresses
     logical :: bulk_stress   !< Bulk stresses
     logical :: cont_damage   !< Continuum damage modeling
+    logical :: hyper_cleaning !< Hyperbolic cleaning for MHD for divB=0
     integer :: num_igr_iters !< number of iterations for elliptic solve
     integer :: num_igr_warm_start_iters !< number of warm start iterations for elliptic solve
     real(wp) :: alf_factor  !< alpha factor for IGR
@@ -217,7 +213,7 @@ module m_global_parameters
     $:GPU_DECLARE(create='[mpp_lim,model_eqns,mixture_err,alt_soundspeed]')
     $:GPU_DECLARE(create='[avg_state,mp_weno,weno_eps,teno_CT,hypoelasticity]')
     $:GPU_DECLARE(create='[hyperelasticity,hyper_model,elasticity,low_Mach]')
-    $:GPU_DECLARE(create='[shear_stress,bulk_stress,cont_damage]')
+    $:GPU_DECLARE(create='[shear_stress,bulk_stress,cont_damage,hyper_cleaning]')
 
     logical :: relax          !< activate phase change
     integer :: relax_model    !< Relaxation model
@@ -240,6 +236,7 @@ module m_global_parameters
     $:GPU_DECLARE(create='[bc_x, bc_y, bc_z]')
 #endif
     type(bounds_info) :: x_domain, y_domain, z_domain
+    $:GPU_DECLARE(create='[x_domain, y_domain, z_domain]')
     real(wp) :: x_a, y_a, z_a
     real(wp) :: x_b, y_b, z_b
 
@@ -290,6 +287,7 @@ module m_global_parameters
     type(int_bounds_info) :: species_idx               !< Indexes of first & last concentration eqns.
     integer :: c_idx                                   !< Index of color function
     integer :: damage_idx                              !< Index of damage state variable (D) for continuum damage model
+    integer :: psi_idx                                 !< Index of hyperbolic cleaning state variable for MHD
     !> @}
     $:GPU_DECLARE(create='[sys_size,E_idx,n_idx,bub_idx,alf_idx,gamma_idx]')
     $:GPU_DECLARE(create='[pi_inf_idx,B_idx,stress_idx,xi_idx,b_size]')
@@ -324,7 +322,7 @@ module m_global_parameters
     ! boundary values.
     !> @{
     real(wp) :: wa_flg
-    !> @{
+    !> @}
 
     $:GPU_DECLARE(create='[wa_flg]')
 
@@ -407,7 +405,7 @@ module m_global_parameters
     !! the maximum allowable number of patches, num_patches_max, may be changed
     !! in the module m_derived_types.f90.
 
-    $:GPU_DECLARE(create='[ib,num_ibs,patch_ib]')
+    $:GPU_DECLARE(create='[ib,num_ibs,patch_ib,Np,airfoil_grid_u,airfoil_grid_l]')
     !> @}
 
     !> @name Bubble modeling
@@ -539,10 +537,10 @@ module m_global_parameters
     !> @}
 
     real(wp) :: Bx0 !< Constant magnetic field in the x-direction (1D)
-    logical :: powell !< Powell‐correction for div B = 0
-    $:GPU_DECLARE(create='[Bx0,powell]')
+    $:GPU_DECLARE(create='[Bx0]')
 
     logical :: fft_wrt
+    logical :: dummy  !< AMDFlang workaround: keep a dummy logical to avoid a compiler case-optimization bug when a parameter+GPU-kernel conditional is false
 
     !> @name Continuum damage model parameters
     !> @{!
@@ -550,6 +548,13 @@ module m_global_parameters
     real(wp) :: cont_damage_s   !< Exponent s for continuum damage modeling
     real(wp) :: alpha_bar       !< Damage rate factor for continuum damage modeling
     $:GPU_DECLARE(create='[tau_star,cont_damage_s,alpha_bar]')
+    !> @}
+
+    !> @name MHD Hyperbolic cleaning parameters
+    !> @{!
+    real(wp) :: hyper_cleaning_speed    !< Hyperbolic cleaning wave speed (c_h)
+    real(wp) :: hyper_cleaning_tau      !< Hyperbolic cleaning tau
+    $:GPU_DECLARE(create='[hyper_cleaning_speed, hyper_cleaning_tau]')
     !> @}
 
 contains
@@ -630,6 +635,7 @@ contains
         shear_stress = .false.
         bulk_stress = .false.
         cont_damage = .false.
+        hyper_cleaning = .false.
         num_igr_iters = dflt_num_igr_iters
         num_igr_warm_start_iters = dflt_num_igr_warm_start_iters
         alf_factor = dflt_alf_factor
@@ -761,6 +767,7 @@ contains
         #:endfor
 
         fft_wrt = .false.
+        dummy = .false.
 
         do j = 1, num_probes_max
             acoustic(j)%pulse = dflt_int
@@ -841,12 +848,54 @@ contains
 
         ! MHD
         Bx0 = dflt_real
-        powell = .false.
+        hyper_cleaning_speed = dflt_real
+        hyper_cleaning_tau = dflt_real
 
         #:if not MFC_CASE_OPTIMIZATION
             mhd = .false.
             relativity = .false.
         #:endif
+
+        do i = 1, num_patches_max
+            patch_ib(i)%geometry = dflt_int
+            patch_ib(i)%x_centroid = 0._wp
+            patch_ib(i)%y_centroid = 0._wp
+            patch_ib(i)%z_centroid = 0._wp
+            patch_ib(i)%length_x = dflt_real
+            patch_ib(i)%length_y = dflt_real
+            patch_ib(i)%length_z = dflt_real
+            patch_ib(i)%radius = dflt_real
+            patch_ib(i)%theta = dflt_real
+            patch_ib(i)%c = dflt_real
+            patch_ib(i)%t = dflt_real
+            patch_ib(i)%m = dflt_real
+            patch_ib(i)%p = dflt_real
+            patch_ib(i)%slip = .false.
+
+            ! Proper default values for translating STL models
+            patch_ib(i)%model_scale(:) = 1._wp
+            patch_ib(i)%model_translate(:) = 0._wp
+            patch_ib(i)%model_rotate(:) = 0._wp
+            patch_ib(i)%model_filepath(:) = dflt_char
+            patch_ib(i)%model_spc = num_ray
+            patch_ib(i)%model_threshold = ray_tracing_threshold
+
+            ! Variables to handle moving imersed boundaries, defaulting to no movement
+            patch_ib(i)%moving_ibm = 0
+            patch_ib(i)%vel(:) = 0._wp
+            patch_ib(i)%angles(:) = 0._wp
+            patch_ib(i)%angular_vel(:) = 0._wp
+            patch_ib(i)%mass = dflt_real
+            patch_ib(i)%moment = dflt_real
+            patch_ib(i)%centroid_offset(:) = 0._wp
+
+            ! sets values of a rotation matrix which can be used when calculating rotations
+            patch_ib(i)%rotation_matrix = 0._wp
+            patch_ib(i)%rotation_matrix(1, 1) = 1._wp
+            patch_ib(i)%rotation_matrix(2, 2) = 1._wp
+            patch_ib(i)%rotation_matrix(3, 3) = 1._wp
+            patch_ib(i)%rotation_matrix_inverse = patch_ib(i)%rotation_matrix
+        end do
 
     end subroutine s_assign_default_values_to_user_inputs
 
@@ -1151,6 +1200,11 @@ contains
                 sys_size = damage_idx
             end if
 
+            if (hyper_cleaning) then
+                psi_idx = sys_size + 1
+                sys_size = psi_idx
+            end if
+
         end if
 
         ! END: Volume Fraction Model
@@ -1278,11 +1332,13 @@ contains
             & teno_CT,hyperelasticity,hyper_model,elasticity,xi_idx, &
             & B_idx,low_Mach]')
 
-        $:GPU_UPDATE(device='[Bx0, powell]')
+        $:GPU_UPDATE(device='[Bx0]')
 
         $:GPU_UPDATE(device='[chem_params]')
 
         $:GPU_UPDATE(device='[cont_damage,tau_star,cont_damage_s,alpha_bar]')
+
+        $:GPU_UPDATE(device='[hyper_cleaning, hyper_cleaning_speed, hyper_cleaning_tau]')
 
         #:if not MFC_CASE_OPTIMIZATION
             $:GPU_UPDATE(device='[wenojs,mapped_weno,wenoz,teno]')

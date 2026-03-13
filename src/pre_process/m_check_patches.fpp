@@ -1,7 +1,10 @@
+!>
+!! @file
+!! @brief Contains module m_check_patches
+
 #:include 'macros.fpp'
 
-!> @brief This module contains subroutines that read, and check consistency
-!!              of, the user provided inputs and data.
+!> @brief Validates geometry parameters and constraints for initial condition patches
 
 #:include 'macros.fpp'
 
@@ -35,6 +38,7 @@ module m_check_patches
 
 contains
 
+    !> @brief Validates the geometry parameters of all active and inactive initial condition patches.
     impure subroutine s_check_patches
 
         integer :: i
@@ -49,8 +53,6 @@ contains
                 @:PROHIBIT(patch_icpp(i)%geometry == 6, "Invalid patch geometry number. "// &
                     "patch_icpp("//trim(iStr)//")%geometry is deprecated.")
                 @:PROHIBIT(patch_icpp(i)%geometry == 7, "Invalid patch geometry number. "// &
-                    "patch_icpp("//trim(iStr)//")%geometry is deprecated.")
-                @:PROHIBIT(patch_icpp(i)%geometry == 13, "Invalid patch geometry number. "// &
                     "patch_icpp("//trim(iStr)//")%geometry is deprecated.")
                 @:PROHIBIT(patch_icpp(i)%geometry == 15, "Invalid patch geometry number. "// &
                     "patch_icpp("//trim(iStr)//")%geometry is deprecated.")
@@ -78,8 +80,10 @@ contains
                     call s_check_plane_sweep_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == 12) then
                     call s_check_ellipsoid_patch_geometry(i)
+                elseif (patch_icpp(i)%geometry == 13) then
+                    call s_check_2d_modal_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == 14) then
-                    call s_check_spherical_harmonic_patch_geometry(i)
+                    call s_check_3d_spherical_harmonic_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == 20) then
                     call s_check_2D_TaylorGreen_vortex_patch_geometry(i)
                 elseif (patch_icpp(i)%geometry == 21) then
@@ -112,12 +116,11 @@ contains
                              patch_icpp(i)%geometry == 4 .or. &
                              patch_icpp(i)%geometry == 5 .or. &
                              patch_icpp(i)%geometry == 8 .or. &
-                             patch_icpp(i)%geometry == 0 .or. &
-                             patch_icpp(i)%geometry == 0 .or. &
                              patch_icpp(i)%geometry == 9 .or. &
                              patch_icpp(i)%geometry == 10 .or. &
                              patch_icpp(i)%geometry == 11 .or. &
                              patch_icpp(i)%geometry == 12 .or. &
+                             patch_icpp(i)%geometry == 13 .or. &
                              patch_icpp(i)%geometry == 14)) then
                 call s_check_supported_patch_smoothing(i)
             else
@@ -247,9 +250,20 @@ contains
 
     end subroutine s_check_sphere_patch_geometry
 
-    !>  This subroutine checks the model patch input
-        !!  @param patch_id Patch identifier
-    impure subroutine s_check_spherical_harmonic_patch_geometry(patch_id)
+    impure subroutine s_check_2d_modal_patch_geometry(patch_id)
+        integer, intent(in) :: patch_id
+
+        call s_int_to_str(patch_id, iStr)
+
+        @:PROHIBIT(n == 0, "2D modal patch "//trim(iStr)//": n must be greater than zero")
+        @:PROHIBIT(p > 0, "2D modal patch "//trim(iStr)//": p must be zero")
+        @:PROHIBIT(patch_icpp(patch_id)%radius <= 0._wp, "2D modal patch "//trim(iStr)//": radius must be greater than zero")
+        @:PROHIBIT(f_is_default(patch_icpp(patch_id)%x_centroid), "2D modal patch "//trim(iStr)//": x_centroid must be set")
+        @:PROHIBIT(f_is_default(patch_icpp(patch_id)%y_centroid), "2D modal patch "//trim(iStr)//": y_centroid must be set")
+
+    end subroutine s_check_2d_modal_patch_geometry
+
+    impure subroutine s_check_3d_spherical_harmonic_patch_geometry(patch_id)
         integer, intent(in) :: patch_id
 
         call s_int_to_str(patch_id, iStr)
@@ -259,14 +273,8 @@ contains
         @:PROHIBIT(f_is_default(patch_icpp(patch_id)%x_centroid), "Spherical harmonic patch "//trim(iStr)//": x_centroid must be set")
         @:PROHIBIT(f_is_default(patch_icpp(patch_id)%y_centroid), "Spherical harmonic patch "//trim(iStr)//": y_centroid must be set")
         @:PROHIBIT(f_is_default(patch_icpp(patch_id)%z_centroid), "Spherical harmonic patch "//trim(iStr)//": z_centroid must be set")
-        @:PROHIBIT(.not. f_approx_in_array(patch_icpp(patch_id)%epsilon, (/1._wp, 2._wp, 3._wp, 4._wp, 5._wp/)), &
-            "Spherical harmonic patch "//trim(iStr)//": epsilon must be one of 1, 2, 3, 4, 5")
-        @:PROHIBIT(patch_icpp(patch_id)%beta < 0._wp, &
-            "Spherical harmonic patch "//trim(iStr)//": beta must be greater than or equal to zero")
-        @:PROHIBIT(patch_icpp(patch_id)%beta > patch_icpp(patch_id)%epsilon, &
-            "Spherical harmonic patch "//trim(iStr)//": beta must be less than or equal to epsilon")
 
-    end subroutine s_check_spherical_harmonic_patch_geometry
+    end subroutine s_check_3d_spherical_harmonic_patch_geometry
 
     !>  This subroutine checks the model patch input
         !!  @param patch_id Patch identifier
@@ -528,6 +536,7 @@ contains
 
     end subroutine s_check_inactive_patch_primitive_variables
 
+    !> @brief Verifies that the model file referenced by the given patch exists on disk.
     impure subroutine s_check_model_geometry(patch_id)
 
         integer, intent(in) :: patch_id

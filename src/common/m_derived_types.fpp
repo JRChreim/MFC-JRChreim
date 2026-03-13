@@ -1,11 +1,10 @@
 !>
-!! @file m_derived_types.f90
+!! @file
 !! @brief Contains module m_derived_types
 
 #:include "macros.fpp"
 
-!> @brief This file contains the definitions of all of the custom-defined
-!!              types used in the pre-process code.
+!> @brief Shared derived types for field data, patch geometry, bubble dynamics, and MPI I/O structures
 module m_derived_types
 
     use m_constants  !< Constants
@@ -180,7 +179,23 @@ module m_derived_types
     type :: t_model
         integer :: ntrs   ! Number of triangles
         type(t_triangle), allocatable :: trs(:) ! Triangles
+
     end type t_model
+
+    type :: t_model_array
+        ! Original CPU-side fields (unchanged)
+        type(t_model), allocatable :: model
+        real(wp), allocatable, dimension(:, :, :) :: boundary_v
+        real(wp), allocatable, dimension(:, :) :: interpolated_boundary_v
+        integer :: boundary_edge_count
+        integer :: total_vertices
+        integer :: interpolate
+
+        ! GPU-friendly flattened arrays
+        integer :: ntrs  ! copy of model%ntrs
+        real(wp), allocatable, dimension(:, :, :) :: trs_v  ! (3, 3, ntrs) - triangle vertices
+        real(wp), allocatable, dimension(:, :) :: trs_n  ! (3, ntrs)    - triangle normals
+    end type t_model_array
 
     !> Derived type adding initial condition (ic) patch parameters as attributes
     !! NOTE: The requirements for the specification of the above parameters
@@ -207,9 +222,18 @@ module m_derived_types
         !! domain of influence.
 
         real(wp), dimension(2:9) :: a !<
-        !! The parameters needed for the spherical harmonic patch
+        !! Used by hardcoded IC and as temporary variables.
 
         logical :: non_axis_sym
+
+        ! Geometry 13 (2D modal Fourier): fourier_cos(n), fourier_sin(n) for mode n
+        real(wp), dimension(1:max_2d_fourier_modes) :: fourier_cos, fourier_sin
+        logical :: modal_clip_r_to_min !< When true, clip boundary radius: R(theta) = max(R(theta), modal_r_min) (Non-exp form only)
+        real(wp) :: modal_r_min        !< Minimum boundary radius when modal_clip_r_to_min is true (Non-exp form only)
+        logical :: modal_use_exp_form  !< When true, boundary = radius*exp(Fourier series)
+
+        ! Geometry 14 (3D spherical harmonic): sph_har_coeff(l,m) for real Y_lm
+        real(wp), dimension(0:max_sph_harm_degree, -max_sph_harm_degree:max_sph_harm_degree) :: sph_har_coeff
 
         real(wp), dimension(3) :: normal !<
         !! Normal vector indicating the orientation of the patch. It is specified
@@ -296,6 +320,7 @@ module m_derived_types
         !! is specified through its x-, y- and z-coordinates, respectively.
         real(wp) :: step_x_centroid, step_y_centroid, step_z_centroid !<
         !! Centroid locations of intermediate steps in the time_stepper module
+        real(wp), dimension(1:3) :: centroid_offset ! offset of center of mass from computed cell center for odd-shaped IBs
 
         real(wp), dimension(1:3) :: angles
         real(wp), dimension(1:3) :: step_angles
@@ -436,8 +461,11 @@ module m_derived_types
         integer, dimension(3) :: ip_grid !< Top left grid point of IP
         real(wp), dimension(2, 2, 2) :: interp_coeffs !< Interpolation Coefficients of image point
         integer :: ib_patch_id !< ID of the IB Patch the ghost point is part of
+        real(wp) :: levelset
+        real(wp), dimension(1:3) :: levelset_norm
         logical :: slip
         integer, dimension(3) :: DB
+        integer :: x_periodicity, y_periodicity, z_periodicity
     end type ghost_point
 
     !> Species parameters

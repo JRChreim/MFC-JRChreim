@@ -1,12 +1,10 @@
 !>
-!! @file m_global_parameters.f90
+!! @file
 !! @brief Contains module m_global_parameters
 
 #:include 'case.fpp'
 
-!> @brief This module contains all of the parameters characterizing the
-!!              computational domain, simulation algorithm, initial condition
-!!              and the stiffened equation of state.
+!> @brief Defines global parameters for the computational domain, simulation algorithm, and initial conditions
 module m_global_parameters
 
 #ifdef MFC_MPI
@@ -100,6 +98,7 @@ module m_global_parameters
     integer :: tensor_size           !< Number of components in the nonsymmetric tensor
     logical :: pre_stress            !< activate pre_stressed domain
     logical :: cont_damage           !< continuum damage modeling
+    logical :: hyper_cleaning        !< Hyperbolic cleaning for MHD
     logical :: igr                   !< Use information geometric regularization
     integer :: igr_order             !< IGR reconstruction order
     logical, parameter :: chemistry = .${chemistry}$. !< Chemistry modeling
@@ -121,6 +120,7 @@ module m_global_parameters
     integer :: c_idx                               !< Index of the color function
     type(int_bounds_info) :: species_idx           !< Indexes of first & last concentration eqns.
     integer :: damage_idx                          !< Index of damage state variable (D) for continuum damage model
+    integer :: psi_idx                             !< Index of hyperbolic cleaning state variable for MHD
 
     ! Cell Indices for the (local) interior points (O-m, O-n, 0-p).
     ! Stands for "InDices With BUFFer".
@@ -183,10 +183,6 @@ module m_global_parameters
 #ifdef MFC_MPI
 
     type(mpi_io_var), public :: MPI_IO_DATA
-    type(mpi_io_ib_var), public :: MPI_IO_IB_DATA
-    type(mpi_io_airfoil_ib_var), public :: MPI_IO_airfoil_IB_DATA
-    type(mpi_io_levelset_var), public :: MPI_IO_levelset_DATA
-    type(mpi_io_levelset_norm_var), public :: MPI_IO_levelsetnorm_DATA
 
     character(LEN=name_len) :: mpiiofs
     integer :: mpi_info_int !<
@@ -300,6 +296,7 @@ module m_global_parameters
     !! to the next time-step.
 
     logical :: fft_wrt
+    logical :: dummy  !< AMDFlang workaround: keep a dummy logical to avoid a compiler case-optimization bug when a parameter+GPU-kernel conditional is false
 
 contains
 
@@ -373,6 +370,7 @@ contains
         b_size = dflt_int
         tensor_size = dflt_int
         cont_damage = .false.
+        hyper_cleaning = .false.
 
         mhd = .false.
         relativity = .false.
@@ -409,6 +407,7 @@ contains
         elliptic_smoothing = .false.
 
         fft_wrt = .false.
+        dummy = .false.
 
         simplex_perturb = .false.
         simplex_params%perturb_vel(:) = .false.
@@ -469,6 +468,12 @@ contains
             patch_icpp(i)%a(8) = dflt_real
             patch_icpp(i)%a(9) = dflt_real
             patch_icpp(i)%non_axis_sym = .false.
+            patch_icpp(i)%fourier_cos(:) = 0._wp
+            patch_icpp(i)%fourier_sin(:) = 0._wp
+            patch_icpp(i)%modal_clip_r_to_min = .false.
+            patch_icpp(i)%modal_r_min = 1.e-12_wp
+            patch_icpp(i)%modal_use_exp_form = .false.
+            patch_icpp(i)%sph_har_coeff(:, :) = 0._wp
 
             !should get all of r0's and v0's
             patch_icpp(i)%r0 = dflt_real
@@ -572,6 +577,7 @@ contains
             patch_ib(i)%angular_vel(:) = 0._wp
             patch_ib(i)%mass = dflt_real
             patch_ib(i)%moment = dflt_real
+            patch_ib(i)%centroid_offset(:) = 0._wp
 
             ! sets values of a rotation matrix which can be used when calculating rotations
             patch_ib(i)%rotation_matrix = 0._wp
@@ -885,6 +891,11 @@ contains
                 sys_size = damage_idx
             end if
 
+            if (hyper_cleaning) then
+                psi_idx = sys_size + 1
+                sys_size = psi_idx
+            end if
+
         end if
 
         if (chemistry) then
@@ -938,12 +949,6 @@ contains
                 MPI_IO_DATA%var(i)%sf => null()
             end do
         end if
-
-        if (ib) then
-            allocate (MPI_IO_IB_DATA%var%sf(0:m, 0:n, 0:p))
-            allocate (MPI_IO_levelset_DATA%var%sf(0:m, 0:n, 0:p, 1:num_ibs))
-            allocate (MPI_IO_levelsetnorm_DATA%var%sf(0:m, 0:n, 0:p, 1:num_ibs, 1:3))
-        end if
 #endif
 
         ! Allocating grid variables for the x-direction
@@ -970,6 +975,7 @@ contains
 
     end subroutine s_initialize_global_parameters_module
 
+    !> @brief Configures MPI parallel I/O settings and allocates processor coordinate arrays.
     impure subroutine s_initialize_parallel_io
 
 #ifdef MFC_MPI
@@ -1007,6 +1013,7 @@ contains
 
     end subroutine s_initialize_parallel_io
 
+    !> @brief Deallocates all global grid, index, and equation-of-state parameter arrays.
     impure subroutine s_finalize_global_parameters_module
 
         integer :: i

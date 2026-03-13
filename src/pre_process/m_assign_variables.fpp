@@ -1,10 +1,11 @@
 !>
-!! @file m_assign_variables.f90
+!! @file
 !! @brief Contains module m_assign_variables
 
 #:include 'case.fpp'
 #:include 'macros.fpp'
 
+!> @brief Assigns initial primitive variables to computational cells based on patch geometry
 module m_assign_variables
 
     use m_derived_types         ! Definitions of the derived types
@@ -37,9 +38,9 @@ module m_assign_variables
         !> Skeleton of s_assign_patch_mixture_primitive_variables
         !!      and s_assign_patch_species_primitive_variables
         !! @param patch_id is the patch identifier
-        !! @param j (x) cell index in which the mixture or species primitive variables from the indicated patch areassigned
-        !! @param k (y,th) cell index in which the mixture or species primitive variables from the indicated patch areassigned
-        !! @param l (z) cell index in which the mixture or species primitive variables from the indicated patch areassigned
+        !! @param j (x) cell index in which the mixture or species primitive variables from the indicated patch are assigned
+        !! @param k (y,th) cell index in which the mixture or species primitive variables from the indicated patch are assigned
+        !! @param l (z) cell index in which the mixture or species primitive variables from the indicated patch are assigned
         !! @param eta pseudo volume fraction
         !! @param q_prim_vf Primitive variables
         !! @param patch_id_fp Array to track patch ids
@@ -71,6 +72,7 @@ module m_assign_variables
 
 contains
 
+    !> @brief Allocates volume fraction sum and sets the patch primitive variable assignment procedure pointer.
     impure subroutine s_initialize_assign_variables_module
 
         if (.not. igr) then
@@ -196,7 +198,7 @@ contains
 
     end subroutine s_assign_patch_mixture_primitive_variables
 
-    !Stable perturbation in pressure (Ando)
+    !> @brief Applies a stable pressure perturbation following Ando's method for bubble-laden flows.
     !! @param j the x-dir node index
     !! @param k the y-dir node index
     !! @param l the z-dir node index
@@ -230,7 +232,6 @@ contains
 
         if (qbmm) then
             do i = 1, nb
-                R3bar = R3bar + weight(i)*0.5_wp*(q_prim_vf(bubxb + 1 + (i - 1)*nmom)%sf(j, k, l))**3._wp
                 R3bar = R3bar + weight(i)*0.5_wp*(q_prim_vf(bubxb + 1 + (i - 1)*nmom)%sf(j, k, l))**3._wp
             end do
         else
@@ -712,6 +713,7 @@ contains
 
     end subroutine s_assign_patch_species_primitive_variables
 
+    !> @brief Nullifies the patch primitive variable assignment procedure pointer.
     impure subroutine s_finalize_assign_variables_module
 
         ! Nullifying procedure pointer to the subroutine assigning either

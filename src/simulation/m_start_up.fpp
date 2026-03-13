@@ -1,22 +1,11 @@
 !>
-!! @file m_start_up.f90
+!! @file
 !! @brief Contains module m_start_up
 
 #:include 'case.fpp'
 #:include 'macros.fpp'
 
-!> @brief The purpose of the module is primarily to read in the files that
-!!              contain the inputs, the initial condition data and the grid data
-!!              that are provided by the user. The module is additionally tasked
-!!              with verifying the consistency of the user inputs and completing
-!!              the grid variablesThe purpose of the module is primarily to read
-!!              in the files that
-!!              contain the inputs, the initial condition data and the grid data
-!!              that are provided by the user. The module is additionally tasked
-!!              with verifying the consistency of the user inputs and completing
-!!              the grid variables. This module also also allocating, initializing
-!!              I/O, and deallocating the relevant variables on both cpus and gpus as well as
-!!              setting up the time stepping, domain decomposition and I/O procedures.
+!> @brief Reads input files, loads initial conditions and grid data, and orchestrates solver initialization and finalization
 module m_start_up
 
     use m_derived_types        !< Definitions of the derived types
@@ -90,8 +79,6 @@ module m_start_up
     use m_body_forces
 
     use m_sim_helpers
-
-    use m_mhd
 
     use m_igr
 
@@ -183,8 +170,9 @@ contains
             g_x, g_y, g_z, n_start, t_save, t_stop, &
             cfl_adap_dt, cfl_const_dt, cfl_target, &
             surface_tension, bubbles_lagrange, lag_params, &
-            hyperelasticity, R0ref, num_bc_patches, Bx0, powell, &
+            hyperelasticity, R0ref, num_bc_patches, Bx0, &
             cont_damage, tau_star, cont_damage_s, alpha_bar, &
+            hyper_cleaning, hyper_cleaning_speed, hyper_cleaning_tau, &
             alf_factor, num_igr_iters, num_igr_warm_start_iters, &
             int_comp, ic_eps, ic_beta, nv_uvm_out_of_core, &
             nv_uvm_igr_temps_on_gpu, nv_uvm_pref_gpu, down_sample, fft_wrt
@@ -259,11 +247,7 @@ contains
 
     end subroutine s_check_input_file
 
-        !!              initial condition and grid data files. The cell-average
-        !!              conservative variables constitute the former, while the
-        !!              cell-boundary locations in x-, y- and z-directions make
-        !!              up the latter. This procedure also calculates the cell-
-        !!              width distributions from the cell-boundary locations.
+    !> @brief Reads serial initial condition and grid data files and computes cell-width distributions.
         !! @param q_cons_vf Cell-averaged conservative variables
     impure subroutine s_read_serial_data_files(q_cons_vf)
 
@@ -426,88 +410,9 @@ contains
             end if
         end if
 
-        ! Read IBM Data
-        if (ib) then
-            ! Read IB markers
-            write (file_path, '(A,I0,A)') &
-                trim(t_step_dir)//'/ib.dat'
-            inquire (FILE=trim(file_path), EXIST=file_exist)
-            if (file_exist) then
-                open (2, FILE=trim(file_path), &
-                      FORM='unformatted', &
-                      ACTION='read', &
-                      STATUS='old')
-                read (2) ib_markers%sf(0:m, 0:n, 0:p); close (2)
-            else
-                call s_mpi_abort(trim(file_path)//' is missing. Exiting.')
-            end if
-
-            ! Read Levelset
-            write (file_path, '(A)') &
-                trim(t_step_dir)//'/levelset.dat'
-            inquire (FILE=trim(file_path), EXIST=file_exist)
-            if (file_exist) then
-                open (2, FILE=trim(file_path), &
-                      FORM='unformatted', &
-                      ACTION='read', &
-                      STATUS='old')
-                read (2) levelset%sf(0:m, 0:n, 0:p, 1:num_ibs); close (2)
-                ! print*, 'check', STL_levelset(106, 50, 0, 1)
-            else
-                call s_mpi_abort(trim(file_path)//' is missing. Exiting.')
-            end if
-
-            ! Read Levelset Norm
-            write (file_path, '(A)') &
-                trim(t_step_dir)//'/levelset_norm.dat'
-            inquire (FILE=trim(file_path), EXIST=file_exist)
-            if (file_exist) then
-                open (2, FILE=trim(file_path), &
-                      FORM='unformatted', &
-                      ACTION='read', &
-                      STATUS='old')
-                read (2) levelset_norm%sf(0:m, 0:n, 0:p, 1:num_ibs, 1:3); close (2)
-            else
-                call s_mpi_abort(trim(file_path)//' is missing. Exiting.')
-            end if
-
-            do i = 1, num_ibs
-                if (patch_ib(i)%c > 0) then
-                    allocate (airfoil_grid_u(1:Np))
-                    allocate (airfoil_grid_l(1:Np))
-
-                    write (file_path, '(A)') &
-                        trim(t_step_dir)//'/airfoil_u.dat'
-                    inquire (FILE=trim(file_path), EXIST=file_exist)
-                    if (file_exist) then
-                        open (2, FILE=trim(file_path), &
-                              FORM='unformatted', &
-                              ACTION='read', &
-                              STATUS='old')
-                        read (2) airfoil_grid_u; close (2)
-                    else
-                        call s_mpi_abort(trim(file_path)//' is missing. Exiting.')
-                    end if
-
-                    write (file_path, '(A)') &
-                        trim(t_step_dir)//'/airfoil_l.dat'
-                    inquire (FILE=trim(file_path), EXIST=file_exist)
-                    if (file_exist) then
-                        open (2, FILE=trim(file_path), &
-                              FORM='unformatted', &
-                              ACTION='read', &
-                              STATUS='old')
-                        read (2) airfoil_grid_l; close (2)
-                    else
-                        call s_mpi_abort(trim(file_path)//' is missing. Exiting.')
-                    end if
-                end if
-            end do
-
-        end if
-
     end subroutine s_read_serial_data_files
 
+    !> @brief Reads parallel initial condition and grid data files via MPI I/O.
         !! @param q_cons_vf Conservative variables
     impure subroutine s_read_parallel_data_files(q_cons_vf)
 
@@ -646,8 +551,7 @@ contains
                     call s_initialize_mpi_data_ds(q_cons_vf)
                 else
                     if (ib) then
-                        call s_initialize_mpi_data(q_cons_vf, ib_markers, &
-                                                   levelset, levelset_norm)
+                        call s_initialize_mpi_data(q_cons_vf, ib_markers)
                     else
                         call s_initialize_mpi_data(q_cons_vf)
                     end if
@@ -715,69 +619,6 @@ contains
 
                 call MPI_FILE_CLOSE(ifile, ierr)
 
-                if (ib) then
-                    ! Read IB Markers
-                    write (file_loc, '(A)') 'ib.dat'
-                    file_loc = trim(case_dir)//'/restart_data'//trim(mpiiofs)//trim(file_loc)
-                    inquire (FILE=trim(file_loc), EXIST=file_exist)
-
-                    if (file_exist) then
-
-                        call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-
-                        disp = 0
-
-                        call MPI_FILE_SET_VIEW(ifile, disp, MPI_INTEGER, MPI_IO_IB_DATA%view, &
-                                               'native', mpi_info_int, ierr)
-                        call MPI_FILE_READ(ifile, MPI_IO_IB_DATA%var%sf, data_size, &
-                                           MPI_INTEGER, status, ierr)
-
-                    else
-                        call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
-                    end if
-
-                    ! Read Levelset
-                    write (file_loc, '(A)') 'levelset.dat'
-                    file_loc = trim(case_dir)//'/restart_data'//trim(mpiiofs)//trim(file_loc)
-                    inquire (FILE=trim(file_loc), EXIST=file_exist)
-
-                    if (file_exist) then
-
-                        call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-
-                        disp = 0
-
-                        call MPI_FILE_SET_VIEW(ifile, disp, mpi_io_p, MPI_IO_levelset_DATA%view, &
-                                               'native', mpi_info_int, ierr)
-                        call MPI_FILE_READ(ifile, MPI_IO_levelset_DATA%var%sf, data_size*num_ibs*mpi_io_type, &
-                                           mpi_io_p, status, ierr)
-
-                    else
-                        call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
-                    end if
-
-                    ! Read Levelset Norm
-                    write (file_loc, '(A)') 'levelset_norm.dat'
-                    file_loc = trim(case_dir)//'/restart_data'//trim(mpiiofs)//trim(file_loc)
-                    inquire (FILE=trim(file_loc), EXIST=file_exist)
-
-                    if (file_exist) then
-
-                        call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-
-                        disp = 0
-
-                        call MPI_FILE_SET_VIEW(ifile, disp, mpi_io_p, MPI_IO_levelsetnorm_DATA%view, &
-                                               'native', mpi_info_int, ierr)
-                        call MPI_FILE_READ(ifile, MPI_IO_levelsetnorm_DATA%var%sf, data_size*num_ibs*3*mpi_io_type, &
-                                           mpi_io_p, status, ierr)
-
-                    else
-                        call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
-                    end if
-
-                end if
-
             else
                 call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
             end if
@@ -797,8 +638,7 @@ contains
                 ! Initialize MPI data I/O
 
                 if (ib) then
-                    call s_initialize_mpi_data(q_cons_vf, ib_markers, &
-                                               levelset, levelset_norm)
+                    call s_initialize_mpi_data(q_cons_vf, ib_markers)
                 else
 
                     call s_initialize_mpi_data(q_cons_vf)
@@ -860,129 +700,10 @@ contains
 
                 call MPI_FILE_CLOSE(ifile, ierr)
 
-                if (ib) then
-
-                    ! Read IB Markers
-                    write (file_loc, '(A)') 'ib.dat'
-                    file_loc = trim(case_dir)//'/restart_data'//trim(mpiiofs)//trim(file_loc)
-                    inquire (FILE=trim(file_loc), EXIST=file_exist)
-
-                    if (file_exist) then
-
-                        call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-
-                        disp = 0
-
-                        call MPI_FILE_SET_VIEW(ifile, disp, MPI_INTEGER, MPI_IO_IB_DATA%view, &
-                                               'native', mpi_info_int, ierr)
-                        call MPI_FILE_READ(ifile, MPI_IO_IB_DATA%var%sf, data_size, &
-                                           MPI_INTEGER, status, ierr)
-
-                    else
-                        call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
-                    end if
-
-                    ! Read Levelset
-                    write (file_loc, '(A)') 'levelset.dat'
-                    file_loc = trim(case_dir)//'/restart_data'//trim(mpiiofs)//trim(file_loc)
-                    inquire (FILE=trim(file_loc), EXIST=file_exist)
-
-                    if (file_exist) then
-
-                        call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-
-                        disp = 0
-
-                        call MPI_FILE_SET_VIEW(ifile, disp, mpi_io_p, MPI_IO_levelset_DATA%view, &
-                                               'native', mpi_info_int, ierr)
-                        call MPI_FILE_READ(ifile, MPI_IO_levelset_DATA%var%sf, data_size*num_ibs*mpi_io_type, &
-                                           mpi_io_p, status, ierr)
-
-                    else
-                        call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
-                    end if
-
-                    ! Read Levelset Norm
-                    write (file_loc, '(A)') 'levelset_norm.dat'
-                    file_loc = trim(case_dir)//'/restart_data'//trim(mpiiofs)//trim(file_loc)
-                    inquire (FILE=trim(file_loc), EXIST=file_exist)
-
-                    if (file_exist) then
-
-                        call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-
-                        disp = 0
-
-                        call MPI_FILE_SET_VIEW(ifile, disp, mpi_io_p, MPI_IO_levelsetnorm_DATA%view, &
-                                               'native', mpi_info_int, ierr)
-                        call MPI_FILE_READ(ifile, MPI_IO_levelsetnorm_DATA%var%sf, data_size*num_ibs*3*mpi_io_type, &
-                                           mpi_io_p, status, ierr)
-
-                    else
-                        call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
-                    end if
-
-                end if
-
             else
                 call s_mpi_abort('File '//trim(file_loc)//' is missing. Exiting.')
             end if
 
-        end if
-
-        if (ib) then
-
-            do j = 1, num_ibs
-                if (patch_ib(j)%c > 0) then
-
-                    allocate (airfoil_grid_u(1:Np))
-                    allocate (airfoil_grid_l(1:Np))
-
-                    write (file_loc, '(A)') 'airfoil_l.dat'
-                    file_loc = trim(case_dir)//'/restart_data'//trim(mpiiofs)//trim(file_loc)
-                    inquire (FILE=trim(file_loc), EXIST=file_exist)
-                    if (file_exist) then
-
-                        call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-
-                        ! Initial displacement to skip at beginning of file
-                        disp = 0
-
-                        call MPI_FILE_SET_VIEW(ifile, disp, mpi_io_p, MPI_IO_airfoil_IB_DATA%view(1), &
-                                               'native', mpi_info_int, ierr)
-                        call MPI_FILE_READ(ifile, MPI_IO_airfoil_IB_DATA%var(1:Np), 3*Np*mpi_io_type, &
-                                           mpi_io_p, status, ierr)
-
-                    end if
-
-                    write (file_loc, '(A)') 'airfoil_u.dat'
-                    file_loc = trim(case_dir)//'/restart_data'//trim(mpiiofs)//trim(file_loc)
-                    inquire (FILE=trim(file_loc), EXIST=file_exist)
-                    if (file_exist) then
-
-                        call MPI_FILE_OPEN(MPI_COMM_WORLD, file_loc, MPI_MODE_RDONLY, mpi_info_int, ifile, ierr)
-
-                        ! Initial displacement to skip at beginning of file
-                        disp = 0
-
-                        call MPI_FILE_SET_VIEW(ifile, disp, mpi_io_p, MPI_IO_airfoil_IB_DATA%view(2), &
-                                               'native', mpi_info_int, ierr)
-                        call MPI_FILE_READ(ifile, MPI_IO_airfoil_IB_DATA%var(Np + 1:2*Np), 3*Np*mpi_io_type, &
-                                           mpi_io_p, status, ierr)
-                    end if
-
-                    do i = 1, Np
-                        airfoil_grid_l(i)%x = MPI_IO_airfoil_IB_DATA%var(i)%x
-                        airfoil_grid_l(i)%y = MPI_IO_airfoil_IB_DATA%var(i)%y
-                    end do
-
-                    do i = 1, Np
-                        airfoil_grid_u(i)%x = MPI_IO_airfoil_IB_DATA%var(Np + i)%x
-                        airfoil_grid_u(i)%y = MPI_IO_airfoil_IB_DATA%var(Np + i)%y
-                    end do
-
-                end if
-            end do
         end if
 
         deallocate (x_cb_glb, y_cb_glb, z_cb_glb)
@@ -1064,6 +785,7 @@ contains
 
     end subroutine s_initialize_internal_energy_equations
 
+    !> @brief Advances the simulation by one time step, handling CFL-based dt and time-stepper dispatch.
     impure subroutine s_perform_time_step(t_step, time_avg)
         integer, intent(inout) :: t_step
         real(wp), intent(inout) :: time_avg
@@ -1123,11 +845,6 @@ contains
             end do
         end if
 
-        call s_compute_derived_variables(t_step)
-
-#ifdef DEBUG
-        print *, 'Computed derived vars'
-#endif
         mytime = mytime + dt
 
         ! Total-variation-diminishing (TVD) Runge-Kutta (RK) time-steppers
@@ -1138,11 +855,11 @@ contains
         if (relax) call s_infinite_relaxation_k(q_cons_ts(1)%vf)
 
         ! Time-stepping loop controls
-
         t_step = t_step + 1
 
     end subroutine s_perform_time_step
 
+    !> @brief Collects per-process wall-clock times and writes aggregate performance metrics to file.
     impure subroutine s_save_performance_metrics(time_avg, time_final, io_time_avg, io_time_final, proc_time, io_proc_time, file_exists)
 
         real(wp), intent(inout) :: time_avg, time_final
@@ -1204,6 +921,7 @@ contains
 
     end subroutine s_save_performance_metrics
 
+    !> @brief Saves conservative variable data to disk at the current time step.
     impure subroutine s_save_data(t_step, start, finish, io_time_avg, nt)
         integer, intent(inout) :: t_step
         real(wp), intent(inout) :: start, finish, io_time_avg
@@ -1247,7 +965,7 @@ contains
                     do j = 0, m
                         if (ieee_is_nan(real(q_cons_ts(stor)%vf(i)%sf(j, k, l), kind=wp))) then
                             print *, "NaN(s) in timestep output.", j, k, l, i, proc_rank, t_step, m, n, p
-                            error stop "NaN(s) in timestep output."
+                            call s_mpi_abort("NaN(s) in timestep output.")
                         end if
                     end do
                 end do
@@ -1300,6 +1018,7 @@ contains
 
     end subroutine s_save_data
 
+    !> @brief Initializes all simulation sub-modules in the required dependency order.
     impure subroutine s_initialize_modules
 
         integer :: m_ds, n_ds, p_ds
@@ -1307,6 +1026,12 @@ contains
         real(wp) :: temp1, temp2, temp3, temp4
 
         call s_initialize_global_parameters_module()
+        #:if USING_AMD
+            #:for BC in {-5, -6, -7, -8, -9, -10, -11, -12, -13}
+                @:PROHIBIT(any((/bc_x%beg, bc_x%end, bc_y%beg, bc_y%end, bc_z%beg, bc_z%end/) == ${BC}$) .and. adv_idx%end > 20 .and. (.not. chemistry), "CBC module with AMD compiler requires adv_idx%end <= 20 when case optimization is turned off")
+                @:PROHIBIT(any((/bc_x%beg, bc_x%end, bc_y%beg, bc_y%end, bc_z%beg, bc_z%end/) == ${BC}$) .and. sys_size > 20 .and. (chemistry), "CBC module with AMD compiler and chemistry requires sys_size <= 20 when case optimization is turned off")
+            #:endfor
+        #:endif
         if (bubbles_euler .or. bubbles_lagrange) then
             call s_initialize_bubbles_model()
         end if
@@ -1369,7 +1094,10 @@ contains
         call s_populate_grid_variables_buffers()
 
         if (model_eqns == 3) call s_initialize_internal_energy_equations(q_cons_ts(1)%vf)
-        if (ib) call s_ibm_setup()
+        if (ib) then
+            call s_ibm_setup()
+            call s_write_ib_data_file(0)
+        end if
         if (bodyForces) call s_initialize_body_forces_module()
         if (acoustic_source) call s_precalculate_acoustic_spatial_sources()
 
@@ -1379,9 +1107,10 @@ contains
         ! Computation of parameters, allocation of memory, association of pointers,
         ! and/or execution of any other tasks that are needed to properly configure
         ! the modules. The preparations below DO DEPEND on the grid being complete.
-        if (igr) then
+        if (igr .or. dummy) then
             call s_initialize_igr_module()
-        else
+        end if
+        if (.not. igr .or. dummy) then
             if (recon_type == WENO_TYPE) then
                 call s_initialize_weno_module()
             elseif (recon_type == MUSCL_TYPE) then
@@ -1397,10 +1126,9 @@ contains
         if (hypoelasticity) call s_initialize_hypoelastic_module()
         if (hyperelasticity) call s_initialize_hyperelastic_module()
 
-        if (mhd .and. powell) call s_initialize_mhd_powell_module
-
     end subroutine s_initialize_modules
 
+    !> @brief Sets up the MPI execution environment, binds GPUs, and decomposes the computational domain.
     impure subroutine s_initialize_mpi_domain
         integer :: ierr
 #ifdef MFC_GPU
@@ -1480,6 +1208,7 @@ contains
 
     end subroutine s_initialize_mpi_domain
 
+    !> @brief Transfers initial conservative variable and model parameter data to the GPU device.
     subroutine s_initialize_gpu_vars
         integer :: i
         !Update GPU DATA
@@ -1540,17 +1269,18 @@ contains
         #:if not MFC_CASE_OPTIMIZATION
             $:GPU_UPDATE(device='[igr,nb,igr_order]')
         #:endif
-        #:block DEF_AMD
+        #:if USING_AMD
             block
                 use m_thermochem, only: molecular_weights
                 use m_chemistry, only: molecular_weights_nonparameter
                 molecular_weights_nonparameter(:) = molecular_weights(:)
                 $:GPU_UPDATE(device='[molecular_weights_nonparameter]')
             end block
-        #:endblock
+        #:endif
 
     end subroutine s_initialize_gpu_vars
 
+    !> @brief Finalizes and deallocates all simulation sub-modules in reverse initialization order.
     impure subroutine s_finalize_modules
 
         call s_finalize_time_steppers_module()
@@ -1584,7 +1314,6 @@ contains
 
         if (surface_tension) call s_finalize_surface_tension_module()
         if (bodyForces) call s_finalize_body_forces_module()
-        if (mhd .and. powell) call s_finalize_mhd_powell_module
 
         ! Terminating MPI execution environment
         call s_mpi_finalize()
