@@ -1224,7 +1224,7 @@ contains
         real(wp), dimension(2), intent(in) :: R2D, DeltamP
         real(wp), intent(in) :: pS, rhoe
         integer, intent(in) :: j, k, l, ns
-        real(wp), dimension(num_fluids) :: ek, hk, gk, sk, rhok
+        real(wp), dimension(num_fluids) :: alphak, ek, hk, gk, sk, rhok
         integer, dimension(num_fluids) :: iFix
         real(wp) :: maxg, rho
         !< Generic loop iterator
