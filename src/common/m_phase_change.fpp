@@ -1415,7 +1415,7 @@ contains
         ! densities
         rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
         
-        if ( isnan(rhok) ) then
+        if ( any( isnan(rhok) ) ) then
           print *, rhok
         end if
 
