@@ -493,6 +493,7 @@ contains
 
         integer :: i, ns !< generic loop iterators
         
+        ! indices for all the fluids/phases
         iFix = (/ (i, i=1,num_fluids) /)
 
         ! initializing the partial energies, volume fractions, and masses
@@ -981,6 +982,7 @@ contains
         integer :: i
         !> @}
 
+        ! indices for all the fluids/phases
         iFix = (/ (i, i=1,num_fluids) /)
         iAuxZP = iFix
 
@@ -1223,9 +1225,13 @@ contains
         real(wp), intent(in) :: pS, rhoe
         integer, intent(in) :: j, k, l, ns
         real(wp), dimension(num_fluids) :: ek, hk, gk, sk, rhok
+        integer, dimension(num_fluids) :: iFix
         real(wp) :: maxg, rho
         !< Generic loop iterator
         integer :: i
+
+        ! auxiliary variable to correct
+        iFix = (/ (i, i=1,num_fluids) /)
 
         ! auxiliary calculations
         ! Thermodynamic state
@@ -1259,7 +1265,11 @@ contains
 
         print *, 'rhok', rhok
 
-        print *, 'alphak', mk / rhok
+        alphak = mk / rhok
+
+        alphak( pack( iFix, m0k < sgm_eps ) ) = 0._wp
+
+        print *, 'alphak', alphak
 
         if (model_eqns == 3) then
             print *, 'mek', mk * ek
@@ -1414,10 +1424,6 @@ contains
 
         ! densities
         rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
-        
-        if ( any( isnan(rhok) ) ) then
-          print *, rhok
-        end if
 
         ! internal energy
         ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
