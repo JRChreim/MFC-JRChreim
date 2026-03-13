@@ -10,17 +10,12 @@
 # flux: --error="${name}.err"
 # flux: --time=${walltime}
 # flux: --exclusive
-# flux:--setattr=thp=always
-# flux: --coral2-hugepages=512GB
+# flux: --setattr=thp=always
 % if account:
 # flux: --bank=${account}
 % endif
 % if partition:
 # flux: --queue=${partition}
-% endif
-% if unified:
-# flux:--setattr=thp=always
-# flux: --coral2-hugepages=512GB
 % endif
 % endif
 
@@ -29,7 +24,7 @@ ${helpers.template_prologue()}
 ok ":) Loading modules:\n"
 cd "${MFC_ROOT_DIR}"
 % if engine == 'batch':
-. ./mfc.sh load -c t -m ${'g' if gpu else 'c'}
+. ./mfc.sh load -c tuo -m ${'g' if gpu else 'c'}
 % endif
 cd - > /dev/null
 echo
@@ -40,6 +35,8 @@ echo
     export MPICH_GPU_SUPPORT_ENABLED=0
 % endif
 
+export HSA_XNACK=0
+
 % for target in targets:
     ${helpers.run_prologue(target)}
 
@@ -48,7 +45,7 @@ echo
     % else:
         (set -x; flux run \
             --nodes=${nodes} --ntasks=${tasks_per_node * nodes} \
-            --exclusive \
+            -o spindle.level=off --exclusive \
             % if gpu:
                 --gpus-per-task 1 \
             % endif

@@ -74,13 +74,13 @@ contains
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
-        real(wp) :: rhoe, dynE, rhos !< total internal energies (different calculations), kinetic energy, and total entropy
+        real(wp) :: rhoe, dynE !< total internal energies (different calculations), kinetic energy, and total entropy
         real(wp) :: rho, rM !< total density, total reacting mass
         real(wp) :: alpha_b !< volume fraction of the subgrid component, used in case icsg is activated
         logical :: TR, TIC, TSG
 
         $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
-        $:GPU_DECLARE(create='[rhoe,dynE,rhos,rho,rM,TR]')
+        $:GPU_DECLARE(create='[rhoe,dynE,rho,rM,TR]')
 
         real(wp), dimension(nb) :: mass_b, R_b !< subgrid variables, used in case icsg is activated
 
@@ -97,7 +97,7 @@ contains
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rhos,rho,rM,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,mOr,rhok,Tk]')
+        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rho,rM,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,mOr,rhok,Tk]')
         do j = 0, m
             do k = 0, n
                 do l = 0, p
@@ -1033,7 +1033,8 @@ contains
             if ( any((/ 1, 4 /) == relax_model ) ) then
                 ! this iAuxZP is only valid when we use either the old or new p-relaxations, as they are only
                 ! used with the 6-equation model. Note that they test the phisical validity of the initial conditions
-                iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
+                ! iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
+                iAuxZP( pack( iFix, ( m0k > 0 ) ) ) = 0
             else
                 ! this is used for either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
                 ! energies are not important
@@ -1048,11 +1049,10 @@ contains
             alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
             
             m0k(iZP) = 0.0_wp
-            ! renormalizing all variables of interest based on the volume fraction
-            ! so everything is adjusted accordingly
 
             if (model_eqns == 3) then
-              me0k(iZP) = 0.0_wp
+              me0k( pack( iFix, me0k < 0.0_wp ) ) = 0.0_wp
+              ! me0k(iZP) = 0.0_wp
               ! me0k = me0k / sum(alpha0k)
             end if
 
