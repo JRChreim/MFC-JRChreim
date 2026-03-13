@@ -1414,6 +1414,10 @@ contains
 
         ! densities
         rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
+        
+        if ( isnan(rhok) ) then
+          print *, rhok
+        end if
 
         ! internal energy
         ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
