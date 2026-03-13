@@ -1267,7 +1267,7 @@ contains
 
         alphak = mk / rhok
 
-        alphak( pack( iFix, m0k < sgm_eps ) ) = 0._wp
+        alphak( pack( iFix, mk < sgm_eps ) ) = 0._wp
 
         print *, 'alphak', alphak
 
