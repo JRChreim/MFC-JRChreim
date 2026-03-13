@@ -140,27 +140,6 @@ contains
                     ! This calulation is performed as the total energy minus the kinetic one as energy it is preserved at discontinuities
                     rhoe = q_cons_vf(E_idx)%sf(j, k, l) - dynE
 
-                    !! phase change triggers
-                    ! For Interface Capturing (enough alphak)
-                    TIC = (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps)
-
-                    ! For Subgrid (enough alpha_b)
-                    ! in case interface capturing and subgrid are activated. Check this later on
-                    alpha_b = 0.0_wp ; TSG = .false.
-                    if (bubbles_euler) then
-                      alpha_b = q_cons_vf(alf_idx)%sf(j, k, l)
-                      do cb = 1, nb
-
-                        ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
-                        mass_b(cb) = rho0ref * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
-
-                        R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
-
-                        call s_SG_trigger( alpha_b, mass_b(cb), R_b(cb), TSG )
-
-                      end do
-                    end if
-
                     ! if phase change is still necessary
                     if (TR) then
                         select case (relax_model)
@@ -182,6 +161,27 @@ contains
             
                             ! new volume fractions, after partial densities and p- or pT-equilibrium
                             alphak = m0k / rhok
+
+                            !! phase change triggers
+                            ! For Interface Capturing (enough alphak)
+                            TIC = (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps)
+
+                            ! For Subgrid (enough alpha_b)
+                            ! in case interface capturing and subgrid are activated. Subgrid trigger
+                            alpha_b = 0.0_wp ; TSG = .false.
+                            if (bubbles_euler) then
+                              alpha_b = q_cons_vf(alf_idx)%sf(j, k, l)
+                              do cb = 1, nb
+
+                                ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
+                                mass_b(cb) = rho0ref * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
+
+                                R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
+
+                                call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), TSG )
+
+                              end do
+                            end if
 
                             ! 1 - model activation, 1st order transition (p,T) <= (pCr, TCr)
                             if ( ( pS < pCr ) .and. &
@@ -1440,21 +1440,22 @@ contains
         !!  criterium, if subgrid model is activated. This is based on Fuster's
         !!  work (Stability of bubbly liquids and its connection to the process
         !!  of cavitation inception)
-    subroutine s_SG_trigger( alpha_b, massIn_b, RIn_b, TSG )
+    subroutine s_SG_trigger( alpha_b, massIn_b, pS, RIn_b, TSG )
         $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
             & cray_inline=True) 
 
-        real(wp), intent(in)  :: alpha_b, massIn_b, RIn_b
+        real(wp), intent(in)  :: alpha_b, massIn_b, pS, RIn_b
         logical, intent(inout)  :: TSG
-        real(wp) :: RBlake, K
+        real(wp) :: RBlake, PolCoeff
 
         ! polytropic coefficient. For the moment, Assuming isentropic only
-        K = gam_g
+        PolCoeff = gam_g
 
         !! first approximation: dilute limit - Blake's critical radius for 
         !! either mono or polydisperse bubbles, since they are into the dilute
         !! limit
-        RBlake = ( 3.0_wp * K * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * K - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * K ) )
+        ! RBlake = ( 3.0_wp * PolCoeff * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * PolCoeff - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * PolCoeff ) )
+        RBlake = 2.0_wp * ss / ( pv - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * PolCoeff ) )
 
         TSG = RIn_b > RBlake 
 
