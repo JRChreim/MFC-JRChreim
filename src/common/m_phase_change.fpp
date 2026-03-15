@@ -726,7 +726,7 @@ contains
             hp = 1.0_wp/(rhoe + pO - mQ) + 1.0_wp/(pO + minval(ps_inf(iSP)))
 
             ! updating common pressure for the newton solver
-            pS = pO + ((1.0_wp - gp) / gpp) / (1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) / (2.0_wp*gpp)*hp)
+            pS = pO + ((1.0_wp - gp) / gpp) / (1.0_wp - (1.0_wp - gp + abs(1.0_wp - gp)) * hp / (2.0_wp*gpp))
 
             ! common temperature
             TS = (rhoe + pS - mQ) / mCP
