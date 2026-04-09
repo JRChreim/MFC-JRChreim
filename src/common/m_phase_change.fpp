@@ -1485,6 +1485,7 @@ contains
 
         if (TSG) then
           print *, 'RBlake', RBlake
+          Print *, '( pv - pS )', ( pv - pS )
         !   print *, 'RIn_b', RIn_b
         end if
         ! TSG = alpha_b > 1.0e-4_wp
