@@ -1335,8 +1335,6 @@ contains
 
         if (surface_tension) call s_initialize_surface_tension_module()
 
-        if (relax) call s_initialize_phasechange_module()
-
         call s_initialize_data_output_module()
         call s_initialize_derived_variables_module()
         call s_initialize_time_steppers_module()

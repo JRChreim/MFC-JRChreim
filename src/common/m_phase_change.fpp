@@ -23,8 +23,7 @@ module m_phase_change
 
     implicit none
 
-    private; public :: s_initialize_phasechange_module, &
- s_infinite_relaxation_k
+    private; public :: s_infinite_relaxation_k
 
     !> @name Parameters for the first order transition phase change
     !> @{
@@ -37,13 +36,6 @@ module m_phase_change
     !> @}
 
 contains
-
-    !>  The purpose of this subroutine is to initialize the phase change module
-        !!      by setting the parameters needed for phase change and
-        !!      selecting the phase change module that will be used
-        !!      (pT- or pTg-equilibrium)
-    impure subroutine s_initialize_phasechange_module
-    end subroutine s_initialize_phasechange_module
 
     logical elemental function f_is_negligible_phase_mass(mass, reacting_mass) result(is_negligible)
         $:GPU_ROUTINE(parallelism='[seq]')
@@ -1403,6 +1395,9 @@ contains
 
         case (2)
             ! Compute saturation pressure from a prescribed saturation temperature.
+            ! minimum pressure that keeps the logarithms well-defined
+            pMin = maxval((/ -(1.0_wp - ptgalpha_eps)*ps_inf(lp) + ptgalpha_eps, &
+                            -(1.0_wp - ptgalpha_eps)*ps_inf(vp) + ptgalpha_eps /))
 
             ! if the prescribed saturation temperature is nonphysical or
             ! the phase change state cannot be sustained
@@ -1436,8 +1431,8 @@ contains
                     dFdp = TSat*(cvs(lp)*(gs_min(lp) - 1)/(pSat + ps_inf(lp)) &
                                  - cvs(vp)*(gs_min(vp) - 1)/(pSat + ps_inf(vp)))
 
-                    ! updating saturation pressure
-                    pSat = pSat - Om*FSatProp/dFdp
+                    ! updating saturation pressure and keeping the logarithms well-defined
+                    pSat = max(pSat - Om*FSatProp/dFdp, pMin)
 
 #ifndef MFC_OpenACC
                     ! Checking if pSat returns a NaN
@@ -1524,6 +1519,8 @@ contains
         real(wp), intent(inout) :: TS
         logical, intent(inout)  :: TSG
         real(wp) :: pVap, RBlake
+
+        print *, pS
 
         call s_Saturation_Properties(pVap, TS, pS, 2)
 
