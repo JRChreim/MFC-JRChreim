@@ -1520,9 +1520,9 @@ contains
         logical, intent(inout)  :: TSG
         real(wp) :: pVap, RBlake
 
-        print *, pS
-
         call s_Saturation_Properties(pVap, TS, pS, 2)
+
+        print *, 'pVap', pVap
 
         !! first approximation: dilute limit - Blake's critical radius for
         !! either mono or polydisperse bubbles, since they are into the dilute
