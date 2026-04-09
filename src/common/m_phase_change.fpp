@@ -39,8 +39,6 @@ module m_phase_change
     !> @name Gibbs free energy phase change parameters
     !> @{
     real(wp) :: A, B, C, D
-    integer, parameter :: sat_output_temperature = 1
-    integer, parameter :: sat_output_pressure    = 2
     !> @}
 
     $:GPU_DECLARE(create='[A,B,C,D]')
@@ -188,7 +186,7 @@ contains
 
                                 R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
-                                call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), TSG )
+                                call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), TS, TSG )
 
                               end do
                             end if
@@ -215,7 +213,7 @@ contains
                                 call s_infinite_pt_relaxation(j, k, l, m0k, 0, pSOV, p_infOV, rhoe, rM, TSOV)
 
                                 ! computing the saturation temperature for the overheated vapor state
-                                call s_Saturation_Properties(pSOV, TSatOV, TSOV, sat_output_temperature)
+                                call s_Saturation_Properties(pSOV, TSatOV, TSOV, 1)
 
                                 ! subcooled liquid
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
@@ -225,7 +223,7 @@ contains
                                 call s_infinite_pt_relaxation(j, k, l, m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
 
                                 ! computing the saturation temperature for the subcooled liquid state
-                                call s_Saturation_Properties(pSSL, TSatSL, TSSL, sat_output_temperature)
+                                call s_Saturation_Properties(pSSL, TSatSL, TSSL, 1)
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -1342,8 +1340,8 @@ contains
 
         !>  This auxiliary routine computes the requested saturation property
         !!      from the supplied saturation state and initial guess
-        !!  @param pSat Saturation pressure. Input for sat_output_temperature and output for sat_output_pressure
-        !!  @param TSat Saturation temperature. Output for sat_output_temperature and input for sat_output_pressure
+        !!  @param pSat Saturation pressure. Input for iSatOut = 1 and output for iSatOut = 2
+        !!  @param TSat Saturation temperature. Output for iSatOut = 1 and input for iSatOut = 2
         !!  @param SatIn Initial guess for the Newton solver: temperature when computing TSat, pressure when computing pSat
         !!  @param iSatOut Saturation-property selector chosen by the caller
     subroutine s_Saturation_Properties(pSat, TSat, SatIn, iSatOut)
@@ -1366,7 +1364,7 @@ contains
         FSatProp = 2.0_wp*ptgalpha_eps
 
         select case (iSatOut)
-        case (sat_output_temperature)
+        case (1)
             ! Compute saturation temperature from a prescribed saturation pressure.
             ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
             ! phisically sustained (p = 0, T = 0)
@@ -1421,7 +1419,7 @@ contains
 
             end if
 
-        case (sat_output_pressure)
+        case (2)
             ! Compute saturation pressure from a prescribed saturation temperature.
             ! minimum pressure that keeps the logarithms well-defined
             pMin = maxval((/ -(1.0_wp - ptgalpha_eps)*ps_inf(lp) + ptgalpha_eps, &
@@ -1477,7 +1475,7 @@ contains
         case default
             call s_int_to_str(iSatOut, iSatOutS)
             call s_mpi_abort('Unsupported saturation output choice = '//iSatOutS// &
-                           & '. Use sat_output_temperature or sat_output_pressure. ' // &
+                           & '. Use 1 for outputting temperature or 2 for outputting pressure. ' // &
                            & 'm_phase_change, s_Saturation_Properties. Aborting!')
 #endif
         end select
@@ -1533,28 +1531,30 @@ contains
         !!  criterium, if subgrid model is activated. This is based on Fuster's
         !!  work (Stability of bubbly liquids and its connection to the process
         !!  of cavitation inception)
-    subroutine s_SG_trigger( alpha_b, massIn_b, pS, RIn_b, TSG )
+    subroutine s_SG_trigger( alpha_b, massIn_b, pS, RIn_b, TS, TSG )
         $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
             & cray_inline=True)
 
-        real(wp), intent(in)  :: alpha_b, massIn_b, pS, RIn_b
+        real(wp), intent(in)    :: alpha_b, massIn_b, pS, RIn_b
+        real(wp), intent(inout) :: TS
         logical, intent(inout)  :: TSG
-        real(wp) :: RBlake
+        real(wp) :: pVap, RBlake
 
-        ! polytropic coefficient. For the moment, Assuming isentropic only
-        gam = gam_g
+        call s_Saturation_Properties(pVap, TS, pS, 2)
 
         !! first approximation: dilute limit - Blake's critical radius for
         !! either mono or polydisperse bubbles, since they are into the dilute
         !! limit
         ! RBlake = ( 3.0_wp * gam * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * gam - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * gam ) )
-        RBlake = 2.0_wp * ss / ( pv - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * gam ) )
+        RBlake = 2.0_wp * ss / ( pVap - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * gam ) )
 
         TSG = RIn_b > RBlake
 
         if (TSG) then
           print *, 'RBlake', RBlake
-          Print *, '( pv - pS )', ( pv - pS )
+          Print *, '( pVap - pS )', ( pVap - pS )
+          print *, 'pVap', pVap
+          print *, 'pS', pS
           print *, 'gam', gam
         end if
         ! TSG = alpha_b > 1.0e-4_wp
