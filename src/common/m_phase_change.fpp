@@ -1534,13 +1534,13 @@ contains
 
         TSG = RIn_b > RBlake
 
-        if (TSG) then
-          print *, 'RBlake', RBlake
-          Print *, '( pVap - pS )', ( pVap - pS )
-          print *, 'pVap', pVap
-          print *, 'pS', pS
-          print *, 'TS', TS
-        end if
+        ! if (TSG) then
+        !   print *, 'RBlake', RBlake
+        !   Print *, '( pVap - pS )', ( pVap - pS )
+        !   print *, 'pVap', pVap
+        !   print *, 'pS', pS
+        !   print *, 'TS', TS
+        ! end if
         ! TSG = alpha_b > 1.0e-4_wp
 
     end subroutine s_SG_trigger
