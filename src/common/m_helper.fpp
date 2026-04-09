@@ -179,6 +179,7 @@ contains
         if (.not. polytropic) Pe_c = 1._wp/vd
 
         if (bubbles_euler) then
+            gam = gam_g ! used this so the variable gam is equally defined for both pre_process and simulation
             ! Initialize variables for non-polytropic (Preston) model
             if (.not. polytropic) then
                 call s_initialize_nonpoly()

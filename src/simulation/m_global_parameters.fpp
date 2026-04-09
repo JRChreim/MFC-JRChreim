@@ -709,7 +709,7 @@ contains
         bub_pp%cp_g = dflt_real; cp_g = dflt_real
         bub_pp%R_v = dflt_real; R_v = dflt_real
         bub_pp%R_g = dflt_real; R_g = dflt_real
-
+        gam = dflt_real;
         ! Tait EOS
         rhoref = dflt_real
         pref = dflt_real
@@ -725,7 +725,6 @@ contains
         polytropic = .true.
         polydisperse = .false.
         thermal = dflt_int
-        R0ref = dflt_real
 
         #:if not MFC_CASE_OPTIMIZATION
             nb = 1
@@ -978,8 +977,6 @@ contains
 
                     @:ALLOCATE(bub_idx%rs(nb), bub_idx%vs(nb))
                     @:ALLOCATE(bub_idx%ps(nb), bub_idx%ms(nb))
-
-                    gam = bub_pp%gam_g
 
                     if (qbmm) then
                         @:ALLOCATE(bub_idx%moms(nb, nmom))

@@ -264,13 +264,12 @@ module m_global_parameters
     integer :: thermal  !1 = adiabatic, 2 = isotherm, 3 = transfer
 
     real(wp) :: phi_vg, phi_gv, Pe_c, Tw, k_vl, k_gl
-    real(wp) :: gam_m
 
     real(wp), dimension(:), allocatable :: pb0, mass_g0, mass_v0, Pe_T, k_v, k_g
     real(wp), dimension(:), allocatable :: Re_trans_T, Re_trans_c, Im_trans_T, Im_trans_c, omegaN
 
     real(wp) :: R0ref, p0ref, rho0ref, T0ref, ss, pv, vd, mu_l, mu_v, mu_g, &
-                gam_v, gam_g, M_v, M_g, cp_v, cp_g, R_v, R_g
+                gam, gam_v, gam_g, gam_m, M_v, M_g, cp_v, cp_g, R_v, R_g
 
     !> @}
 
@@ -518,7 +517,6 @@ contains
         polydisperse = .false.
 
         thermal = dflt_int
-        R0ref = dflt_real
         nb = dflt_int
 
         Eu = dflt_real
@@ -628,6 +626,7 @@ contains
         bub_pp%cp_g = dflt_real; cp_g = dflt_real
         bub_pp%R_v = dflt_real; R_v = dflt_real
         bub_pp%R_g = dflt_real; R_g = dflt_real
+        gam = dflt_real
 
     end subroutine s_assign_default_values_to_user_inputs
 

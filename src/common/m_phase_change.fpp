@@ -39,6 +39,8 @@ module m_phase_change
     !> @name Gibbs free energy phase change parameters
     !> @{
     real(wp) :: A, B, C, D
+    integer, parameter :: sat_output_temperature = 1
+    integer, parameter :: sat_output_pressure    = 2
     !> @}
 
     $:GPU_DECLARE(create='[A,B,C,D]')
@@ -212,8 +214,8 @@ contains
                                 ! calling pT-equilibrium for overheated vapor, which is MFL = 0
                                 call s_infinite_pt_relaxation(j, k, l, m0k, 0, pSOV, p_infOV, rhoe, rM, TSOV)
 
-                                ! calculating Saturation temperature
-                                call s_TSat(pSOV, TSatOV, TSOV)
+                                ! computing the saturation temperature for the overheated vapor state
+                                call s_Saturation_Properties(pSOV, TSatOV, TSOV, sat_output_temperature)
 
                                 ! subcooled liquid
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
@@ -222,8 +224,8 @@ contains
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1
                                 call s_infinite_pt_relaxation(j, k, l, m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
 
-                                ! calculating Saturation temperature
-                                call s_TSat(pSSL, TSatSL, TSSL)
+                                ! computing the saturation temperature for the subcooled liquid state
+                                call s_Saturation_Properties(pSSL, TSatSL, TSSL, sat_output_temperature)
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -1338,82 +1340,149 @@ contains
 
     end subroutine s_whistleblower
 
-        !>  This auxiliary subroutine finds the Saturation temperature for a given
-        !!      saturation pressure through a newton solver
-        !!  @param pSat Saturation Pressure
-        !!  @param TSat Saturation Temperature
-        !!  @param TSIn equilibrium Temperature
-    subroutine s_TSat(pSat, TSat, TSIn)
-        $:GPU_ROUTINE(function_name='s_TSat',parallelism='[seq]', &
+        !>  This auxiliary routine computes the requested saturation property
+        !!      from the supplied saturation state and initial guess
+        !!  @param pSat Saturation pressure. Input for sat_output_temperature and output for sat_output_pressure
+        !!  @param TSat Saturation temperature. Output for sat_output_temperature and input for sat_output_pressure
+        !!  @param SatIn Initial guess for the Newton solver: temperature when computing TSat, pressure when computing pSat
+        !!  @param iSatOut Saturation-property selector chosen by the caller
+    subroutine s_Saturation_Properties(pSat, TSat, SatIn, iSatOut)
+        $:GPU_ROUTINE(function_name='s_Saturation_Properties',parallelism='[seq]', &
             & cray_inline=True)
 
-        real(wp), intent(out) :: TSat
-        real(wp), intent(in) :: pSat, TSIn
-        real(wp) :: dFdT, FT, Om !< auxiliary variables
-        character(20) :: nss, pSatS, TSatS
+        real(wp), intent(inout) :: pSat, TSat
+        real(wp), intent(in) :: SatIn
+        integer, intent(in) :: iSatOut
+        real(wp) :: dFdp, dFdT, FSatProp, Om, pMin
+        character(20) :: iSatOutS, nss, pInS, pSatS, TSatS
 
         ! Generic loop iterators
         integer :: ns
 
-        ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
-        ! phisically sustained (p = 0, T = 0)
-        if ((pSat <= 0.0_wp) .and. (TSIn >= 0.0_wp)) then
+        ! Shared Newton-solver state. The selected branch below only changes the
+        ! residual and jacobian formulas for the requested saturation property.
+        Om = under_relax
+        ns = 0
+        FSatProp = 2.0_wp*ptgalpha_eps
 
-            ! assigning Saturation temperature
-            TSat = 0.0_wp
+        select case (iSatOut)
+        case (sat_output_temperature)
+            ! Compute saturation temperature from a prescribed saturation pressure.
+            ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
+            ! phisically sustained (p = 0, T = 0)
+            if ((pSat <= 0.0_wp) .and. (SatIn >= 0.0_wp)) then
 
-        else
+                ! assigning Saturation temperature
+                TSat = 0.0_wp
 
-            ! calculating initial estimate for temperature in the TSat procedure. I will also use this variable to
-            ! iterate over the Newton's solver
-            TSat = TSIn
+            else
 
-            ! underrelaxation factor
-            Om = under_relax
-            ! starting counter for the Newton solver
-            ns = 0
+                ! calculating initial estimate for temperature in the TSat procedure. I will also use this variable to
+                ! iterate over the Newton's solver
+                TSat = SatIn
 
-            ! Newton solver for finding the saturation temperature as function of pressure. ns == 0, so the loop is
-            ! entered at least once.
-            do while ( ( abs(FT) > ptgalpha_eps ) .or. ( ns == 0 ) )
+                ! Newton solver for finding the saturation temperature as function of pressure. ns == 0, so the loop is
+                ! entered at least once.
+                do while ( ( abs(FSatProp) > ptgalpha_eps ) .or. ( ns == 0 ) )
 
-                ! Updating counter for the iterative procedure
-                ns = ns + 1
+                    ! Updating counter for the iterative procedure
+                    ns = ns + 1
 
-                ! calculating residual
-                FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
-                           *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
-                           + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
-                           - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
-                     + qvs(lp) - qvs(vp)
+                    ! residual for the saturation-temperature solve
+                    FSatProp = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
+                                     *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
+                                     + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
+                                     - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
+                               + qvs(lp) - qvs(vp)
 
-                ! calculating the jacobian
-                dFdT = &
-                    -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TSat) &
-                    - (qvps(lp) - qvps(vp)) &
-                    + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
-                    - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))
+                    ! calculating the jacobian
+                    dFdT = &
+                        -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TSat) &
+                        - (qvps(lp) - qvps(vp)) &
+                        + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
+                        - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))
 
-                ! updating saturation temperature
-                TSat = TSat - Om*FT/dFdT
+                    ! updating saturation temperature
+                    TSat = TSat - Om*FSatProp/dFdT
 
 #ifndef MFC_OpenACC
-                ! Checking if TSat returns a NaN
-                if ((ieee_is_nan(TSat)) .or. (ns > max_iter)) then
+                    ! Checking if TSat returns a NaN
+                    if ((ieee_is_nan(TSat)) .or. (ns > max_iter)) then
 
-                    call s_int_to_str(ns, nss)
-                    call s_real_to_str(TSat, TSatS)
-                    call s_real_to_str(pSat, pSatS)
-                    call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
-                    & ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
+                        call s_int_to_str(ns, nss)
+                        call s_real_to_str(TSat, TSatS)
+                        call s_real_to_str(pSat, pSatS)
+                        call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
+                        & ns = '//nss//'. m_phase_change, s_Saturation_Properties. Aborting!')
 
-                end if
+                    end if
 #endif
-            end do
+                end do
 
-        end if
+            end if
 
-    end subroutine s_TSat
+        case (sat_output_pressure)
+            ! Compute saturation pressure from a prescribed saturation temperature.
+            ! minimum pressure that keeps the logarithms well-defined
+            pMin = maxval((/ -(1.0_wp - ptgalpha_eps)*ps_inf(lp) + ptgalpha_eps, &
+                            -(1.0_wp - ptgalpha_eps)*ps_inf(vp) + ptgalpha_eps /))
+
+            ! if the prescribed saturation temperature is nonphysical or
+            ! the phase change state cannot be sustained
+            if (TSat <= 0.0_wp) then
+
+                ! assigning Saturation pressure
+                pSat = 0.0_wp
+
+            else
+
+                ! calculating initial estimate for pressure in the pSat procedure. I will also use this variable to
+                ! iterate over the Newton's solver
+                pSat = max(SatIn, pMin)
+
+                ! Newton solver for finding the saturation pressure as function of temperature. ns == 0, so the loop is
+                ! entered at least once.
+                do while ( ( abs(FSatProp) > ptgalpha_eps ) .or. ( ns == 0 ) )
+
+                    ! Updating counter for the iterative procedure
+                    ns = ns + 1
+
+                    ! residual for the saturation-pressure solve
+                    FSatProp = A + B/TSat + C*log(TSat) + D*log(pSat + ps_inf(lp)) - log(pSat + ps_inf(vp))
+
+                    ! calculating the jacobian
+                    dFdp = D/(pSat + ps_inf(lp)) - 1.0_wp/(pSat + ps_inf(vp))
+
+                    ! updating saturation pressure and keeping the logarithms well-defined
+                    pSat = max(pSat - Om*FSatProp/dFdp, pMin)
+
+#ifndef MFC_OpenACC
+                    ! Checking if pSat returns a NaN
+                    if ((ieee_is_nan(pSat)) .or. (ns > max_iter)) then
+
+                        call s_int_to_str(ns, nss)
+                        call s_real_to_str(TSat, TSatS)
+                        call s_real_to_str(pSat, pSatS)
+                        call s_real_to_str(SatIn, pInS)
+                        call s_mpi_abort('pSat = '//pSatS//', TSat = '//TSatS//', pIn = '//pInS//'. &
+                        & ns = '//nss//'. m_phase_change, s_Saturation_Properties. Aborting!')
+
+                    end if
+#endif
+                end do
+
+            end if
+
+#ifndef MFC_OpenACC
+        case default
+            call s_int_to_str(iSatOut, iSatOutS)
+            call s_mpi_abort('Unsupported saturation output choice = '//iSatOutS// &
+                           & '. Use sat_output_temperature or sat_output_pressure. ' // &
+                           & 'm_phase_change, s_Saturation_Properties. Aborting!')
+#endif
+        end select
+
+    end subroutine s_Saturation_Properties
 
     subroutine update_conservative_vars(j, k, l, m0k, pS, q_cons_vf, Tk )
 
@@ -1470,22 +1539,23 @@ contains
 
         real(wp), intent(in)  :: alpha_b, massIn_b, pS, RIn_b
         logical, intent(inout)  :: TSG
-        real(wp) :: RBlake, PolCoeff
+        real(wp) :: RBlake
 
         ! polytropic coefficient. For the moment, Assuming isentropic only
-        PolCoeff = gam_g
+        gam = gam_g
 
         !! first approximation: dilute limit - Blake's critical radius for
         !! either mono or polydisperse bubbles, since they are into the dilute
         !! limit
-        ! RBlake = ( 3.0_wp * PolCoeff * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * PolCoeff - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * PolCoeff ) )
-        RBlake = 2.0_wp * ss / ( pv - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * PolCoeff ) )
+        ! RBlake = ( 3.0_wp * gam * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * gam - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * gam ) )
+        RBlake = 2.0_wp * ss / ( pv - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * gam ) )
 
         TSG = RIn_b > RBlake
 
         if (TSG) then
           print *, 'RBlake', RBlake
           Print *, '( pv - pS )', ( pv - pS )
+          print *, gam
         !   print *, 'RIn_b', RIn_b
         end if
         ! TSG = alpha_b > 1.0e-4_wp
