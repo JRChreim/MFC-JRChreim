@@ -1333,7 +1333,7 @@ contains
         real(wp), intent(in) :: SatIn
         integer, intent(in) :: iSatOut
         real(wp) :: dFdp, dFdT, FSatProp, Om, pMin
-        character(20) :: iSatOutS, nss, pInS, pSatS, TSatS
+        character(20) :: iSatOutS, nss, SatInS, pSatS, TSatS
 
         ! Generic loop iterators
         integer :: ns
@@ -1391,7 +1391,8 @@ contains
                         call s_int_to_str(ns, nss)
                         call s_real_to_str(TSat, TSatS)
                         call s_real_to_str(pSat, pSatS)
-                        call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
+                        call s_real_to_str(SatIn, SatInS)
+                        call s_mpi_abort('pSat = '//pSatS//', TSat = '//TSatS//', SatIn = '//SatInS//'. &
                         & ns = '//nss//'. m_phase_change, s_Saturation_Properties. Aborting!')
 
                     end if
@@ -1445,8 +1446,8 @@ contains
                         call s_int_to_str(ns, nss)
                         call s_real_to_str(TSat, TSatS)
                         call s_real_to_str(pSat, pSatS)
-                        call s_real_to_str(SatIn, pInS)
-                        call s_mpi_abort('pSat = '//pSatS//', TSat = '//TSatS//', pIn = '//pInS//'. &
+                        call s_real_to_str(SatIn, SatInS)
+                        call s_mpi_abort('pSat = '//pSatS//', TSat = '//TSatS//', pIn = '//SatInS//'. &
                         & ns = '//nss//'. m_phase_change, s_Saturation_Properties. Aborting!')
 
                     end if
@@ -1548,7 +1549,7 @@ contains
     impure subroutine s_real_to_str(rl, res)
         real(wp), intent(in) :: rl
         character(len=*), intent(out) :: res
-        write (res, '(F10.4)') rl
+        write (res, '(ES20.8)') rl
         res = trim(res)
     end subroutine s_real_to_str
 
