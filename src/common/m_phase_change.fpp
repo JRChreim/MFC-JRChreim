@@ -36,13 +36,6 @@ module m_phase_change
     integer, parameter  :: vp       = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
 
-    !> @name Gibbs free energy phase change parameters
-    !> @{
-    real(wp) :: A, B, C, D
-    !> @}
-
-    $:GPU_DECLARE(create='[A,B,C,D]')
-
 contains
 
     !>  The purpose of this subroutine is to initialize the phase change module
@@ -50,18 +43,6 @@ contains
         !!      selecting the phase change module that will be used
         !!      (pT- or pTg-equilibrium)
     impure subroutine s_initialize_phasechange_module
-        ! variables used in the calculation of the saturation curves for fluids 1 and 2
-        A = (cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp) + qvps(vp) - qvps(lp)) &
-            /((gs_min(vp) - 1.0_wp)*cvs(vp))
-
-        B = (qvs(lp) - qvs(vp))/((gs_min(vp) - 1.0_wp)*cvs(vp))
-
-        C = (cvs(vp)*gs_min(vp) - cvs(lp)*gs_min(lp)) &
-            /((gs_min(vp) - 1.0_wp)*cvs(vp))
-
-        D = ((gs_min(lp) - 1.0_wp)*cvs(lp)) &
-            /((gs_min(vp) - 1.0_wp)*cvs(vp))
-
     end subroutine s_initialize_phasechange_module
 
     logical elemental function f_is_negligible_phase_mass(mass, reacting_mass) result(is_negligible)
@@ -1421,9 +1402,6 @@ contains
 
         case (2)
             ! Compute saturation pressure from a prescribed saturation temperature.
-            ! minimum pressure that keeps the logarithms well-defined
-            pMin = maxval((/ -(1.0_wp - ptgalpha_eps)*ps_inf(lp) + ptgalpha_eps, &
-                            -(1.0_wp - ptgalpha_eps)*ps_inf(vp) + ptgalpha_eps /))
 
             ! if the prescribed saturation temperature is nonphysical or
             ! the phase change state cannot be sustained
@@ -1445,14 +1423,20 @@ contains
                     ! Updating counter for the iterative procedure
                     ns = ns + 1
 
-                    ! residual for the saturation-pressure solve
-                    FSatProp = A + B/TSat + C*log(TSat) + D*log(pSat + ps_inf(lp)) - log(pSat + ps_inf(vp))
+                    ! residual for the saturation-pressure solve, using the same
+                    ! Gibbs-equality expression as in the saturation-temperature path
+                    FSatProp = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
+                                     *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
+                                     + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
+                                     - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
+                               + qvs(lp) - qvs(vp)
 
-                    ! calculating the jacobian
-                    dFdp = D/(pSat + ps_inf(lp)) - 1.0_wp/(pSat + ps_inf(vp))
+                    ! jacobian of the Gibbs-equality residual with respect to pressure
+                    dFdp = TSat*(cvs(lp)*(gs_min(lp) - 1)/(pSat + ps_inf(lp)) &
+                                 - cvs(vp)*(gs_min(vp) - 1)/(pSat + ps_inf(vp)))
 
-                    ! updating saturation pressure and keeping the logarithms well-defined
-                    pSat = max(pSat - Om*FSatProp/dFdp, pMin)
+                    ! updating saturation pressure
+                    pSat = pSat - Om*FSatProp/dFdp
 
 #ifndef MFC_OpenACC
                     ! Checking if pSat returns a NaN
