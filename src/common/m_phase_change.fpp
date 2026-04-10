@@ -23,7 +23,8 @@ module m_phase_change
 
     implicit none
 
-    private; public :: s_infinite_relaxation_k
+    private; public :: s_compute_bubbles_euler_vapor_pressure, &
+                       s_infinite_relaxation_k
 
     !> @name Parameters for the first order transition phase change
     !> @{
@@ -36,6 +37,27 @@ module m_phase_change
     !> @}
 
 contains
+
+    !>  Compute the common initial vapor pressure used by Eulerian bubbles from
+        !!      the reference bubble temperature. At initialization, all Eulerian
+        !!      bubbles share the same temperature, so they also share the same
+        !!      saturation pressure. This assumes fluid 1 is the host liquid and
+        !!      fluid 2 is its vapor, matching the saturation-property solver.
+    impure subroutine s_compute_bubbles_euler_vapor_pressure()
+
+        real(wp) :: pGuess, pVap, TSatRef
+
+        if ((.not. bubbles_euler) .or. (num_fluids < 2)) return
+
+        TSatRef = bub_pp%T0ref
+        pGuess = max(bub_pp%p0ref, ptgalpha_eps)
+
+        call s_Saturation_Properties(pVap, TSatRef, pGuess, 2)
+
+        pv = pVap
+        bub_pp%pv = pVap
+
+    end subroutine s_compute_bubbles_euler_vapor_pressure
 
     logical elemental function f_is_negligible_phase_mass(mass, reacting_mass) result(is_negligible)
         $:GPU_ROUTINE(parallelism='[seq]')
