@@ -23,7 +23,10 @@ module m_phase_change
 
     implicit none
 
-    private; public :: s_compute_bubbles_euler_vapor_pressure, &
+    private; public :: pVap_sf, &
+                       s_initialize_phasechange_module, &
+                       s_finalize_phasechange_module, &
+                       s_compute_bubbles_euler_vapor_pressure, &
                        s_infinite_relaxation_k
 
     !> @name Parameters for the first order transition phase change
@@ -36,7 +39,28 @@ module m_phase_change
     integer, parameter  :: vp       = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
 
+    real(wp), allocatable, dimension(:, :, :) :: pVap_sf !< Relaxed cellwise vapor pressure used by Eulerian bubbles
+    $:GPU_DECLARE(create='[pVap_sf]')
+
 contains
+
+    impure subroutine s_initialize_phasechange_module()
+
+        if (.not. bubbles_euler) return
+
+        @:ALLOCATE(pVap_sf(0:m, 0:n, 0:p))
+        pVap_sf = pv
+        $:GPU_UPDATE(device='[pVap_sf]')
+
+    end subroutine s_initialize_phasechange_module
+
+    impure subroutine s_finalize_phasechange_module()
+
+        if (allocated(pVap_sf)) then
+            @:DEALLOCATE(pVap_sf)
+        end if
+
+    end subroutine s_finalize_phasechange_module
 
     !>  Compute the common initial vapor pressure used by Eulerian bubbles from
         !!      the reference bubble temperature. At initialization, all Eulerian
@@ -46,16 +70,20 @@ contains
     impure subroutine s_compute_bubbles_euler_vapor_pressure()
 
         real(wp) :: pGuess, pVap, TSatRef
+        
+        ! A dflt_real input signals that no vapor pressure should be used. Additionally
+        ! if the Eulerian bubble model is not activated, there is no need to compute the vapor pressure for the bubbles.
+        if ( ( bub_pp%pv == dflt_real .or. bub_pp%pv == 0.0_wp ) .or. (.not. bubbles_euler) .or. (num_fluids < 2) ) return
 
-        if ((.not. bubbles_euler) .or. (num_fluids < 2)) return
-
-        TSatRef = bub_pp%T0ref
-        pGuess = max(bub_pp%p0ref, ptgalpha_eps)
-
-        call s_Saturation_Properties(pVap, TSatRef, pGuess, 2)
-
+        ! if this is not the case, then we update the vapor pressure pv to its saturation value at the reference temperature. This is the initial vapor pressure for all the bubbles, and it will be updated during the simulation with the pT- or pTg-equilibrium solver.
+        call s_Saturation_Properties(pVap, TSatRef, bub_pp%p0ref, 2)
         pv = pVap
         bub_pp%pv = pVap
+
+        if (allocated(pVap_sf)) then
+            pVap_sf = pVap
+            $:GPU_UPDATE(device='[pVap_sf]')
+        end if
 
     end subroutine s_compute_bubbles_euler_vapor_pressure
 
@@ -77,12 +105,13 @@ contains
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
+        real(wp) :: pVapSG !< Vapor pressure from the intermediate pT state, used only for the Blake/subgrid trigger
         real(wp) :: rhoe, dynE !< total internal energies (different calculations), kinetic energy, and total entropy
         real(wp) :: rho, rM !< total density, total reacting mass
         real(wp) :: alpha_b !< volume fraction of the subgrid component, used in case icsg is activated
         logical :: TR, TIC, TSG
 
-        $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
+        $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,pVapSG]')
         $:GPU_DECLARE(create='[rhoe,dynE,rho,rM,TR]')
 
         real(wp), dimension(nb) :: mass_b, R_b !< subgrid variables, used in case icsg is activated
@@ -100,12 +129,14 @@ contains
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rho,rM,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,mOr,rhok,Tk]')
+        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,pVapSG,rhoe,rhoeT,dynE,rho,rM,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,mOr,rhok,Tk]')
         do j = 0, m
             do k = 0, n
                 do l = 0, p
                     ! trigger for phase change. This will be used for checking many conditions through the code
                     TR = .true.
+
+                    if (bubbles_euler) pVap_sf(j, k, l) = pv
 
                     $:GPU_LOOP(parallelism='[seq]')
                     do i = 1, num_fluids
@@ -171,17 +202,22 @@ contains
 
                             ! For Subgrid (enough alpha_b)
                             ! in case interface capturing and subgrid are activated. Subgrid trigger
-                            alpha_b = 0.0_wp ; TSG = .false.
-                            if (bubbles_euler) then
-                              alpha_b = q_cons_vf(alf_idx)%sf(j, k, l)
+                            alpha_b = q_cons_vf(alf_idx)%sf(j, k, l) ; TSG = .false.
+                            if (bubbles_euler .and. (pv > 0._wp) .and. (alphak(lp) > alpha_b)) then
+                              ! Vapor pressure from the intermediate pT state is
+                              ! only needed here to evaluate the Blake/subgrid
+                              ! trigger before deciding whether pTg relaxation is
+                              ! activated.
+                              call s_Saturation_Properties(pVapSG, TS, pS, 2)
+
                               do cb = 1, nb
 
                                 ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
-                                mass_b(cb) = rho0ref * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
+                                ! mass_b(cb) = rho0ref * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
 
                                 R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
-                                call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), TS, TSG )
+                                call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), pVapSG, TSG )
 
                               end do
                             end if
@@ -266,7 +302,7 @@ contains
                                 ! cycles the innermost loop to the next iteration
                                 cycle
                             end if
-                        end select
+                        end select                        
                     else
                         $:GPU_LOOP(parallelism='[seq]')
                         do i = 1, num_fluids
@@ -274,8 +310,16 @@ contains
                             m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
                         end do
                     end if
-                    ! updating conservative variables after the any relaxation procedures
-                    call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+                    ! Update conservative variables only when the relaxation
+                    ! path remains active for this cell.
+                    if (TR) then 
+                        call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+                        ! Store the final relaxed-cell vapor pressure
+                        ! for the next Euler bubble update.
+                        if (bubbles_euler .and. pv > 0.0_wp) then
+                            call s_Saturation_Properties(pVap_sf(j, k, l), TS, pS, 2)
+                        end if
+                    end if
                 end do
             end do
         end do
@@ -1363,7 +1407,7 @@ contains
             ! Compute saturation temperature from a prescribed saturation pressure.
             ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
             ! phisically sustained (p = 0, T = 0)
-            if ((pSat <= 0.0_wp) .and. (SatIn >= 0.0_wp)) then
+            if ((pSat <= sgm_eps) .and. (SatIn >= 0.0_wp)) then
 
                 ! assigning Saturation temperature
                 TSat = 0.0_wp
@@ -1423,7 +1467,7 @@ contains
 
             ! if the prescribed saturation temperature is nonphysical or
             ! the phase change state cannot be sustained
-            if (TSat <= 0.0_wp) then
+            if (TSat <= sgm_eps) then
 
                 ! assigning Saturation pressure
                 pSat = 0.0_wp
@@ -1533,32 +1577,33 @@ contains
         !!  criterium, if subgrid model is activated. This is based on Fuster's
         !!  work (Stability of bubbly liquids and its connection to the process
         !!  of cavitation inception)
-    subroutine s_SG_trigger( alpha_b, massIn_b, pS, RIn_b, TS, TSG )
+    subroutine s_SG_trigger( alpha_b, massIn_b, pS, RIn_b, pVap, TSG )
         $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
             & cray_inline=True)
 
-        real(wp), intent(in)    :: alpha_b, massIn_b, pS, RIn_b
-        real(wp), intent(inout) :: TS
+        real(wp), intent(in)    :: alpha_b, massIn_b, pS, RIn_b, pVap
         logical, intent(inout)  :: TSG
-        real(wp) :: pVap, RBlake
-
-        call s_Saturation_Properties(pVap, TS, pS, 2)
+        real(wp) :: RBlake
 
         !! first approximation: dilute limit - Blake's critical radius for
         !! either mono or polydisperse bubbles, since they are into the dilute
         !! limit
         ! RBlake = ( 3.0_wp * gam * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * gam - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * gam ) )
-        RBlake = 2.0_wp * ss / ( pVap - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * gam ) )
+        ! below the boiling point, the subgrid model is not activated, as for any T, the equilibrium is stable
+        if (pS > pVap) then
+            TSG = .false.
+        else
+            RBlake = 2.0_wp * ss / ( pVap - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * gam ) )
+            TSG = RIn_b > RBlake
+        end if
 
-        TSG = RIn_b > RBlake
-
-        ! if (TSG) then
-        !   print *, 'RBlake', RBlake
-        !   Print *, '( pVap - pS )', ( pVap - pS )
-        !   print *, 'pVap', pVap
-        !   print *, 'pS', pS
-        !   print *, 'TS', TS
-        ! end if
+        if (TSG) then
+          print *, 'RIn_b', RIn_b
+          print *, 'RBlake', RBlake
+          Print *, '( pVap - pS )', ( pVap - pS )
+          print *, 'pVap', pVap
+          print *, 'pS', pS
+        end if
         ! TSG = alpha_b > 1.0e-4_wp
 
     end subroutine s_SG_trigger

@@ -1311,13 +1311,14 @@ contains
         real(wp) :: temp1, temp2, temp3, temp4
 
         call s_initialize_global_parameters_module()
-        if (bubbles_euler) call s_compute_bubbles_euler_vapor_pressure()
-        if (bubbles_euler .or. bubbles_lagrange) then
-            call s_initialize_bubbles_model()
-        end if
         call s_initialize_mpi_common_module()
         call s_initialize_mpi_proxy_module()
         call s_initialize_variables_conversion_module()
+        if (bubbles_euler) call s_compute_bubbles_euler_vapor_pressure()
+        call s_initialize_phasechange_module()
+        if (bubbles_euler .or. bubbles_lagrange) then
+            call s_initialize_bubbles_model()
+        end if
         if (grid_geometry == 3) call s_initialize_fftw_module()
 
         if (bubbles_euler) call s_initialize_bubbles_EE_module()
@@ -1573,6 +1574,7 @@ contains
                 call s_finalize_muscl_module()
             end if
         end if
+        call s_finalize_phasechange_module()
         call s_finalize_variables_conversion_module()
         if (grid_geometry == 3) call s_finalize_fftw_module
         call s_finalize_mpi_common_module()

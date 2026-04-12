@@ -558,7 +558,7 @@ contains
                 myR = intfc_rad(k, 2)
                 myV = intfc_vel(k, 2)
                 myPb = gas_p(k, 2)
-                pint = f_cpbw_KM(myR0, myR, myV, myPb)
+                pint = f_cpbw_KM(myR0, myR, myV, myPb, Eu - pv)
                 pint = pint + 0.5_wp*myV**2._wp
                 if (lag_params%cluster_type == 2) then
                     bub_dphidt(k) = (paux - pint) + term2
@@ -590,8 +590,8 @@ contains
             myR0 = bub_R0(k)
 
             ! Vapor and heat fluxes
-            call s_vflux(myR, myV, myPb, myMass_v, k, myVapFlux, myMass_n, myBeta_c, myR_m, mygamma_m)
-            myPbdot = f_bpres_dot(myVapFlux, myR, myV, myPb, myMass_v, k, myBeta_t, myR_m, mygamma_m)
+            call s_vflux(myR, myV, myPb, myMass_v, k, pv, myVapFlux, myMass_n, myBeta_c, myR_m, mygamma_m)
+            myPbdot = f_bpres_dot(myVapFlux, myR, myV, myPb, myMass_v, k, pv, myBeta_t, myR_m, mygamma_m)
             myMvdot = 4._wp*pi*myR**2._wp*myVapFlux
 
             ! Obtaining driving pressure
@@ -611,7 +611,7 @@ contains
                 call s_advance_step(myRho, myPinf, myR, myV, myR0, myPb, myPbdot, dmalf, &
                                     dm_bub_adv_src, dm_divu, &
                                     k, myMass_v, myMass_n, myBeta_c, &
-                                    myBeta_t, myCson, adap_dt_stop)
+                                    myBeta_t, myCson, pv, adap_dt_stop)
 
                 ! Update bubble state
                 intfc_rad(k, 1) = myR
@@ -625,7 +625,7 @@ contains
                 intfc_dveldt(k, stage) = f_rddot(myRho, myPinf, myR, myV, myR0, &
                                                  myPb, myPbdot, dmalf, &
                                                  dm_bub_adv_src, dm_divu, &
-                                                 myCson)
+                                                 myCson, pv)
                 intfc_draddt(k, stage) = myV
                 gas_dmvdt(k, stage) = myMvdot
                 gas_dpdt(k, stage) = myPbdot

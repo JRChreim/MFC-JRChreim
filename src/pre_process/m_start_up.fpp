@@ -772,13 +772,14 @@ contains
         ! Computation of parameters, allocation procedures, and/or any other tasks
         ! needed to properly setup the modules
         call s_initialize_global_parameters_module()
-        if (bubbles_euler) call s_compute_bubbles_euler_vapor_pressure()
-        if (bubbles_euler .or. bubbles_lagrange) then
-            call s_initialize_bubbles_model()
-        end if
         call s_initialize_mpi_common_module()
         call s_initialize_data_output_module()
         call s_initialize_variables_conversion_module()
+        if (bubbles_euler) call s_compute_bubbles_euler_vapor_pressure()
+        call s_initialize_phasechange_module()
+        if (bubbles_euler .or. bubbles_lagrange) then
+            call s_initialize_bubbles_model()
+        end if
         call s_initialize_grid_module()
         call s_initialize_initial_condition_module()
         call s_initialize_perturbation_module()
@@ -930,6 +931,7 @@ contains
         ! Deallocation procedures for the modules
         call s_finalize_mpi_common_module()
         call s_finalize_grid_module()
+        call s_finalize_phasechange_module()
         call s_finalize_variables_conversion_module()
         call s_finalize_data_output_module()
         call s_finalize_global_parameters_module()

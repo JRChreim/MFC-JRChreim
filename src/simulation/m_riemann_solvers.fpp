@@ -2771,8 +2771,8 @@ contains
                                     $:GPU_LOOP(parallelism='[seq]')
                                     do i = 1, nb
                                         if (.not. qbmm) then
-                                            pbw_L(i) = f_cpbw_KM(R0(i), R0_L(i), V0_L(i), P0_L(i))
-                                            pbw_R(i) = f_cpbw_KM(R0(i), R0_R(i), V0_R(i), P0_R(i))
+                                            pbw_L(i) = f_cpbw_KM(R0(i), R0_L(i), V0_L(i), P0_L(i), Eu - pv)
+                                            pbw_R(i) = f_cpbw_KM(R0(i), R0_R(i), V0_R(i), P0_R(i), Eu - pv)
                                         end if
                                     end do
 
