@@ -1585,8 +1585,7 @@ contains
         logical, intent(inout)  :: TSG
         real(wp) :: RBlake
 
-        print *, 'pS: ', pS
-        print *, 'pVap: ', pVap
+        print *, 'Volume fraction: ', q_cons_vf(lp + advxb - 1)%sf(j, k, l)
 
         !! first approximation: dilute limit - Blake's critical radius for
         !! either mono or polydisperse bubbles, since they are into the dilute
