@@ -1594,6 +1594,8 @@ contains
             TSG = .false.
         else
             RBlake = 2.0_wp * ss / ( pVap - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * gam ) )
+            print *, 'RBlake', RBlake
+            print *, 'RBlake', RIn_b
             TSG = RIn_b > RBlake
         end if
 
