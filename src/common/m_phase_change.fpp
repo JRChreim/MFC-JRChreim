@@ -297,11 +297,11 @@ contains
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
 
-                                    if ( m0k(vp) > 0.0_wp ) then
-                                        print *, 'alphak(lp):', alphak(lp)
-                                        print *, 'alphak(vp):', alphak(vp)
-                                        print *, 'alpha_b:', alpha_b
-                                    end if
+                                    ! if ( m0k(vp) > 0.0_wp ) then
+                                    !     print *, 'alphak(lp):', alphak(lp)
+                                    !     print *, 'alphak(vp):', alphak(vp)
+                                    !     print *, 'alpha_b:', alpha_b
+                                    ! end if
 
                             else
                                 $:GPU_LOOP(parallelism='[seq]')
@@ -750,7 +750,7 @@ contains
 #ifndef MFC_OpenACC
             else
                 call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
                                   , 0.0_wp, (/0.0_wp, 0.0_wp/), rhoe, spread(0.0_wp, 1, num_fluids))
 
                 call s_real_to_str(rhoe - mQ - minval(ps_inf(iSP)), Econsts)
@@ -799,7 +799,7 @@ contains
             if ((pS <= -1.0_wp*minval(ps_inf(iSP))) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
 
               call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
                                 , pS, (/abs( gp - 1.0_wp ), 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
 
               call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
