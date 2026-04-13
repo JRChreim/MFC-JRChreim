@@ -203,7 +203,7 @@ contains
                             ! For Subgrid (enough alpha_b)
                             ! in case interface capturing and subgrid are activated. Subgrid trigger
                             alpha_b = q_cons_vf(alf_idx)%sf(j, k, l) ; TSG = .false.
-                            if (bubbles_euler .and. (alphak(lp) > alpha_b) .and. (alphak(lp) > palpha_eps )) then
+                            if (bubbles_euler .and. (alphak(lp) > alpha_b) .and. ( alphak(lp) > palpha_eps )) then
                               ! Vapor pressure from the intermediate pT state is
                               ! only needed here to evaluate the Blake/subgrid
                               ! trigger before deciding whether pTg relaxation is
@@ -217,7 +217,6 @@ contains
 
                                 R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
-                                
                                 ! print *, 'Volume fraction: ', alphak(lp)
                                 ! print *, 'Volume fraction bubble: ', alpha_b
 
@@ -294,6 +293,11 @@ contains
                                         end do
                                         ! cycles the innermost loop to the next iteration
                                         cycle
+                                    end if
+                                    if m0k(vp) > 0.0_wp then
+                                        print *, 'alphak(lp):', alphak(lp)
+                                        print *, 'alphak(vp):', alphak(vp)
+                                        print *, 'alpha_b:', alpha_b
                                     end if
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
@@ -995,7 +999,7 @@ contains
           ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
           maxg = maxval([gk(lp),gk(vp)])
 
-                      ! checking if the residue returned any NaN values
+          ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
           if (ieee_is_nan(norm2(R2D)) .or. (ns > max_iter)) then
 
