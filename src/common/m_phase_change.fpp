@@ -210,9 +210,6 @@ contains
                               ! activated.
                               call s_Saturation_Properties(pVapSG, TS, pS, 2)
 
-                              print *, 'pS: ', pS
-                              print *, 'pVap: ', pVapSG
-
                               do cb = 1, nb
 
                                 ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
@@ -1587,6 +1584,9 @@ contains
         real(wp), intent(in)    :: alpha_b, massIn_b, pS, RIn_b, pVap
         logical, intent(inout)  :: TSG
         real(wp) :: RBlake
+
+        print *, 'pS: ', pS
+        print *, 'pVap: ', pVapSG
 
         !! first approximation: dilute limit - Blake's critical radius for
         !! either mono or polydisperse bubbles, since they are into the dilute
