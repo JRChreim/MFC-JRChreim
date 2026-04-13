@@ -219,7 +219,7 @@ contains
 
                                 
                                 print *, 'Volume fraction: ', alphak(lp)
-                                print *, 'Volume fraction bubble: ', alphak(lp)
+                                print *, 'Volume fraction bubble: ', alpha_b
                                 
 
                                 call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), pVapSG, TSG )
