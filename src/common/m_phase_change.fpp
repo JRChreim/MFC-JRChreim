@@ -217,7 +217,10 @@ contains
 
                                 R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
+                                
                                 print *, 'Volume fraction: ', alphak(lp)
+                                print *, 'Volume fraction bubble: ', alphak(lp)
+                                
 
                                 call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), pVapSG, TSG )
 
