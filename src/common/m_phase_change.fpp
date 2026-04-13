@@ -203,7 +203,7 @@ contains
                             ! For Subgrid (enough alpha_b)
                             ! in case interface capturing and subgrid are activated. Subgrid trigger
                             alpha_b = q_cons_vf(alf_idx)%sf(j, k, l) ; TSG = .false.
-                            if (bubbles_euler .and. (alphak(lp) > alpha_b)) then
+                            if (bubbles_euler .and. (alphak(lp) > alpha_b) .and. (alphak(lp) > palpha_eps )) then
                               ! Vapor pressure from the intermediate pT state is
                               ! only needed here to evaluate the Blake/subgrid
                               ! trigger before deciding whether pTg relaxation is
