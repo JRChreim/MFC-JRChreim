@@ -1598,18 +1598,16 @@ contains
             TSG = .false.
         else
             RBlake = 2.0_wp * ss / ( pVap - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * gam ) )
-            print *, 'RBlake', RBlake
-            print *, 'RBlake', RIn_b
             TSG = RIn_b > RBlake
         end if
 
-        if (TSG) then
-          print *, 'RIn_b', RIn_b
-          print *, 'RBlake', RBlake
-          Print *, '( pVap - pS )', ( pVap - pS )
-          print *, 'pVap', pVap
-          print *, 'pS', pS
-        end if
+        ! if (TSG) then
+        !   print *, 'RIn_b', RIn_b
+        !   print *, 'RBlake', RBlake
+        !   Print *, '( pVap - pS )', ( pVap - pS )
+        !   print *, 'pVap', pVap
+        !   print *, 'pS', pS
+        ! end if
         ! TSG = alpha_b > 1.0e-4_wp
 
     end subroutine s_SG_trigger
