@@ -217,6 +217,8 @@ contains
 
                                 R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
+                                print *, 'Volume fraction: ', alphak(lp)
+
                                 call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), pVapSG, TSG )
 
                               end do
@@ -1584,8 +1586,6 @@ contains
         real(wp), intent(in)    :: alpha_b, massIn_b, pS, RIn_b, pVap
         logical, intent(inout)  :: TSG
         real(wp) :: RBlake
-
-        print *, 'Volume fraction: ', q_cons_vf(lp + advxb - 1)%sf(j, k, l)
 
         !! first approximation: dilute limit - Blake's critical radius for
         !! either mono or polydisperse bubbles, since they are into the dilute
