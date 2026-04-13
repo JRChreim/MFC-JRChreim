@@ -296,6 +296,13 @@ contains
                                     end if
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
+
+                                    if ( m0k(vp) > 0.0_wp ) then
+                                        print *, 'alphak(lp):', alphak(lp)
+                                        print *, 'alphak(vp):', alphak(vp)
+                                        print *, 'alpha_b:', alpha_b
+                                    end if
+
                             else
                                 $:GPU_LOOP(parallelism='[seq]')
                                 do i = 1, num_fluids
