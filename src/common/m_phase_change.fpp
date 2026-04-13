@@ -203,12 +203,15 @@ contains
                             ! For Subgrid (enough alpha_b)
                             ! in case interface capturing and subgrid are activated. Subgrid trigger
                             alpha_b = q_cons_vf(alf_idx)%sf(j, k, l) ; TSG = .false.
-                            if (bubbles_euler .and. (pv > 0._wp) .and. (alphak(lp) > alpha_b)) then
+                            if (bubbles_euler .and. (alphak(lp) > alpha_b)) then
                               ! Vapor pressure from the intermediate pT state is
                               ! only needed here to evaluate the Blake/subgrid
                               ! trigger before deciding whether pTg relaxation is
                               ! activated.
                               call s_Saturation_Properties(pVapSG, TS, pS, 2)
+
+                              print *, 'pS: ', pS
+                              print *, 'pVap: ', pVapSG
 
                               do cb = 1, nb
 
@@ -1585,8 +1588,6 @@ contains
         logical, intent(inout)  :: TSG
         real(wp) :: RBlake
 
-        print *, 'pS: ', pS
-        print *, 'pVap: ', pVap
         !! first approximation: dilute limit - Blake's critical radius for
         !! either mono or polydisperse bubbles, since they are into the dilute
         !! limit
