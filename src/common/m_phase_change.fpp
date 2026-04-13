@@ -294,12 +294,6 @@ contains
                                         ! cycles the innermost loop to the next iteration
                                         cycle
                                     end if
-
-                                    if m0k(vp) > 0.0_wp then
-                                        print *, 'alphak(lp):', alphak(lp)
-                                        print *, 'alphak(vp):', alphak(vp)
-                                        print *, 'alpha_b:', alpha_b
-                                    end if
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
                             else
