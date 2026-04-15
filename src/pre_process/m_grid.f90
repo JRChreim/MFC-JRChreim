@@ -55,42 +55,22 @@ contains
     impure subroutine s_generate_serial_grid
 
         ! Generic loop iterator
-        integer :: i, j             !< generic loop operators
-        real(wp) :: length   !< domain lengths
+        integer :: i             !< generic loop operators
 
         ! Grid Generation in the x-direction
         dx = (x_domain%end - x_domain%beg)/real(m + 1, wp)
 
         do i = 0, m
-            x_cc(i) = x_domain%beg + 5.e-1_wp*dx*real(2*i + 1, wp)
             x_cb(i - 1) = x_domain%beg + dx*real(i, wp)
         end do
 
         x_cb(m) = x_domain%end
 
+        call s_stretch_grid(x_cb, m, x_domain, stretch_x, a_x, x_a, x_b, loops_x, x_cc, dx)
+
         if (stretch_x) then
-
-            length = abs(x_cb(m) - x_cb(-1))
-            x_cb = x_cb/length
-            x_a = x_a/length
-            x_b = x_b/length
-
-            do j = 1, loops_x
-                do i = -1, m
-                    x_cb(i) = x_cb(i)/a_x* &
-                              (a_x + log(cosh(a_x*(x_cb(i) - x_a))) &
-                               + log(cosh(a_x*(x_cb(i) - x_b))) &
-                               - 2._wp*log(cosh(a_x*(x_b - x_a)/2._wp)))
-                end do
-            end do
-            x_cb = x_cb*length
-
-            x_cc(0:m) = (x_cb(0:m) + x_cb(-1:m - 1))/2._wp
-
-            dx = minval(x_cb(0:m) - x_cb(-1:m - 1))
             print *, 'Stretched grid: min/max x grid: ', minval(x_cc(:)), maxval(x_cc(:))
             if (num_procs > 1) call s_mpi_reduce_min(dx)
-
         end if
 
         ! Grid Generation in the y-direction
@@ -101,11 +81,9 @@ contains
 
             dy = (y_domain%end - y_domain%beg)/real(2*n + 1, wp)
 
-            y_cc(0) = y_domain%beg + 5.e-1_wp*dy
             y_cb(-1) = y_domain%beg
 
             do i = 1, n
-                y_cc(i) = y_domain%beg + 2._wp*dy*real(i, wp)
                 y_cb(i - 1) = y_domain%beg + dy*real(2*i - 1, wp)
             end do
 
@@ -114,7 +92,6 @@ contains
             dy = (y_domain%end - y_domain%beg)/real(n + 1, wp)
 
             do i = 0, n
-                y_cc(i) = y_domain%beg + 5.e-1_wp*dy*real(2*i + 1, wp)
                 y_cb(i - 1) = y_domain%beg + dy*real(i, wp)
             end do
 
@@ -122,30 +99,9 @@ contains
 
         y_cb(n) = y_domain%end
 
-        if (stretch_y) then
+        call s_stretch_grid(y_cb, n, y_domain, stretch_y, a_y, y_a, y_b, loops_y, y_cc, dy)
 
-            length = abs(y_cb(n) - y_cb(-1))
-            y_cb = y_cb/length
-            y_a = y_a/length
-            y_b = y_b/length
-
-            do j = 1, loops_y
-                do i = -1, n
-                    y_cb(i) = y_cb(i)/a_y* &
-                              (a_y + log(cosh(a_y*(y_cb(i) - y_a))) &
-                               + log(cosh(a_y*(y_cb(i) - y_b))) &
-                               - 2._wp*log(cosh(a_y*(y_b - y_a)/2._wp)))
-                end do
-            end do
-
-            y_cb = y_cb*length
-            y_cc(0:m) = (y_cb(0:n) + y_cb(-1:n - 1))/2._wp
-
-            dy = minval(y_cb(0:n) - y_cb(-1:n - 1))
-
-            if (num_procs > 1) call s_mpi_reduce_min(dy)
-
-        end if
+        if (stretch_y .and. (num_procs > 1)) call s_mpi_reduce_min(dy)
 
         ! Grid Generation in the z-direction
         if (p == 0) return
@@ -153,36 +109,14 @@ contains
         dz = (z_domain%end - z_domain%beg)/real(p + 1, wp)
 
         do i = 0, p
-            z_cc(i) = z_domain%beg + 5.e-1_wp*dz*real(2*i + 1, wp)
             z_cb(i - 1) = z_domain%beg + dz*real(i, wp)
         end do
 
         z_cb(p) = z_domain%end
 
-        if (stretch_z) then
+        call s_stretch_grid(z_cb, p, z_domain, stretch_z, a_z, z_a, z_b, loops_z, z_cc, dz)
 
-            length = abs(z_cb(p) - z_cb(-1))
-            z_cb = z_cb/length
-            z_a = z_a/length
-            z_b = z_b/length
-
-            do j = 1, loops_z
-                do i = -1, p
-                    z_cb(i) = z_cb(i)/a_z* &
-                              (a_z + log(cosh(a_z*(z_cb(i) - z_a))) &
-                               + log(cosh(a_z*(z_cb(i) - z_b))) &
-                               - 2._wp*log(cosh(a_z*(z_b - z_a)/2._wp)))
-                end do
-            end do
-
-            z_cb = z_cb*length
-            z_cc(0:m) = (z_cb(0:p) + z_cb(-1:p - 1))/2._wp
-
-            dz = minval(z_cb(0:p) - z_cb(-1:p - 1))
-
-            if (num_procs > 1) call s_mpi_reduce_min(dz)
-
-        end if
+        if (stretch_z .and. (num_procs > 1)) call s_mpi_reduce_min(dz)
 
     end subroutine s_generate_serial_grid
 
@@ -195,8 +129,6 @@ contains
 
 #ifdef MFC_MPI
 
-        real(wp) :: length   !< domain lengths
-
         ! Locations of cell boundaries
         real(wp), allocatable, dimension(:) :: x_cb_glb, y_cb_glb, z_cb_glb !<
             !! Locations of cell boundaries
@@ -207,7 +139,7 @@ contains
         integer :: ifile, ierr, data_size
         integer, dimension(MPI_STATUS_SIZE) :: status
 
-        integer :: i, j !< Generic loop integers
+        integer :: i !< Generic loop integers
 
         allocate (x_cb_glb(-1:m_glb))
         allocate (y_cb_glb(-1:n_glb))
@@ -219,26 +151,7 @@ contains
             x_cb_glb(i - 1) = x_domain%beg + dx*real(i, wp)
         end do
         x_cb_glb(m_glb) = x_domain%end
-        if (stretch_x) then
-            length = abs(x_cb_glb(m_glb) - x_cb_glb(-1))
-
-            x_cb_glb = x_cb_glb/length
-
-            x_a = x_a/length
-            x_b = x_b/length
-
-            do j = 1, loops_x
-                do i = -1, m_glb
-                    x_cb_glb(i) = x_cb_glb(i)/a_x* &
-                                  (a_x + log(cosh(a_x*(x_cb_glb(i) - x_a))) &
-                                   + log(cosh(a_x*(x_cb_glb(i) - x_b))) &
-                                   - 2._wp*log(cosh(a_x*(x_b - x_a)/2._wp)))
-                end do
-            end do
-
-            x_cb_glb = x_cb_glb*length
-
-        end if
+        call s_stretch_grid(x_cb_glb, m_glb, x_domain, stretch_x, a_x, x_a, x_b, loops_x)
 
         ! Grid generation in the y-direction
         if (n_glb > 0) then
@@ -256,26 +169,7 @@ contains
                 end do
             end if
             y_cb_glb(n_glb) = y_domain%end
-            if (stretch_y) then
-                length = abs(y_cb_glb(n_glb) - y_cb_glb(-1))
-
-                y_cb_glb = y_cb_glb/length
-
-                y_a = y_a/length
-                y_b = y_b/length
-
-                do j = 1, loops_y
-                    do i = -1, n_glb
-                        y_cb_glb(i) = y_cb_glb(i)/a_y* &
-                                      (a_y + log(cosh(a_y*(y_cb_glb(i) - y_a))) &
-                                       + log(cosh(a_y*(y_cb_glb(i) - y_b))) &
-                                       - 2._wp*log(cosh(a_y*(y_b - y_a)/2._wp)))
-                    end do
-                end do
-
-                y_cb_glb = y_cb_glb*length
-
-            end if
+            call s_stretch_grid(y_cb_glb, n_glb, y_domain, stretch_y, a_y, y_a, y_b, loops_y)
 
             ! Grid generation in the z-direction
             if (p_glb > 0) then
@@ -284,25 +178,7 @@ contains
                     z_cb_glb(i - 1) = z_domain%beg + dz*real(i, wp)
                 end do
                 z_cb_glb(p_glb) = z_domain%end
-                if (stretch_z) then
-                    length = abs(z_cb_glb(p_glb) - z_cb_glb(-1))
-
-                    z_cb_glb = z_cb_glb/length
-                    z_a = z_a/length
-                    z_b = z_b/length
-
-                    do j = 1, loops_z
-                        do i = -1, p_glb
-                            z_cb_glb(i) = z_cb_glb(i)/a_z* &
-                                          (a_z + log(cosh(a_z*(z_cb_glb(i) - z_a))) &
-                                           + log(cosh(a_z*(z_cb_glb(i) - z_b))) &
-                                           - 2._wp*log(cosh(a_z*(z_b - z_a)/2._wp)))
-                        end do
-                    end do
-
-                    z_cb_glb = z_cb_glb*length
-
-                end if
+                call s_stretch_grid(z_cb_glb, p_glb, z_domain, stretch_z, a_z, z_a, z_b, loops_z)
             end if
         end if
 
@@ -337,6 +213,52 @@ contains
 #endif
 
     end subroutine s_generate_parallel_grid
+
+    !> Apply the current 1D stretching formula to one coordinate direction.
+        !! This helper centralizes the stretching logic so the serial and
+        !! parallel grid generators can share the same implementation.
+        !! Center recomputation and minimum-spacing reporting are optional so
+        !! the same routine can be used both for local and global grids.
+    impure subroutine s_stretch_grid(cb, cell_end, domain, stretch, a, coord_a, coord_b, loops, cc, min_spacing)
+
+        integer, intent(in) :: cell_end
+        real(wp), intent(inout) :: cb(-1:cell_end)
+        type(bounds_info), intent(in) :: domain
+        logical, intent(in) :: stretch
+        real(wp), intent(in) :: a, coord_a, coord_b
+        integer, intent(in) :: loops
+        real(wp), intent(out), optional :: cc(0:cell_end)
+        real(wp), intent(out), optional :: min_spacing
+
+        real(wp) :: length, a_loc, coord_a_loc, coord_b_loc
+        integer :: i, j
+
+        if (stretch) then
+
+            length = abs(domain%end - domain%beg)
+            a_loc = a
+            coord_a_loc = coord_a/length
+            coord_b_loc = coord_b/length
+
+            cb = cb/length
+
+            do j = 1, loops
+                do i = -1, cell_end
+                    cb(i) = cb(i)/a_loc* &
+                            (a_loc + log(cosh(a_loc*(cb(i) - coord_a_loc))) &
+                             + log(cosh(a_loc*(cb(i) - coord_b_loc))) &
+                             - 2._wp*log(cosh(a_loc*(coord_b_loc - coord_a_loc)/2._wp)))
+                end do
+            end do
+
+            cb = cb*length
+
+        end if
+
+        if (present(cc)) cc(0:cell_end) = (cb(0:cell_end) + cb(-1:cell_end - 1))/2._wp
+        if (present(min_spacing)) min_spacing = minval(cb(0:cell_end) - cb(-1:cell_end - 1))
+
+    end subroutine s_stretch_grid
 
     !> Computation of parameters, allocation procedures, and/or
         !!              any other tasks needed to properly setup the module
