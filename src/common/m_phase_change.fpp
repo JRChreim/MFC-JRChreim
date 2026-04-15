@@ -225,6 +225,9 @@ contains
                               end do
                             end if
 
+                            print *, 'TIC, TSG: ', TIC, TSG
+                            print *, 'm0k: ', m0k
+
                             ! 1 - model activation, 1st order transition (p,T) <= (pCr, TCr)
                             if ( ( pS < pCr ) .and. &
                             ! 2.1 Homogeneous pTg-equilibrium criterium
@@ -282,6 +285,8 @@ contains
                                     ! returning partial pressures to what they were after the partial density correction
                                     m0k(lp) = mOr(1) ; m0k(vp) = mOr(2)
 
+                                    print *, 'inside'
+                                    print *, 'm0k: ', m0k
                                     ! pTg-relaxation
                                     call s_infinite_ptg_relaxation(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
