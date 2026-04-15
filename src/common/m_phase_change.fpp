@@ -285,7 +285,7 @@ contains
                                     print *, 'inside'
                                     print *, 'TIC, TSG: ', TIC, TSG
                                     print *, 'm0k: ', m0k
-                                    
+
                                     ! pTg-relaxation
                                     call s_infinite_ptg_relaxation(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
@@ -990,20 +990,24 @@ contains
             ! and (ii) the energy before and after the phase-change process.
             call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
-          ! updating common temperature
-          TS = (rhoe + pS - mQ)/mCP
+            print *, 'R2D = ', R2D
+            print *, 'm0k = ', m0k
+            print *, 'pS = ', pS
 
-          ! entropy
-          sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+            ! updating common temperature
+            TS = (rhoe + pS - mQ)/mCP
 
-          ! enthalpy
-          hk = gs_min*cvs*TS + qvs
+            ! entropy
+            sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
 
-          ! Gibbs-free energy
-          gk = hk - TS*sk
+            ! enthalpy
+            hk = gs_min*cvs*TS + qvs
 
-          ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
-          maxg = maxval([gk(lp),gk(vp)])
+            ! Gibbs-free energy
+            gk = hk - TS*sk
+
+            ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
+            maxg = maxval([gk(lp),gk(vp)])
 
           ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
