@@ -991,11 +991,16 @@ contains
 
             print *, 'j,k,l = ', j, k, l
             print *, 'Iteration number: ', ns
-            print *, 'R2D = ', R2D
-            print *, 'm0k = ', m0k
-            print *, 'pS = ', pS
             print *, 'TS = ', TS
-            print *, 'rhoe = ', rhoe
+            print *, 'mCP = ', mCP
+            print *, 'mQ = ', mQ
+            print *, 'Om = ', Om
+            print *, 'DeltamP = ', DeltamP
+            print *, 'pS = ', pS
+            print *, 'pS + ps_inf(lp) = ', pS + ps_inf(lp)
+            print *, 'pS + ps_inf(vp) = ', pS + ps_inf(vp)
+            print *, 'R2D = ', R2D
+            print *, 'det(J) = ', Jac(1,1)*Jac(2,2) - Jac(1,2)*Jac(2,1)
 
             ! entropy
             sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
