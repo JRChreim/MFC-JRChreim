@@ -71,7 +71,7 @@ contains
 
         x_cb(m) = x_domain%end
 
-        call s_stretch_grid_by_type(x_cb, x_cc, m, x_domain, dx, stretch_x, stretch_type, a_x, x_a, x_b, loops_x, a_x)
+        call s_stretch_grid_by_type(x_cb, x_cc, m, x_domain, dx, stretch_x, stretch_type, a_x, x_a, x_b, loops_x)
 
         ! Grid Generation in the y-direction
         if (n == 0) return
@@ -99,7 +99,7 @@ contains
 
         y_cb(n) = y_domain%end
 
-        call s_stretch_grid_by_type(y_cb, y_cc, n, y_domain, dy, stretch_y, stretch_type, a_y, y_a, y_b, loops_y, a_y)
+        call s_stretch_grid_by_type(y_cb, y_cc, n, y_domain, dy, stretch_y, stretch_type, a_y, y_a, y_b, loops_y)
 
         ! Grid Generation in the z-direction
         if (p == 0) return
@@ -112,7 +112,7 @@ contains
 
         z_cb(p) = z_domain%end
 
-        call s_stretch_grid_by_type(z_cb, z_cc, p, z_domain, dz, stretch_z, stretch_type, a_z, z_a, z_b, loops_z, a_z)
+        call s_stretch_grid_by_type(z_cb, z_cc, p, z_domain, dz, stretch_z, stretch_type, a_z, z_a, z_b, loops_z)
 
     end subroutine s_generate_serial_grid
 
@@ -147,7 +147,7 @@ contains
             x_cb_glb(i - 1) = x_domain%beg + dx*real(i, wp)
         end do
         x_cb_glb(m_glb) = x_domain%end
-        call s_stretch_grid_by_type(x_cb_glb, x_cc, m_glb, x_domain, dx, stretch_x, stretch_type, a_x, x_a, x_b, loops_x, a_x)
+        call s_stretch_grid_by_type(x_cb_glb, x_cc, m_glb, x_domain, dx, stretch_x, stretch_type, a_x, x_a, x_b, loops_x)
 
         ! Grid generation in the y-direction
         if (n_glb > 0) then
@@ -165,7 +165,7 @@ contains
                 end do
             end if
             y_cb_glb(n_glb) = y_domain%end
-            call s_stretch_grid_by_type(y_cb_glb, y_cc, n_glb, y_domain, dy, stretch_y, stretch_type, a_y, y_a, y_b, loops_y, a_y)
+            call s_stretch_grid_by_type(y_cb_glb, y_cc, n_glb, y_domain, dy, stretch_y, stretch_type, a_y, y_a, y_b, loops_y)
 
             ! Grid generation in the z-direction
             if (p_glb > 0) then
@@ -174,7 +174,7 @@ contains
                     z_cb_glb(i - 1) = z_domain%beg + dz*real(i, wp)
                 end do
                 z_cb_glb(p_glb) = z_domain%end
-                call s_stretch_grid_by_type(z_cb_glb, z_cc, p_glb, z_domain, dz, stretch_z, stretch_type, a_z, z_a, z_b, loops_z, a_z)
+                call s_stretch_grid_by_type(z_cb_glb, z_cc, p_glb, z_domain, dz, stretch_z, stretch_type, a_z, z_a, z_b, loops_z)
             end if
         end if
 
@@ -213,7 +213,9 @@ contains
     !> Dispatch the grid stretching routine according to the user-selected
         !! stretch type. 'stretch_type = 1' selects the hyperbolic tangent map
         !! and 'stretch_type = 2' selects the geometric-progression core.
-    impure subroutine s_stretch_grid_by_type(cb, cc, cell_end, domain, dS, stretch, stretch_type, a, coord_a, coord_b, loops, num_refined)
+        !! The geometric-progression count is passed in as a real value and
+        !! converted explicitly here before reaching the integer-only helper.
+    impure subroutine s_stretch_grid_by_type(cb, cc, cell_end, domain, dS, stretch, stretch_type, a, coord_a, coord_b, loops)
 
         integer, intent(in) :: cell_end
         real(wp), intent(inout) :: cb(-1:cell_end)
@@ -221,15 +223,18 @@ contains
         integer, intent(in) :: stretch_type
         logical, intent(in) :: stretch
         real(wp), intent(in) :: a, coord_a, coord_b
-        integer, intent(in) :: loops, num_refined
+        integer, intent(in) :: loops
         real(wp), intent(out) :: cc(0:cell_end)
         real(wp), intent(out) :: dS
 
+        integer :: num_refined
+
         if (stretch) then
-            select case stretch_type
+            select case (stretch_type)
                 case (1)
                     call s_stretch_grid_hyper_tan(cb, cell_end, domain, a, coord_a, coord_b, loops)
                 case (2)
+                    num_refined = nint(a)
                     call s_stretch_grid_geom_prog(cb, cell_end, domain, coord_a, coord_b, num_refined)
             end select
         end if
