@@ -154,6 +154,8 @@ for cmp in ["x", "y", "z"]:
     PRE_PROCESS[f"bc_{cmp}%beg"] = ParamType.INT
     PRE_PROCESS[f"bc_{cmp}%end"] = ParamType.INT
 
+PRE_PROCESS["stretch_type"] = ParamType.INT
+
 for f_id in range(1, 10+1):
     PRE_PROCESS[f'fluid_rho({f_id})'] = ParamType.REAL
 
