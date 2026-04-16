@@ -241,10 +241,6 @@ contains
             end select
         end if
 
-        if (have_cc .neqv. have_dS) then
-            call s_mpi_abort('s_stretch_grid_by_type requires both cc and dS or neither.')
-        end if
-
         if (present(cc)) then
             cc(0:cell_end) = (cb(0:cell_end) + cb(-1:cell_end - 1))/2._wp
             print *, 'Stretched grid: min/max [x,y,z] grid: ', minval(cc(:)), maxval(cc(:))
