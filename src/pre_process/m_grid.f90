@@ -71,7 +71,7 @@ contains
 
         x_cb(m) = x_domain%end
 
-        call s_stretch_grid_by_type(x_cb, x_cc, m, x_domain, dx, stretch_x, stretch_type, a_x, x_a, x_b, loops_x)
+        call s_stretch_grid_by_type(x_cb, m, x_domain, stretch_x, stretch_type, a_x, x_a, x_b, loops_x, x_cc, dx)
 
         ! Grid Generation in the y-direction
         if (n == 0) return
@@ -99,7 +99,7 @@ contains
 
         y_cb(n) = y_domain%end
 
-        call s_stretch_grid_by_type(y_cb, y_cc, n, y_domain, dy, stretch_y, stretch_type, a_y, y_a, y_b, loops_y)
+        call s_stretch_grid_by_type(y_cb, n, y_domain, stretch_y, stretch_type, a_y, y_a, y_b, loops_y, y_cc, dy)
 
         ! Grid Generation in the z-direction
         if (p == 0) return
@@ -112,7 +112,7 @@ contains
 
         z_cb(p) = z_domain%end
 
-        call s_stretch_grid_by_type(z_cb, z_cc, p, z_domain, dz, stretch_z, stretch_type, a_z, z_a, z_b, loops_z)
+        call s_stretch_grid_by_type(z_cb, p, z_domain, stretch_z, stretch_type, a_z, z_a, z_b, loops_z, z_cc, dz)
 
     end subroutine s_generate_serial_grid
 
@@ -147,7 +147,7 @@ contains
             x_cb_glb(i - 1) = x_domain%beg + dx*real(i, wp)
         end do
         x_cb_glb(m_glb) = x_domain%end
-        call s_stretch_grid_by_type(x_cb_glb, x_cc, m_glb, x_domain, dx, stretch_x, stretch_type, a_x, x_a, x_b, loops_x)
+        call s_stretch_grid_by_type(x_cb_glb, m_glb, x_domain, stretch_x, stretch_type, a_x, x_a, x_b, loops_x)
 
         ! Grid generation in the y-direction
         if (n_glb > 0) then
@@ -165,7 +165,7 @@ contains
                 end do
             end if
             y_cb_glb(n_glb) = y_domain%end
-            call s_stretch_grid_by_type(y_cb_glb, y_cc, n_glb, y_domain, dy, stretch_y, stretch_type, a_y, y_a, y_b, loops_y)
+            call s_stretch_grid_by_type(y_cb_glb, n_glb, y_domain, stretch_y, stretch_type, a_y, y_a, y_b, loops_y)
 
             ! Grid generation in the z-direction
             if (p_glb > 0) then
@@ -174,7 +174,7 @@ contains
                     z_cb_glb(i - 1) = z_domain%beg + dz*real(i, wp)
                 end do
                 z_cb_glb(p_glb) = z_domain%end
-                call s_stretch_grid_by_type(z_cb_glb, z_cc, p_glb, z_domain, dz, stretch_z, stretch_type, a_z, z_a, z_b, loops_z)
+                call s_stretch_grid_by_type(z_cb_glb, p_glb, z_domain, stretch_z, stretch_type, a_z, z_a, z_b, loops_z)
             end if
         end if
 
@@ -215,17 +215,19 @@ contains
         !! and 'stretch_type = 2' selects the geometric-progression core.
         !! The geometric-progression count is passed in as a real value and
         !! converted explicitly here before reaching the integer-only helper.
-    impure subroutine s_stretch_grid_by_type(cb, cc, cell_end, domain, dS, stretch, stretch_type, a, coord_a, coord_b, loops)
+        !! Cell-center and minimum-spacing outputs are optional so the MPI
+        !! grid path can skip them.
+    impure subroutine s_stretch_grid_by_type(cb, cell_end, domain, stretch, stretch_type, a, coord_a, coord_b, loops, cc, dS)
 
         integer, intent(in) :: cell_end
         real(wp), intent(inout) :: cb(-1:cell_end)
         type(bounds_info), intent(in) :: domain
-        integer, intent(in) :: stretch_type
         logical, intent(in) :: stretch
+        integer, intent(in) :: stretch_type
         real(wp), intent(in) :: a, coord_a, coord_b
         integer, intent(in) :: loops
-        real(wp), intent(out) :: cc(0:cell_end)
-        real(wp), intent(out) :: dS
+        real(wp), intent(out), optional :: cc(0:cell_end)
+        real(wp), intent(out), optional :: dS
 
         integer :: num_refined
 
@@ -239,11 +241,18 @@ contains
             end select
         end if
 
-        cc(0:cell_end) = (cb(0:cell_end) + cb(-1:cell_end - 1))/2._wp
-        dS = minval(cb(0:cell_end) - cb(-1:cell_end - 1))
+        if (have_cc .neqv. have_dS) then
+            call s_mpi_abort('s_stretch_grid_by_type requires both cc and dS or neither.')
+        end if
 
-        print *, 'Stretched grid: min/max [x,y,z] grid: ', minval(cc(:)), maxval(cc(:))
-        if (num_procs > 1) call s_mpi_reduce_min(dS)
+        if (present(cc)) then
+            cc(0:cell_end) = (cb(0:cell_end) + cb(-1:cell_end - 1))/2._wp
+            print *, 'Stretched grid: min/max [x,y,z] grid: ', minval(cc(:)), maxval(cc(:))
+        end if
+        if (present(dS)) then
+            dS = minval(cb(0:cell_end) - cb(-1:cell_end - 1))
+            if (num_procs > 1) call s_mpi_reduce_min(dS)
+        end if            
 
     end subroutine s_stretch_grid_by_type
 
