@@ -986,6 +986,9 @@ contains
             ! and (ii) the energy before and after the phase-change process.
             call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
+            ! updating common temperature
+            TS = (rhoe + pS - mQ)/mCP
+
             print *, 'j,k,l = ', j, k, l
             print *, 'Iteration number: ', ns
             print *, 'R2D = ', R2D
@@ -993,9 +996,6 @@ contains
             print *, 'pS = ', pS
             print *, 'TS = ', TS
             print *, 'rhoe = ', rhoe
-
-            ! updating common temperature
-            TS = (rhoe + pS - mQ)/mCP
 
             ! entropy
             sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
