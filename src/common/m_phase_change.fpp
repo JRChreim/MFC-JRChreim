@@ -986,6 +986,7 @@ contains
             ! and (ii) the energy before and after the phase-change process.
             call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
+            print *, 'j,k,l = ', j, k, l
             print *, 'Iteration number: ', ns
             print *, 'R2D = ', R2D
             print *, 'm0k = ', m0k
