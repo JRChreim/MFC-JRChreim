@@ -282,10 +282,6 @@ contains
                                     ! returning partial pressures to what they were after the partial density correction
                                     m0k(lp) = mOr(1) ; m0k(vp) = mOr(2)
 
-                                    print *, 'inside'
-                                    print *, 'TIC, TSG: ', TIC, TSG
-                                    print *, 'm0k: ', m0k
-
                                     ! pTg-relaxation
                                     call s_infinite_ptg_relaxation(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS, TSG)
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
