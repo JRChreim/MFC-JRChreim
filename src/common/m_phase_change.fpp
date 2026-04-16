@@ -991,6 +991,7 @@ contains
             print *, 'R2D = ', R2D
             print *, 'm0k = ', m0k
             print *, 'pS = ', pS
+            print *, 'TS = ', TS
 
             ! updating common temperature
             TS = (rhoe + pS - mQ)/mCP
