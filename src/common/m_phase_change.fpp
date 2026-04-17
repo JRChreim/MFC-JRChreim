@@ -279,6 +279,18 @@ contains
 
                                 ! if not, mixture of fluids. Starting phase change (pTg)
                                 else
+#ifndef MFC_OpenACC
+                                    print *, 'case 6 fallback to pTg: j,k,l = ', j, k, l
+                                    print *, 'pS = ', pS, ' pCr = ', pCr
+                                    print *, 'TIC = ', TIC, ' TSG = ', TSG
+                                    print *, 'TSOV = ', TSOV
+                                    print *, 'TSatOV = ', TSatOV
+                                    print *, 'TSOV - TSatOV = ', TSOV - TSatOV
+                                    print *, 'TSSL = ', TSSL
+                                    print *, 'TSatSL = ', TSatSL
+                                    print *, 'TSSL - TSatSL = ', TSSL - TSatSL
+                                    print *, 'm0k(lp) = ', m0k(lp), ' m0k(vp) = ', m0k(vp)
+#endif
                                     ! returning partial pressures to what they were after the partial density correction
                                     m0k(lp) = mOr(1) ; m0k(vp) = mOr(2)
 
@@ -742,6 +754,15 @@ contains
         if ((rhoe - mQ - minval(ps_inf(iSP))) < 0.0_wp) then
 
             if ( any((/ 0, 1 /) == MFL ) ) then
+#ifndef MFC_OpenACC
+                print *, 'pT trial rejected by energy constraint: j,k,l = ', j, k, l
+                print *, 'MFL = ', MFL
+                print *, 'm0k(lp) = ', m0k(lp), ' m0k(vp) = ', m0k(vp)
+                print *, 'rhoe = ', rhoe
+                print *, 'mQ = ', mQ
+                print *, 'minval(ps_inf(iSP)) = ', minval(ps_inf(iSP))
+                print *, 'energy_margin = ', rhoe - mQ - minval(ps_inf(iSP))
+#endif
 
                 ! Assigning zero values for pressure and temperature in case of mass depletion cases
                 pS = 0.0_wp ; TS = 0.0_wp
