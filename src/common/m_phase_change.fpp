@@ -839,6 +839,7 @@ contains
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
+        real(wp), parameter :: Om_floor = 1.0e-12_wp ! minimum positive relaxation factor
         real(wp) :: Om ! underrelaxation factor
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s
@@ -970,8 +971,13 @@ contains
             else
                 Oc(3) = under_relax
             end if
-            ! choosing amonst the minimum relaxation maximum to ensure solver will not produce unphysical values
-            Om = minval(Oc)
+            ! choosing amongst the minimum relaxation maximum to ensure solver will not produce unphysical values.
+            ! If the limiter becomes nonpositive, fall back to a tiny positive step instead of reversing direction.
+            if (minval(Oc) > 0.0_wp) then
+                Om = min(under_relax, minval(Oc))
+            else
+                Om = Om_floor
+            end if
 #else
             Om = under_relax
 #endif
