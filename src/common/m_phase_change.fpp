@@ -1031,29 +1031,29 @@ contains
             ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
             maxg = maxval([gk(lp),gk(vp)])
 
-            print *, 'j,k,l = ', j, k, l
-            print *, 'ns = ', ns
-            print *, 'mCP = ', mCP
-            print *, 'mQ = ', mQ
-            print *, 'TS = ', TS
-            print *, 'Om = ', Om
-            print *, 'DeltamP = ', DeltamP
-            print *, 'pS = ', pS
-            print *, 'pS + minval(p_infpTg) = ', pS + minval(p_infpTg)
-            print *, 'pS + ps_inf(lp) = ', pS + ps_inf(lp)
-            print *, 'pS + ps_inf(vp) = ', pS + ps_inf(vp)
-            print *, 'R2D = ', R2D
-            print *, 'norm2(R2D) = ', norm2(R2D)
-            print *, 'det(J) = ', Jac(1,1)*Jac(2,2) - Jac(1,2)*Jac(2,1)
-            print *, 'Jac = ', Jac
-            print *, 'mCPD = ', mCPD
-            print *, 'mQD = ', mQD
-            print *, 'mCVGP = ', mCVGP
-            print *, 'mCVGP2 = ', mCVGP2
-            print *, 'm0k(lp) = ', m0k(lp)
-            print *, 'm0k(vp) = ', m0k(vp)
-            print *, 'maxg = ', maxg
-            print *, 'relative residual = ', norm2(R2D*(/maxg,rhoe/))/norm2((/maxg,rhoe/))
+            ! print *, 'j,k,l = ', j, k, l
+            ! print *, 'ns = ', ns
+            ! print *, 'mCP = ', mCP
+            ! print *, 'mQ = ', mQ
+            ! print *, 'TS = ', TS
+            ! print *, 'Om = ', Om
+            ! print *, 'DeltamP = ', DeltamP
+            ! print *, 'pS = ', pS
+            ! print *, 'pS + minval(p_infpTg) = ', pS + minval(p_infpTg)
+            ! print *, 'pS + ps_inf(lp) = ', pS + ps_inf(lp)
+            ! print *, 'pS + ps_inf(vp) = ', pS + ps_inf(vp)
+            ! print *, 'R2D = ', R2D
+            ! print *, 'norm2(R2D) = ', norm2(R2D)
+            ! print *, 'det(J) = ', Jac(1,1)*Jac(2,2) - Jac(1,2)*Jac(2,1)
+            ! print *, 'Jac = ', Jac
+            ! print *, 'mCPD = ', mCPD
+            ! print *, 'mQD = ', mQD
+            ! print *, 'mCVGP = ', mCVGP
+            ! print *, 'mCVGP2 = ', mCVGP2
+            ! print *, 'm0k(lp) = ', m0k(lp)
+            ! print *, 'm0k(vp) = ', m0k(vp)
+            ! print *, 'maxg = ', maxg
+            ! print *, 'relative residual = ', norm2(R2D*(/maxg,rhoe/))/norm2((/maxg,rhoe/))
 
 
           ! checking if the residue returned any NaN values
