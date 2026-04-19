@@ -948,7 +948,7 @@ contains
                             end if
 
                             #:if (NORM_DIR == 2)
-                                if (cyl_coord) then
+                                if (cyl_coord .or. sph_coord) then
                                     !Substituting the advective flux into the inviscid geometrical source flux
                                     $:GPU_LOOP(parallelism='[seq]')
                                     do i = 1, E_idx
@@ -1610,7 +1610,7 @@ contains
                             end if
 
                             #:if (NORM_DIR == 2)
-                                if (cyl_coord) then
+                                if (cyl_coord .or. sph_coord) then
                                     !Substituting the advective flux into the inviscid geometrical source flux
                                     $:GPU_LOOP(parallelism='[seq]')
                                     do i = 1, E_idx
@@ -2349,9 +2349,9 @@ contains
                                          xi_P*qR_prim_rs${XYZ}$_vf(j + 1, k, l, c_idx))*s_S
                                 end if
 
-                                ! Geometrical source flux for cylindrical coordinates
+                                ! Geometrical source flux for cylindrical/spherical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         !Substituting the advective flux into the inviscid geometrical source flux
                                         $:GPU_LOOP(parallelism='[seq]')
                                         do i = 1, E_idx
@@ -2581,10 +2581,10 @@ contains
                                     end do
                                 end if
 
-                                ! Geometrical source flux for cylindrical coordinates
+                                ! Geometrical source flux for cylindrical/spherical coordinates
 
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         ! Substituting the advective flux into the inviscid geometrical source flux
                                         $:GPU_LOOP(parallelism='[seq]')
                                         do i = 1, E_idx
@@ -3016,9 +3016,9 @@ contains
                                         *(vel_R(dir_idx(1)) + s_P*(xi_R - 1._wp))
                                 end if
 
-                                ! Geometrical source flux for cylindrical coordinates
+                                ! Geometrical source flux for cylindrical/spherical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         ! Substituting the advective flux into the inviscid geometrical source flux
                                         $:GPU_LOOP(parallelism='[seq]')
                                         do i = 1, E_idx
@@ -3376,9 +3376,9 @@ contains
                                         *(vel_R(dir_idx(1)) + s_P*(xi_R - 1._wp))
                                 end if
 
-                                ! Geometrical source flux for cylindrical coordinates
+                                ! Geometrical source flux for cylindrical/spherical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         ! Substituting the advective flux into the inviscid geometrical source flux
                                         $:GPU_LOOP(parallelism='[seq]')
                                         do i = 1, E_idx
@@ -3853,9 +3853,9 @@ contains
                                     end do
                                 end if
 
-                                ! Geometrical source flux for cylindrical coordinates
+                                ! Geometrical source flux for cylindrical/spherical coordinates
                                 #:if (NORM_DIR == 2)
-                                    if (cyl_coord) then
+                                    if (cyl_coord .or. sph_coord) then
                                         !Substituting the advective flux into the inviscid geometrical source flux
                                         $:GPU_LOOP(parallelism='[seq]')
                                         do i = 1, E_idx
@@ -5300,7 +5300,7 @@ contains
             end do
             $:END_GPU_PARALLEL_LOOP()
 
-            if (cyl_coord) then
+            if (cyl_coord .or. sph_coord) then
                 $:GPU_PARALLEL_LOOP(collapse=4)
                 do i = 1, sys_size
                     do l = is3%beg, is3%end

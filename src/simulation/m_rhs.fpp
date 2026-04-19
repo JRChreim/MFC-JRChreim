@@ -1201,7 +1201,7 @@ contains
                 $:END_GPU_PARALLEL_LOOP()
             end if
 
-            call s_add_directional_advection_source_terms(idir, rhs_vf, q_cons_vf, q_prim_vf, flux_src_n_vf, Kterm)
+            call s_add_directional_advection_source_terms(idir, rhs_vf, q_cons_vf, q_prim_vf, flux_src_n_vf, Kterm, multip)
 
         case (2) ! y-direction
             if (bc_y%beg <= BC_CHAR_SLIP_WALL .and. bc_y%beg >= BC_CHAR_SUP_OUTFLOW) then
@@ -1240,10 +1240,10 @@ contains
                                 rhs_vf(i_fluid_loop + intxb - 1)%sf(q, k, l) = &
                                     rhs_vf(i_fluid_loop + intxb - 1)%sf(q, k, l) - &
                                     inv_ds*advected_qty_val*pressure_val*(flux_face1 - flux_face2)
-                                if (cyl_coord) then
+                                if (cyl_coord .or. sph_coord) then
                                     rhs_vf(i_fluid_loop + intxb - 1)%sf(q, k, l) = &
                                         rhs_vf(i_fluid_loop + intxb - 1)%sf(q, k, l) - &
-                                        5.e-1_wp/y_cc(k)*advected_qty_val*pressure_val*(flux_face1 + flux_face2)
+                                        multip/y_cc(k)*advected_qty_val*pressure_val*(flux_face1 + flux_face2)
                                 end if
                             end do
                         end do
@@ -1252,7 +1252,7 @@ contains
                 $:END_GPU_PARALLEL_LOOP()
             end if
 
-            if (cyl_coord) then
+            if (cyl_coord .or. sph_coord) then
                 $:GPU_PARALLEL_LOOP(collapse=4,private='[j,k,l,q,flux_face1,flux_face2]')
                 do j = 1, sys_size
                     do l = 0, p
@@ -1261,7 +1261,7 @@ contains
                                 flux_face1 = flux_gsrc_n(2)%vf(j)%sf(q, k - 1, l)
                                 flux_face2 = flux_gsrc_n(2)%vf(j)%sf(q, k, l)
                                 rhs_vf(j)%sf(q, k, l) = rhs_vf(j)%sf(q, k, l) - &
-                                                        5.e-1_wp/y_cc(k)*(flux_face1 + flux_face2)
+                                                        multip/y_cc(k)*(flux_face1 + flux_face2)
                             end do
                         end do
                     end do
@@ -1269,7 +1269,7 @@ contains
                 $:END_GPU_PARALLEL_LOOP()
             end if
 
-            call s_add_directional_advection_source_terms(idir, rhs_vf, q_cons_vf, q_prim_vf, flux_src_n_vf, Kterm)
+            call s_add_directional_advection_source_terms(idir, rhs_vf, q_cons_vf, q_prim_vf, flux_src_n_vf, Kterm, multip)
 
         case (3) ! z-direction
             if (bc_z%beg <= BC_CHAR_SLIP_WALL .and. bc_z%beg >= BC_CHAR_SUP_OUTFLOW) then
@@ -1348,14 +1348,14 @@ contains
                 $:END_GPU_PARALLEL_LOOP()
             end if
 
-            call s_add_directional_advection_source_terms(idir, rhs_vf, q_cons_vf, q_prim_vf, flux_src_n_vf, Kterm)
+            call s_add_directional_advection_source_terms(idir, rhs_vf, q_cons_vf, q_prim_vf, flux_src_n_vf, Kterm, multip)
 
         end select
 
     contains
 
         subroutine s_add_directional_advection_source_terms(current_idir, rhs_vf_arg, q_cons_vf_arg, &
-                                                            q_prim_vf_arg, flux_src_n_vf_arg, Kterm_arg)
+                                                            q_prim_vf_arg, flux_src_n_vf_arg, Kterm_arg, multip)
             integer, intent(in) :: current_idir
             type(scalar_field), dimension(sys_size), intent(inout) :: rhs_vf_arg
             type(vector_field), intent(in) :: q_cons_vf_arg
@@ -1363,6 +1363,7 @@ contains
             type(vector_field), intent(in) :: flux_src_n_vf_arg
             ! CORRECTED DECLARATION FOR Kterm_arg:
             real(wp), allocatable, dimension(:, :, :), intent(in) :: Kterm_arg
+            real(wp), intent(in) :: multip
 
             integer :: j_adv, k_idx, l_idx, q_idx
             real(wp) :: local_inv_ds, local_term_coeff, local_flux1, local_flux2
@@ -1466,9 +1467,9 @@ contains
                                         local_flux2 = flux_src_n_vf_arg%vf(advxe)%sf(q_idx, k_idx - 1, l_idx)
                                         rhs_vf_arg(advxe)%sf(q_idx, k_idx, l_idx) = rhs_vf_arg(advxe)%sf(q_idx, k_idx, l_idx) + &
                                                                                     local_inv_ds*local_term_coeff*(local_flux1 - local_flux2)
-                                        if (cyl_coord) then
+                                        if (cyl_coord .or. sph_coord) then
                                             rhs_vf_arg(advxe)%sf(q_idx, k_idx, l_idx) = rhs_vf_arg(advxe)%sf(q_idx, k_idx, l_idx) - &
-                                                                                        (local_k_term_val/(2._wp*y_cc(k_idx)))*(local_flux1 + local_flux2)
+                                                                                        (multip*local_k_term_val/y_cc(k_idx))*(local_flux1 + local_flux2)
                                         end if
                                     end do; end do; end do
                             $:END_GPU_PARALLEL_LOOP()
@@ -1483,9 +1484,9 @@ contains
                                         local_flux2 = flux_src_n_vf_arg%vf(advxb)%sf(q_idx, k_idx - 1, l_idx)
                                         rhs_vf_arg(advxb)%sf(q_idx, k_idx, l_idx) = rhs_vf_arg(advxb)%sf(q_idx, k_idx, l_idx) + &
                                                                                     local_inv_ds*local_term_coeff*(local_flux1 - local_flux2)
-                                        if (cyl_coord) then
+                                        if (cyl_coord .or. sph_coord) then
                                             rhs_vf_arg(advxb)%sf(q_idx, k_idx, l_idx) = rhs_vf_arg(advxb)%sf(q_idx, k_idx, l_idx) + &
-                                                                                        (local_k_term_val/(2._wp*y_cc(k_idx)))*(local_flux1 + local_flux2)
+                                                                                        (multip*local_k_term_val/y_cc(k_idx))*(local_flux1 + local_flux2)
                                         end if
                                     end do; end do; end do
                             $:END_GPU_PARALLEL_LOOP()
@@ -1752,7 +1753,7 @@ contains
                 end if
             end if
 
-            ! Applying the geometrical viscous Riemann source fluxes calculated as average
+            ! Applying the geometrical source fluxes calculated as average
             ! of values at cell boundaries
             if (cyl_coord) then
                 if ((bc_y%beg == -2) .or. (bc_y%beg == -14)) then
@@ -1763,7 +1764,7 @@ contains
                             do j = 0, m
                                 $:GPU_LOOP(parallelism='[seq]')
                                 do i = momxb, E_idx
-                                    rhs_vf(i)%sf(j, k, l) = &
+                                        rhs_vf(i)%sf(j, k, l) = &
                                         rhs_vf(i)%sf(j, k, l) - 5.e-1_wp/y_cc(k)* &
                                         (flux_src_n_in(i)%sf(j, k - 1, l) &
                                          + flux_src_n_in(i)%sf(j, k, l))
@@ -2195,4 +2196,3 @@ contains
     end subroutine s_finalize_rhs_module
 
 end module m_rhs
-

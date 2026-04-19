@@ -973,8 +973,8 @@ contains
                             call s_compute_supersonic_outflow_L(lambda, L, rho, c, mf, dalpha_rho_ds, dpres_ds, dvel_ds, dadv_ds, dYs_ds)
                         end if
 
-                        ! Be careful about the cylindrical coordinate!
-                        if (cyl_coord .and. cbc_dir == 2 .and. cbc_loc == 1) then
+                        ! Be careful about the radial coordinate!
+                        if ((cyl_coord .or. sph_coord) .and. cbc_dir == 2 .and. cbc_loc == 1) then
                             dpres_dt = -5.e-1_wp*(L(advxe) + L(1)) + rho*c*c*vel(dir_idx(1)) &
                                        /y_cc(n)
                         else
@@ -1009,7 +1009,7 @@ contains
                         end if
 
                         ! The treatment of void fraction source is unclear
-                        if (cyl_coord .and. cbc_dir == 2 .and. cbc_loc == 1) then
+                        if ((cyl_coord .or. sph_coord) .and. cbc_dir == 2 .and. cbc_loc == 1) then
                             $:GPU_LOOP(parallelism='[seq]')
                             do i = 1, advxe - E_idx
                                 dadv_dt(i) = -L(momxe + i) !+ adv_local(i) * vel(dir_idx(1))/y_cc(n)
