@@ -1279,7 +1279,7 @@ contains
                 call s_cbc(q_prim_vf%vf, flux_n(idir)%vf, flux_src_n_vf%vf, idir, 1, irx, iry, irz)
             end if
 
-            if (grid_geometry == 3) then ! Cylindrical Coordinates
+            if (grid_geometry == 3 .and. .not. sph_coord) then ! Cylindrical Coordinates (skip for spherical 2D radial symmetry)
                 $:GPU_PARALLEL_LOOP(collapse=4,private='[j,k,l,q,inv_ds,velocity_val,flux_face1,flux_face2]')
                 do j = 1, sys_size
                     do k = 0, p
@@ -1304,13 +1304,13 @@ contains
                                 flux_face1 = flux_gsrc_n(3)%vf(j)%sf(l, q, k - 1)
                                 flux_face2 = flux_gsrc_n(3)%vf(j)%sf(l, q, k)
                                 rhs_vf(j)%sf(l, q, k) = rhs_vf(j)%sf(l, q, k) - &
-                                                        5.e-1_wp/y_cc(q)*(flux_face1 + flux_face2)
+                                                        multip/y_cc(q)*(flux_face1 + flux_face2)
                             end do
                         end do
                     end do
                 end do
                 $:END_GPU_PARALLEL_LOOP()
-            else ! Cartesian Coordinates
+            else if (.not. sph_coord) then ! Cartesian Coordinates (skip for spherical)
                 $:GPU_PARALLEL_LOOP(collapse=4,private='[j,k,l,q,inv_ds,flux_face1,flux_face2]')
                 do j = 1, sys_size
                     do k = 0, p
@@ -1327,7 +1327,7 @@ contains
                 $:END_GPU_PARALLEL_LOOP()
             end if
 
-            if (model_eqns == 3) then
+            if (model_eqns == 3 .and. .not. sph_coord) then ! Skip z-direction advection for spherical 2D radial
                 $:GPU_PARALLEL_LOOP(collapse=4,private='[i_fluid_loop,k,l,q,inv_ds,advected_qty_val, pressure_val,flux_face1,flux_face2]')
                 do k = 0, p
                     do q = 0, n
@@ -1508,13 +1508,15 @@ contains
                 end if
 
             case (3) ! z-direction: loops l_idx (x), q_idx (y), k_idx (z); sf(l_idx, q_idx, k_idx); dz(k_idx); Kterm(l_idx,q_idx,k_idx)
-                if (grid_geometry == 3) then
-                    use_standard_riemann = (riemann_solver == 1)
-                else
-                    use_standard_riemann = (riemann_solver == 1 .or. riemann_solver == 4)
-                end if
+                ! Skip z-direction advection source terms for spherical 2D radial symmetry
+                if (.not. sph_coord) then
+                    if (grid_geometry == 3) then
+                        use_standard_riemann = (riemann_solver == 1)
+                    else
+                        use_standard_riemann = (riemann_solver == 1 .or. riemann_solver == 4)
+                    end if
 
-                if (use_standard_riemann) then
+                    if (use_standard_riemann) then
                     $:GPU_PARALLEL_LOOP(collapse=4,private='[j_adv,k_idx,l_idx,q_idx,local_inv_ds, local_term_coeff,local_flux1,local_flux2]')
                     do j_adv = advxb, advxe
                         do k_idx = 0, p ! z_extent
@@ -1575,6 +1577,7 @@ contains
                         $:END_GPU_PARALLEL_LOOP()
                     end if
                 end if
+                end if ! End of if (.not. sph_coord) for case(3)
             end select
         end subroutine s_add_directional_advection_source_terms
 
