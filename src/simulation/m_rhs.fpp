@@ -1304,7 +1304,7 @@ contains
                                 flux_face1 = flux_gsrc_n(3)%vf(j)%sf(l, q, k - 1)
                                 flux_face2 = flux_gsrc_n(3)%vf(j)%sf(l, q, k)
                                 rhs_vf(j)%sf(l, q, k) = rhs_vf(j)%sf(l, q, k) - &
-                                                        5.e-1_wp/y_cc(q)*(flux_face1 + flux_face2)
+                                                        multip/y_cc(q)*(flux_face1 + flux_face2)
                             end do
                         end do
                     end do
