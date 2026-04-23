@@ -124,9 +124,14 @@ contains
 
         !< Generic loop iterators
         integer :: cb, i, j, k, l
+        integer :: p4_cells, p4_outer_sum, p4_inner_sum, p4_outer_max, p4_inner_max
+        integer :: p5_cells, p5_iter_sum, p5_iter_max
+        integer :: ns_outer_cell, ns_inner_cell, ns_pt_cell
 
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
+        p4_cells = 0 ; p4_outer_sum = 0 ; p4_inner_sum = 0 ; p4_outer_max = 0 ; p4_inner_max = 0
+        p5_cells = 0 ; p5_iter_sum = 0 ; p5_iter_max = 0
 
         ! starting equilibrium solver
         $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,pVapSG,rhoe,rhoeT,dynE,rho,rM,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,mOr,rhok,Tk]')
@@ -180,10 +185,18 @@ contains
                         case (1) ! (old) p-equilibrium
                             call s_old_infinite_p_relaxation(j, k, l, alphak, me0k, m0k, pS, rhoe, Tk)
                         case (4) ! p-equilibrium
-                            call s_infinite_p_relaxation(j, k, l, alphak, me0k, m0k, pS, rhoe, rM, Tk)
+                            call s_infinite_p_relaxation(j, k, l, alphak, me0k, m0k, pS, rhoe, rM, Tk, ns_outer_cell, ns_inner_cell)
+                            p4_cells = p4_cells + 1
+                            p4_outer_sum = p4_outer_sum + ns_outer_cell
+                            p4_inner_sum = p4_inner_sum + ns_inner_cell
+                            p4_outer_max = max(p4_outer_max, ns_outer_cell)
+                            p4_inner_max = max(p4_inner_max, ns_inner_cell)
                         case (5) ! pT-equilibrium
                             ! for this case, MFL cannot be either 0 or 1, so I chose it to be 2
-                            call s_infinite_pt_relaxation(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS)
+                            call s_infinite_pt_relaxation(j, k, l, m0k, 2, pS, p_infpT, rhoe, rM, TS, ns_pt_cell)
+                            p5_cells = p5_cells + 1
+                            p5_iter_sum = p5_iter_sum + ns_pt_cell
+                            p5_iter_max = max(p5_iter_max, ns_pt_cell)
                             Tk = spread(TS, 1, num_fluids)
                         case (6) ! pT-pTg equilibrium
                             ! pT-equilibrium as rhe initial condition
@@ -346,6 +359,23 @@ contains
             end do
         end do
         $:END_GPU_PARALLEL_LOOP()
+
+#ifndef MFC_OpenACC
+        if (proc_rank == 0) then
+          if (p4_cells > 0) then
+            print *, 'p-relaxation summary (model 4): cells = ', p4_cells, &
+                     ', avg outer iters = ', real(p4_outer_sum, wp) / real(p4_cells, wp), &
+                     ', max outer iters = ', p4_outer_max, &
+                     ', avg inner iters = ', real(p4_inner_sum, wp) / real(p4_cells, wp), &
+                     ', max inner iters = ', p4_inner_max
+          end if
+          if (p5_cells > 0) then
+            print *, 'pT-relaxation summary (model 5): calls = ', p5_cells, &
+                     ', avg iters = ', real(p5_iter_sum, wp) / real(p5_cells, wp), &
+                     ', max iters = ', p5_iter_max
+          end if
+        end if
+#endif
     end subroutine s_infinite_relaxation_k ! ----------------
 
     !>  This auxiliary subroutine is created to activate the pT-equilibrium for N fluids
@@ -355,7 +385,7 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
-    impure subroutine s_infinite_p_relaxation(j, k, l, alpha0k, me0k, m0k, pS, rhoe, rM, Tk)
+    impure subroutine s_infinite_p_relaxation(j, k, l, alpha0k, me0k, m0k, pS, rhoe, rM, Tk, ns_outer_out, ns_inner_total_out)
         $:GPU_ROUTINE(function_name='s_infinite_p_relaxation', &
             & parallelism='[seq]', cray_inline=True)
 
@@ -364,6 +394,7 @@ contains
         real(wp), intent(out) :: pS
         real(wp), dimension(num_fluids), intent(out) :: Tk
         real(wp), dimension(num_fluids), intent(in)  :: alpha0k, me0k, m0k
+        integer, intent(out), optional :: ns_outer_out, ns_inner_total_out
         integer, intent(in) :: j, k, l
 
         real(wp) :: fp, fpp !< variables for the Newton Solver
@@ -376,6 +407,7 @@ contains
 
         integer :: mF !< multiplying factor for the tolerance of the solver
         integer :: i, na, ns, nsL !< generic loop iterators
+        integer :: ns_total
 
         ! indices for all the fluids/phases
         iFix = (/ (i, i=1,num_fluids) /)
@@ -429,6 +461,7 @@ contains
 
         ! counter for the outer loop
         nsL = 0
+        ns_total = 0
 
         do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) .or.  ( nSL == 0 ) )
             ! increasing counter
@@ -521,6 +554,8 @@ contains
                 end if
             end do
 
+            ns_total = ns_total + ns
+
             ! Outer relaxation step: now that the frozen-energy pressure solve has converged,
             ! update the phase internal energies from the Rankine-Hugoniot relation.
             mek_target(iSP) = meik(iSP) - pS * ( alphak(iSP) - alpha0k(iSP) )
@@ -546,6 +581,9 @@ contains
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+
+        if (present(ns_outer_out)) ns_outer_out = nsL
+        if (present(ns_inner_total_out)) ns_inner_total_out = ns_total
 
     end subroutine s_infinite_p_relaxation ! -----------------------
 
@@ -714,7 +752,7 @@ contains
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param rhoe mixture energy
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_pt_relaxation(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS)
+    subroutine s_infinite_pt_relaxation(j, k, l, m0k, MFL, pS, p_infpT, rhoe, rM, TS, ns_out)
 
         $:GPU_ROUTINE(function_name='s_infinite_pt_relaxation', &
             & parallelism='[seq]', cray_inline=True)
@@ -724,6 +762,7 @@ contains
         real(wp), dimension(num_fluids), intent(out) :: p_infpT
         real(wp), intent(in) :: rhoe, rM
         real(wp), intent(in), dimension(num_fluids) :: m0k
+        integer, intent(out), optional :: ns_out
         logical, dimension(num_fluids) :: is_negligible_mass
         integer, intent(in) :: j, k, l, MFL
         integer, dimension(num_fluids) :: iFix, iAuxSP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
@@ -780,6 +819,8 @@ contains
 
                 ! Assigning zero values for pressure and temperature in case of mass depletion cases
                 pS = 0.0_wp ; TS = 0.0_wp
+
+                if (present(ns_out)) ns_out = 0
 
                 return
 #ifndef MFC_OpenACC
@@ -846,6 +887,7 @@ contains
 
         ! updating maximum number of iterations
         max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        if (present(ns_out)) ns_out = ns
 
     end subroutine s_infinite_pt_relaxation ! -----------------------
 
