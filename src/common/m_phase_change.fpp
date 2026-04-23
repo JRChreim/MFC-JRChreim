@@ -375,7 +375,7 @@ contains
         integer, dimension(:), allocatable :: iSP, iZP
 
         integer :: mF !< multiplying factor for the tolerance of the solver
-        integer :: i, na, ns, nsL !< generic loop iterators
+        integer :: i, na, ns, nsL, ns_total !< generic loop iterators
 
         ! indices for all the fluids/phases
         iFix = (/ (i, i=1,num_fluids) /)
@@ -429,6 +429,7 @@ contains
 
         ! counter for the outer loop
         nsL = 0
+        ns_total = 0
 
         do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) .or.  ( nSL == 0 ) )
             ! increasing counter
@@ -471,6 +472,7 @@ contains
             do while ( ( ( abs(fp - 1.0_wp) > mF * ptgalpha_eps ) ) .or. ( ns <= 1 ) )
                 ! increasing counter
                 ns = ns + 1
+                ns_total = ns_total + 1
 
                 ! updating functions used in the Newton's solver. f(p)
                 fp = sum( alphak(iSP) )
@@ -544,8 +546,9 @@ contains
         ! be either 0 or NaN for the sake of the algorithm.
         Tk(iZP) = (pS + ps_inf(iZP)) / ( (gs_min(iZP) - 1.0_wp) * cvs(iZP) )
 
-        ! updating maximum number of iterations
-        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns/))
+        ! updating maximum number of iterations using the total number of inner
+        ! Newton steps accumulated across all outer relaxation passes for this cell
+        max_iter_pc_ts = maxval((/max_iter_pc_ts, ns_total/))
 
     end subroutine s_infinite_p_relaxation ! -----------------------
 
