@@ -362,7 +362,7 @@ contains
 
 #ifndef MFC_OpenACC
         if (proc_rank == 0) then
-          if (p4_cells > 0) then
+          if ( (p4_cells > 0) .and. p4_outer_max > 1 ) then
             print *, 'p-relaxation summary (model 4): cells = ', p4_cells, &
                      ', avg outer iters = ', real(p4_outer_sum, wp) / real(p4_cells, wp), &
                      ', max outer iters = ', p4_outer_max, &
