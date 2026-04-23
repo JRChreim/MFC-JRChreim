@@ -161,7 +161,28 @@ contains
                       TR = .false.
                     end if
 
+#ifndef MFC_OpenACC
+                    if ( ( j == 0 ) .and. ( k == 5 ) .and. ( l == 0 ) ) then
+                        print *, 'pre-correction phase-change probe: proc_rank = ', proc_rank, &
+                                 ' j,k,l = ', j, k, l
+                        print *, 'raw alphak = ', alphak
+                        print *, 'raw m0k    = ', m0k
+                    end if
+#endif
+
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
+
+#ifndef MFC_OpenACC
+                    if ( ( j == 0 ) .and. ( k == 5 ) .and. ( l == 0 ) ) then
+                        print *, 'post-correction phase-change probe: proc_rank = ', proc_rank, &
+                                 ' j,k,l = ', j, k, l
+                        print *, 'corrected m0k = ', m0k
+                        print *, 'rM = ', rM
+                        print *, 'rho = ', rho
+                        print *, 'active phase count = ', count( m0k > sgm_eps )
+                        print *, 'TR = ', TR
+                    end if
+#endif
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
                     dynE = 0.0_wp
