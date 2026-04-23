@@ -412,13 +412,14 @@ contains
         ! counter for the outer loop
         nsL = 0
 
-        ! Relaxation factor. Although this is not needed for Newton Solver for finding p, it seems to be needed to update
-        ! the internal energies after finding pS.
-        Om = under_relax
-
         do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
+
+            ! Start each Newton iteration from the user relaxation, so step acceptance
+            ! depends on the current state rather than the previous accepted value.
+            Om = under_relax
+            Oc = under_relax
 
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
@@ -476,6 +477,8 @@ contains
                 else
                   Om = under_relax
                 end if
+
+                Om = max( 1.0e-12_wp, min( Om, minval( Oc ) ) )
 
                 ! updating phase variables, together with the relaxed pressure, in a loosely coupled procedure
                 ! internal energies
