@@ -416,11 +416,6 @@ contains
             ! increasing counter
             nsL = nsL + 1
 
-            ! Start each Newton iteration from the user relaxation, so step acceptance
-            ! depends on the current state rather than the previous accepted value.
-            Om = under_relax
-            Oc = under_relax
-
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
             ! global convergence will be estabilished
             Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
@@ -459,32 +454,7 @@ contains
                 ! updating the relaxed pressure
                 pS = pS + ( ( 1.0_wp - fp ) / fpp ) / ( 1.0_wp - ( 1.0_wp - fp + abs( 1.0_wp - fp ) ) / ( 2.0_wp * fpp * ( pS + minval( gs_min(iSP) * ps_inf(iSP) ) ) ) )
 
-                ! updating the underelaxation parameters.
-                ! First restriction
-                if ( any( pS + gs_min(iSP) * ps_inf(iSP) > 0 ) ) then
-                  Oc(1) = minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 2
-                end if
-
-                ! second restriction
-                if ( any( pS + gs_min(iSP) * ps_inf(iSP) < 0 ) ) then
-                  Oc(2) = maxval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 1
-                end if
-
-                ! updating internal energies. An underrelaxation factor is needed due to the closure for mek
-                if ( ( Om >= minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) ) &
-                .and. ( minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) > 0 ) ) then
-                  Om = minval( (meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * (alphak(iSP) - alpha0k(iSP)) ) ) / 2
-                else
-                  Om = under_relax
-                end if
-
-                Om = max( 1.0e-12_wp, min( Om, minval( Oc ) ) )
-
-                ! updating phase variables, together with the relaxed pressure, in a loosely coupled procedure
-                ! internal energies
-                mek(iSP) = meik(iSP) - Om * pS * ( alphak(iSP) - alpha0k(iSP) )
-
-                ! volume fractions
+                ! updating the volume fractions
                 alphak(iSP) = ( gs_min(iSP) - 1.0_wp ) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS + gs_min(iSP) * ps_inf(iSP) )
 
                 ! checking if pS is within expected bounds
@@ -523,6 +493,32 @@ contains
                     end if
                 end if
             end do
+
+            ! Outer relaxation step: now that the frozen-energy pressure solve has converged,
+            ! update the phase internal energies from the Rankine-Hugoniot relation.
+            Om = under_relax
+            Oc = under_relax
+
+            ! First restriction
+            if ( any( pS + gs_min(iSP) * ps_inf(iSP) > 0 ) ) then
+              Oc(1) = minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 2
+            end if
+
+            ! Second restriction
+            if ( any( pS + gs_min(iSP) * ps_inf(iSP) < 0 ) ) then
+              Oc(2) = maxval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 1
+            end if
+
+            ! Update the relaxation factor using the current outer state.
+            if ( ( Om >= minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) ) &
+            .and. ( minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) > 0 ) ) then
+              Oc(3) = minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 2
+            end if
+
+            Om = max( 1.0e-12_wp, min( Om, minval( Oc ) ) )
+
+            ! Rankine-Hugoniot outer update of the phase internal energies.
+            mek(iSP) = meik(iSP) - Om * pS * ( alphak(iSP) - alpha0k(iSP) )
         end do
 
         ! (NOT common) temperatures
