@@ -367,12 +367,11 @@ contains
         integer, intent(in) :: j, k, l
 
         real(wp) :: fp, fpp !< variables for the Newton Solver
-        real(wp) :: Econst, Om, TS !< auxiliary variables
-        real(wp), dimension(num_fluids) :: alphak, mek, meik
+        real(wp) :: Econst, Om, TS, mQ, energy_floor !< auxiliary variables
+        real(wp), dimension(num_fluids) :: alphak, mek, meik, mek_old, mek_target
         logical, dimension(num_fluids) :: is_negligible_mass
         character(20) :: nss, pSs, Econsts
         integer, dimension(num_fluids) :: iFix, iAuxSP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
-        real(wp), dimension(3) :: Oc
         integer, dimension(:), allocatable :: iSP, iZP
 
         integer :: mF !< multiplying factor for the tolerance of the solver
@@ -405,6 +404,25 @@ contains
 
         ! internal energies - first estimate
         mek = meik * ( 1 + ptgalpha_eps )
+        fp = 0.0_wp
+        fpp = 1.0_wp
+
+        ! Make sure the initial frozen-energy state is admissible for the pressure solve.
+        ! Each active phase must satisfy mek > m0k*qvs, otherwise the pressure Newton step
+        ! can become immediately unphysical.
+        mQ = sum( m0k(iSP) * qvs(iSP) )
+        energy_floor = minval( mek(iSP) - m0k(iSP) * qvs(iSP) )
+        if ( energy_floor <= 0.0_wp ) then
+          if ( rhoe <= mQ ) then
+            call s_real_to_str(rhoe - mQ, Econsts)
+            call s_mpi_abort('Solver for the p-relaxation solver failed (m_phase_change, s_infinite_p_relaxation). &
+&                   . Please, check energy constraint. The initial phase energies are not admissible. Energy margin ~'//Econsts//'.')
+          end if
+
+          mek(iSP) = m0k(iSP) * qvs(iSP) + ( rhoe - mQ ) * alpha0k(iSP) / max( sum( alpha0k(iSP) ), sgm_eps )
+        end if
+
+        mek_old = mek
 
         ! volume fractions - first estimate
         alphak = alpha0k * ( 1 + ptgalpha_eps ) / sum( alpha0k * ( 1 + ptgalpha_eps ) )
@@ -416,13 +434,22 @@ contains
             ! increasing counter
             nsL = nsL + 1
 
+            ! Keep a copy of the current outer iterate. The inner pressure solve uses this
+            ! frozen energy state, and the Rankine-Hugoniot update is applied afterward.
+            mek_old = mek
+
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
-            ! global convergence will be estabilished
-            Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
+            ! global convergence will be estabilished. The expression below is only meaningful when all
+            ! participating phases have positive stiffness.
+            if ( minval( ps_inf(iSP) ) > 0.0_wp ) then
+              Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
+            else
+              Econst = huge( 1.0_wp )
+            end if
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
-            if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
+            if ( ( ( minval( ps_inf(iSP) ) > 0.0_wp ) .and. ( Econst <= 1.0_wp ) ) .or. ( nsL > max_iter ) ) then
 
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
@@ -496,29 +523,17 @@ contains
 
             ! Outer relaxation step: now that the frozen-energy pressure solve has converged,
             ! update the phase internal energies from the Rankine-Hugoniot relation.
+            mek_target(iSP) = meik(iSP) - pS * ( alphak(iSP) - alpha0k(iSP) )
+
             Om = under_relax
-            Oc = under_relax
-
-            ! First restriction
-            if ( any( pS + gs_min(iSP) * ps_inf(iSP) > 0 ) ) then
-              Oc(1) = minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 2
+            if ( any( mek_target(iSP) < m0k(iSP) * qvs(iSP) ) ) then
+              Om = min( under_relax, minval( ( mek_old(iSP) - m0k(iSP) * qvs(iSP) ) / ( mek_old(iSP) - mek_target(iSP) ) ) / 2 )
             end if
 
-            ! Second restriction
-            if ( any( pS + gs_min(iSP) * ps_inf(iSP) < 0 ) ) then
-              Oc(2) = maxval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 1
-            end if
+            Om = max( 1.0e-12_wp, Om )
 
-            ! Update the relaxation factor using the current outer state.
-            if ( ( Om >= minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) ) &
-            .and. ( minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) > 0 ) ) then
-              Oc(3) = minval( ( meik(iSP) - m0k(iSP) * qvs(iSP) ) / ( pS * ( alphak(iSP) - alpha0k(iSP) ) ) ) / 2
-            end if
-
-            Om = max( 1.0e-12_wp, min( Om, minval( Oc ) ) )
-
-            ! Rankine-Hugoniot outer update of the phase internal energies.
-            mek(iSP) = meik(iSP) - Om * pS * ( alphak(iSP) - alpha0k(iSP) )
+            ! Damp the outer update toward the Rankine-Hugoniot target.
+            mek(iSP) = mek_old(iSP) + Om * ( mek_target(iSP) - mek_old(iSP) )
         end do
 
         ! (NOT common) temperatures
