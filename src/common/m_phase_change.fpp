@@ -161,7 +161,7 @@ contains
                       TR = .false.
                     end if
 
-                    if ( any( m0k <= sgm_eps ) .or. any( alphak <= sgm_eps ) ) then
+                    if ( any( m0k <= 0 ) .or. any( alphak <= 0 ) ) then
                         print *, 'pre-correction phase-change probe: proc_rank = ', proc_rank, &
                                  ' j,k,l = ', j, k, l
                         print *, 'raw alphak = ', alphak
@@ -175,7 +175,7 @@ contains
                         print *, 'corrected m0k = ', m0k
                         print *, 'rM = ', rM
                         print *, 'rho = ', rho
-                        print *, 'active phase count = ', count( m0k > sgm_eps )
+                        print *, 'active phase count = ', count( m0k > 0 )
                         print *, 'TR = ', TR
 
                     else
