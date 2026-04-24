@@ -171,6 +171,7 @@ contains
 
                         print *, 'post-correction phase-change probe: proc_rank = ', proc_rank, &
                                  ' j,k,l = ', j, k, l
+                        print *, 'corrected alphak = ', alphak
                         print *, 'corrected m0k = ', m0k
                         print *, 'rM = ', rM
                         print *, 'rho = ', rho
