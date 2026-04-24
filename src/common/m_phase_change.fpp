@@ -1146,6 +1146,7 @@ contains
         logical, intent(inout) :: TR
         integer, intent(in) :: CT, j, k, l
         integer, dimension(num_fluids) :: iFix, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        logical, dimension(num_fluids) :: is_valid_phase
         integer, dimension(:), allocatable :: iZP
         integer :: i
         !> @}
@@ -1163,62 +1164,63 @@ contains
 
         ! CT = 0: No Mass correction; ! CT = 1: Reacting Mass correction;
         ! CT = 2: crude correction; else: Total Mass correction
-        if (CT == 0) then
-          if ( sum( pack(m0k, m0k < rho * mixM ) ) /= 0 ) then
-            TR = .false.
-          end if
-        elseif (CT == 1) then
-            if (rM < 0.0_wp) then
-                ! reacting masses are very negative so as to affect the physics of the problem, so phase change will not be activated
-                if ( any( (/ m0k(lp), m0k(vp) /) < rM * mixM ) ) then
-                    ! do not continue relaxation
-                    TR = .false.
-                    ! reacting masses are not as negative so I can disregard them,
-                    ! expecting no significant changes in the physics of the simulation
-                else
-                    m0k(lp) = mixM*rM ; m0k(vp) = mixM*rM
-
-                    ! continue relaxation
-                    TR = .true.
-                end if
-            ! correcting the partial densities of the reacting fluids. In case liquid is negative
-            elseif (m0k(lp) < rM * mixM) then
-
-                m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
-
-                ! continue relaxation
-                TR = .true.
-
-            ! correcting the partial densities of the reacting fluids. In case vapor is negative
-            elseif (m0k(vp) < rM * mixM) then
-
-                m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
-
-                ! continue relaxation
-                TR = .true.
-
+        select case (CT)
+          case(0)
+            if ( sum( pack(m0k, m0k < rho * mixM ) ) /= 0 ) then
+              TR = .false.
             end if
-        elseif (CT == 2) then
-            ! zero phase indices. Auxiliary variable to avoid do loops - use Morgan's Law
-            if ( any((/ 1, 4 /) == relax_model ) ) then
-                ! this iAuxZP is only valid when we use either the old or new p-relaxations, as they are only
-                ! used with the 6-equation model. Note that they test the phisical validity of the initial conditions
-                ! iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) .and. ( me0k > m0k * qvs ) ) ) = 0
-                iAuxZP( pack( iFix, ( m0k > 0 ) ) ) = 0
-            else
-                ! this is used for either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
-                ! energies are not important
-                iAuxZP( pack( iFix, ( alpha0k > 0 ) .and. ( m0k > 0 ) ) ) = 0
-            end if
-            iZP = pack(iAuxZP, iAuxZP /= 0)
+          case(1)
+              if (rM < 0.0_wp) then
+                  ! reacting masses are very negative so as to affect the physics of the problem, so phase change will not be activated
+                  if ( any( (/ m0k(lp), m0k(vp) /) < rM * mixM ) ) then
+                      ! do not continue relaxation
+                      TR = .false.
+                      ! reacting masses are not as negative so I can disregard them,
+                      ! expecting no significant changes in the physics of the simulation
+                  else
+                      m0k(lp) = mixM*rM ; m0k(vp) = mixM*rM
+
+                      ! continue relaxation
+                      TR = .true.
+                  end if
+              ! correcting the partial densities of the reacting fluids. In case liquid is negative
+              elseif (m0k(lp) < rM * mixM) then
+
+                  m0k(lp) = mixM*rM ; m0k(vp) = (1.0_wp - mixM)*rM
+
+                  ! continue relaxation
+                  TR = .true.
+
+              ! correcting the partial densities of the reacting fluids. In case vapor is negative
+              elseif (m0k(vp) < rM * mixM) then
+
+                  m0k(lp) = (1.0_wp - mixM)*rM ; m0k(vp) = mixM*rM
+
+                  ! continue relaxation
+                  TR = .true.
+
+              end if
+          case(2)
+            ! ! zero phase indices. Auxiliary variable to avoid do loops - use Morgan's Law
+            ! is_valid_phase = ( alpha0k > 0.0_wp ) .and. ( m0k > 0.0_wp )
+            ! if ( any((/ 1, 4 /) == relax_model ) ) then
+            !     ! For the p-relaxation branches, keep only phases that are genuinely admissible.
+            !     ! A phase must have positive volume fraction, positive partial density, and
+            !     ! enough internal energy to remain physically valid. Recall that for relax_model == 1 or 4, model_eqns == 3
+            !     ! necessarily. For either pT- or pTg-relaxation, as regardless of the equation model, the phasic internal
+            !     ! energies are not important
+            !     is_valid_phase = is_valid_phase .and. ( me0k > m0k * qvs + 0.0_wp )
+            ! end if
+            ! iAuxZP( pack( iFix, is_valid_phase ) ) = 0
+            ! iZP = pack(iAuxZP, iAuxZP /= 0)
 
             ! if either the volume fraction or the partial density is negative, make them positive
-            alpha0k(iZP) = 0.0_wp
+            alpha0k(pack( iFix, alpha0k < 0.0_wp )) = 0.0_wp
 
             ! the largest value of alpha0k must be one
             alpha0k( pack( iFix, alpha0k > 1.0_wp ) ) = 1.0_wp
 
-            m0k(iZP) = 0.0_wp
+            m0k( pack( iFix, m0k < 0.0_wp ) ) = 0.0_wp
 
             if (model_eqns == 3) then
               me0k( pack( iFix, me0k < 0.0_wp ) ) = 0.0_wp
@@ -1232,13 +1234,13 @@ contains
 
             ! continue relaxation
             TR = .true.
-        else
+          case default
             ! if there are any insignificant values, make them significant
             m0k( pack( iFix, m0k < rho * mixM ) ) = rho * mixM
 
             ! continue relaxation
             TR = .true.
-        end if
+        end select
 
         ! Mixture density
         rho = sum(m0k)
