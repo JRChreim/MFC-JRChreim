@@ -161,26 +161,26 @@ contains
                       TR = .false.
                     end if
 
-                    if ( any( m0k <= 0 ) .or. any( alphak <= 0 ) ) then
-                        print *, 'pre-correction phase-change probe: proc_rank = ', proc_rank, &
-                                 ' j,k,l = ', j, k, l
-                        print *, 'raw alphak = ', alphak
-                        print *, 'raw m0k    = ', m0k
+                    ! if ( any( m0k <= 0 ) .or. any( alphak <= 0 ) ) then
+                    !     print *, 'pre-correction phase-change probe: proc_rank = ', proc_rank, &
+                    !              ' j,k,l = ', j, k, l
+                    !     print *, 'raw alphak = ', alphak
+                    !     print *, 'raw m0k    = ', m0k
 
-                        call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
+                    !     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
-                        print *, 'post-correction phase-change probe: proc_rank = ', proc_rank, &
-                                 ' j,k,l = ', j, k, l
-                        print *, 'corrected alphak = ', alphak
-                        print *, 'corrected m0k = ', m0k
-                        print *, 'rM = ', rM
-                        print *, 'rho = ', rho
-                        print *, 'active phase count = ', count( m0k > 0 )
-                        print *, 'TR = ', TR
+                    !     print *, 'post-correction phase-change probe: proc_rank = ', proc_rank, &
+                    !              ' j,k,l = ', j, k, l
+                    !     print *, 'corrected alphak = ', alphak
+                    !     print *, 'corrected m0k = ', m0k
+                    !     print *, 'rM = ', rM
+                    !     print *, 'rho = ', rho
+                    !     print *, 'active phase count = ', count( m0k > 0 )
+                    !     print *, 'TR = ', TR
 
-                    else
-                        call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
-                    end if
+                    ! else
+                    call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
+                    ! end if
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
                     dynE = 0.0_wp
