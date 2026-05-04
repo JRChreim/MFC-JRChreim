@@ -221,27 +221,27 @@ contains
 
                             ! For Subgrid (enough alpha_b)
                             ! in case interface capturing and subgrid are activated. Subgrid trigger
-                            alpha_b = q_cons_vf(alf_idx)%sf(j, k, l) ; TSG = .false.
-                            if (bubbles_euler .and. (alphak(lp) > alpha_b) .and. ( alphak(lp) > 0.5 )) then
-                              ! Vapor pressure from the intermediate pT state is
-                              ! only needed here to evaluate the Blake/subgrid
-                              ! trigger before deciding whether pTg relaxation is
-                              ! activated.
-                              call s_Saturation_Properties(pVapSG, TS, pS, 2)
+                            TSG = .false.
+                            if (bubbles_euler) then
+                              alpha_b = q_cons_vf(alf_idx)%sf(j, k, l) 
+                              if ( (alphak(lp) > alpha_b) .and. ( alphak(lp) > 0.5 ) ) then
+                                ! Vapor pressure from the intermediate pT state is
+                                ! only needed here to evaluate the Blake/subgrid
+                                ! trigger before deciding whether pTg relaxation is
+                                ! activated.
+                                call s_Saturation_Properties(pVapSG, TS, pS, 2)
 
-                              do cb = 1, nb
+                                do cb = 1, nb
 
-                                ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
-                                ! mass_b(cb) = rho0ref * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
+                                  ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
+                                  ! mass_b(cb) = rho0ref * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
 
-                                R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
+                                  R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
 
-                                ! print *, 'Volume fraction: ', alphak(lp)
-                                ! print *, 'Volume fraction bubble: ', alpha_b
+                                  call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), pVapSG, TSG )
 
-                                call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), pVapSG, TSG )
-
-                              end do
+                                end do
+                              end if
                             end if
 
                             ! 1 - model activation, 1st order transition (p,T) <= (pCr, TCr)
