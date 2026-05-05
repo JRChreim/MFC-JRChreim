@@ -431,9 +431,10 @@ module m_global_parameters
     $:GPU_DECLARE(create='[weight,R0]')
 
     logical :: bubbles_euler      !< Bubbles euler on/off
+    logical :: oneway
     logical :: polytropic   !< Polytropic  switch
     logical :: polydisperse !< Polydisperse bubbles
-    $:GPU_DECLARE(create='[bubbles_euler,polytropic,polydisperse]')
+    $:GPU_DECLARE(create='[bubbles_euler,oneway,polytropic,polydisperse]')
 
     logical :: adv_n        !< Solve the number density equation and compute alpha from number density
     logical :: adap_dt      !< Adaptive step size control
@@ -708,7 +709,7 @@ contains
         bub_pp%cp_g = dflt_real; cp_g = dflt_real
         bub_pp%R_v = dflt_real; R_v = dflt_real
         bub_pp%R_g = dflt_real; R_g = dflt_real
-
+        gam = dflt_real;
         ! Tait EOS
         rhoref = dflt_real
         pref = dflt_real
@@ -719,11 +720,11 @@ contains
 
         ! Bubble modeling
         bubbles_euler = .false.
+        oneway = .false.
         bubble_model = 1
         polytropic = .true.
         polydisperse = .false.
         thermal = dflt_int
-        R0ref = dflt_real
 
         #:if not MFC_CASE_OPTIMIZATION
             nb = 1
@@ -941,7 +942,12 @@ contains
                 sys_size = adv_idx%end
 
                 if (bubbles_euler) then
-                    alf_idx = adv_idx%end
+                    if (oneway) then
+                        alf_idx = adv_idx%end + 1
+                        sys_size = sys_size + 1
+                    else
+                        alf_idx = adv_idx%end
+                    end if
                 else
                     alf_idx = 1
                 end if
@@ -971,8 +977,6 @@ contains
 
                     @:ALLOCATE(bub_idx%rs(nb), bub_idx%vs(nb))
                     @:ALLOCATE(bub_idx%ps(nb), bub_idx%ms(nb))
-
-                    gam = bub_pp%gam_g
 
                     if (qbmm) then
                         @:ALLOCATE(bub_idx%moms(nb, nmom))
@@ -1279,7 +1283,7 @@ contains
         $:GPU_UPDATE(device='[alt_soundspeed,acoustic_source,num_source]')
         $:GPU_UPDATE(device='[dt,sys_size,buff_size,pref,rhoref, &
             & gamma_idx,pi_inf_idx,E_idx,alf_idx,stress_idx, &
-            & mpp_lim,bubbles_euler,hypoelasticity,alt_soundspeed, &
+            & mpp_lim,bubbles_euler,oneway,hypoelasticity,alt_soundspeed, &
             & avg_state,model_eqns, &
             & mixture_err,grid_geometry,cyl_coord,mp_weno,weno_eps, &
             & teno_CT,hyperelasticity,hyper_model,elasticity,xi_idx, &

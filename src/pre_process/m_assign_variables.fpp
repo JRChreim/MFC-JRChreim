@@ -207,14 +207,12 @@ contains
         type(scalar_field), dimension(1:sys_size), intent(inout) :: q_prim_vf
 
         integer :: i
-        real(wp) :: pres_mag, loc, n_tait, B_tait, p0
+        real(wp) :: pres_mag, loc, p0
         real(wp) :: R3bar, n0, ratio, nH, vfH, velH, rhoH, deno
 
         p0 = 101325._wp
         pres_mag = 1.e-1_wp
         loc = x_cc(177)
-        n_tait = gs_min(1)
-        B_tait = ps_inf(1)
 
         if (j < 177) then
             q_prim_vf(E_idx)%sf(j, k, l) = 0.5_wp*q_prim_vf(E_idx)%sf(j, k, l)
@@ -245,7 +243,7 @@ contains
 
         n0 = 3._wp*q_prim_vf(alf_idx)%sf(j, k, l)/(4._wp*pi*R3bar)
 
-        ratio = ((1._wp + B_tait)/(q_prim_vf(E_idx)%sf(j, k, l) + B_tait))**(1._wp/n_tait)
+        ratio = ((1._wp + ps_inf(1))/(q_prim_vf(E_idx)%sf(j, k, l) + ps_inf(1)))**(1._wp/gs_min(1))
 
         nH = n0/((1._wp - q_prim_vf(alf_idx)%sf(j, k, l))*ratio + (4._wp*pi/3._wp)*n0*R3bar)
         vfH = (4._wp*pi/3._wp)*nH*R3bar
@@ -301,7 +299,6 @@ contains
         ! variables of the current and smoothing patches
         real(wp) :: rho         !< density
         real(wp) :: gamma
-        real(wp) :: lit_gamma   !< specific heat ratio
         real(wp) :: pi_inf      !< stiffness from SEOS
         real(wp) :: qv          !< reference energy from SEOS
         real(wp) :: orig_rho
@@ -329,7 +326,7 @@ contains
             orig_prim_vf(i) = q_prim_vf(i)%sf(j, k, l)
         end do
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. oneway) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -359,7 +356,7 @@ contains
             end do
         end if
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. oneway) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -404,7 +401,7 @@ contains
             end do
         end if
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. oneway) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -450,6 +447,13 @@ contains
             end do
 
             if (adv_n) then
+                if (oneway) then
+                    if (oneway_patch == patch_id) then
+                        q_prim_vf(alf_idx)%sf(j, k, l) = oneway_vf
+                    else
+                        q_prim_vf(alf_idx)%sf(j, k, l) = sgm_eps
+                    end if
+                end if
                 ! Initialize number density
                 R3bar = 0._wp
                 do i = 1, nb
@@ -537,7 +541,7 @@ contains
             end do
         end if
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. oneway) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -559,21 +563,16 @@ contains
                     + (1._wp - eta)*orig_prim_vf(i)
             end do
         else
-            !get mixture density from pressure via Tait EOS
-            pi_inf = pi_infs(1)
-            gamma = gammas(1)
-            lit_gamma = gs_min(1)
-
-            ! \rho = (( p_l + pi_inf)/( p_ref + pi_inf))**(1/little_gam) * rhoref(1-alf)
+            !get mixture density from pressure via SG EOS
+            ! \rho = (( p_l + ps_inf))/( p_ref + ps_inf))**(1/little_gam) * rhoref(1-alf)
             q_prim_vf(1)%sf(j, k, l) = &
-                (((q_prim_vf(E_idx)%sf(j, k, l) + pi_inf)/(pref + pi_inf))**(1/lit_gamma))* &
+                (((q_prim_vf(E_idx)%sf(j, k, l) + ps_inf(1))/(pref + ps_inf(1)))**(1/gs_min(1)))* &
                 rhoref*(1 - q_prim_vf(alf_idx)%sf(j, k, l))
         end if
 
         ! Density and the specific heat ratio and liquid stiffness functions
         ! call s_convert_species_to_mixture_variables(q_prim_vf, j, k, l, &
-        call s_convert_to_mixture_variables(q_prim_vf, j, k, l, &
-                                            rho, gamma, pi_inf, qv)
+        call s_convert_to_mixture_variables(q_prim_vf, j, k, l, rho, gamma, pi_inf, qv)
 
         ! Velocity
         do i = 1, E_idx - mom_idx%beg
@@ -659,6 +658,13 @@ contains
             end do
 
             if (adv_n) then
+                if (oneway) then
+                    if (oneway_patch == patch_id) then
+                        q_prim_vf(alf_idx)%sf(j, k, l) = oneway_vf
+                    else
+                        q_prim_vf(alf_idx)%sf(j, k, l) = sgm_eps
+                    end if
+                end if
                 ! Initialize number density
                 R3bar = 0._wp
                 do i = 1, nb
@@ -668,7 +674,7 @@ contains
             end if
         end if
 
-        if (mpp_lim .and. bubbles_euler) then
+        if (mpp_lim .and. bubbles_euler .and. .not. oneway) then
             !adjust volume fractions, according to modeled gas void fraction
             alf_sum%sf = 0._wp
             do i = adv_idx%beg, adv_idx%end - 1
@@ -685,7 +691,6 @@ contains
             do i = 1, nb
                 if (f_is_default(real(q_prim_vf(bub_idx%ps(i))%sf(j, k, l), kind=wp))) then
                     q_prim_vf(bub_idx%ps(i))%sf(j, k, l) = pb0(i)
-                    ! print *, 'setting to pb0'
                 end if
                 if (f_is_default(real(q_prim_vf(bub_idx%ms(i))%sf(j, k, l), kind=wp))) then
                     q_prim_vf(bub_idx%ms(i))%sf(j, k, l) = mass_v0(i)

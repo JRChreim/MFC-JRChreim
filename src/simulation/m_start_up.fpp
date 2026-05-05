@@ -161,7 +161,7 @@ contains
             fd_order, probe, num_probes, t_step_old, &
             alt_soundspeed, mixture_err, weno_Re_flux, &
             null_weights, precision, parallel_io, cyl_coord, &
-            rhoref, pref, bubbles_euler, bubble_model, &
+            rhoref, pref, bubbles_euler, oneway, bubble_model, &
             R0ref, chem_params, &
 #:if not MFC_CASE_OPTIMIZATION
             nb, mapped_weno, wenoz, teno, wenoz_q, weno_order, &
@@ -1311,12 +1311,14 @@ contains
         real(wp) :: temp1, temp2, temp3, temp4
 
         call s_initialize_global_parameters_module()
-        if (bubbles_euler .or. bubbles_lagrange) then
-            call s_initialize_bubbles_model()
-        end if
         call s_initialize_mpi_common_module()
         call s_initialize_mpi_proxy_module()
         call s_initialize_variables_conversion_module()
+        if (bubbles_euler) call s_compute_bubbles_euler_vapor_pressure()
+        call s_initialize_phasechange_module()
+        if (bubbles_euler .or. bubbles_lagrange) then
+            call s_initialize_bubbles_model()
+        end if
         if (grid_geometry == 3) call s_initialize_fftw_module()
 
         if (bubbles_euler) call s_initialize_bubbles_EE_module()
@@ -1334,8 +1336,6 @@ contains
         call s_initialize_rhs_module()
 
         if (surface_tension) call s_initialize_surface_tension_module()
-
-        if (relax) call s_initialize_phasechange_module()
 
         call s_initialize_data_output_module()
         call s_initialize_derived_variables_module()
@@ -1505,7 +1505,7 @@ contains
         $:GPU_UPDATE(device='[R0ref,p0ref,rho0ref,ss,pv,vd,mu_l,mu_v,mu_g, &
             & gam_v,gam_g,M_v,M_g,R_v,R_g,Tw,cp_v,cp_g,k_vl,k_gl, &
             & gam, gam_m,Eu,Ca,Web,Re_inv,Pe_c,phi_vg,phi_gv,omegaN, &
-            & bubbles_euler,polytropic,polydisperse,qbmm, &
+            & bubbles_euler,oneway,polytropic,polydisperse,qbmm, &
             & ptil,bubble_model,thermal,poly_sigma,adv_n,adap_dt, &
             & adap_dt_tol,adap_dt_max_iters,n_idx,pi_fac,low_Mach]')
 
@@ -1574,6 +1574,7 @@ contains
                 call s_finalize_muscl_module()
             end if
         end if
+        call s_finalize_phasechange_module()
         call s_finalize_variables_conversion_module()
         if (grid_geometry == 3) call s_finalize_fftw_module
         call s_finalize_mpi_common_module()

@@ -156,7 +156,7 @@
             q_prim_vf(advxe)%sf(i, j, 0) = alpha_air
         end if
 
-    case (207) ! Spherical Pressure Pulse (Meng's Thesis, 2016) - Solution to Wave Equation
+    case (209) ! Spherical Pressure Pulse (Meng's Thesis, 2016) - Solution to Wave Equation
         q_prim_vf(E_idx)%sf(i, j, 0) = patch_icpp(1)%pres * ( 1 + 1e-4_wp * exp( - pi * y_cc(j) ** 2 ) )
 
     case (250) ! MHD Orszag-Tang vortex

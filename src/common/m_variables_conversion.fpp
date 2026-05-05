@@ -139,13 +139,12 @@ contains
                 pres = (energy - dyn_p - pi_inf - qv - pres_mag)/gamma
             elseif ((model_eqns /= 4) .and. (bubbles_euler .neqv. .true.)) then
                 pres = (energy - dyn_p - pi_inf - qv)/gamma
-            else if ((model_eqns /= 4) .and. bubbles_euler) then
+            else if ((model_eqns /= 4) .and. bubbles_euler .and. .not. oneway) then
                 pres = ((energy - dyn_p)/(1._wp - alf) - pi_inf - qv)/gamma
+            else if ((model_eqns /= 4) .and. bubbles_euler .and. oneway) then
+                pres = (energy - dyn_p - pi_inf - qv)/gamma
             else
-                pres = (pref + pi_inf)* &
-                       (energy/ &
-                        (rhoref*(1 - alf)) &
-                        )**(1/gamma + 1) - pi_inf
+                pres = (pref + pi_inf)*(energy/(rhoref*(1 - alf)))**(1/gamma + 1) - pi_inf
             end if
 
             if (hypoelasticity .and. present(G)) then
@@ -161,11 +160,7 @@ contains
                     end if
                 end do
 
-                pres = ( &
-                       energy - &
-                       0.5_wp*(mom**2._wp)/rho - &
-                       pi_inf - qv - E_e &
-                       )/gamma
+                pres = (energy - 0.5_wp*(mom**2._wp)/rho - pi_inf - qv - E_e )/gamma
 
             end if
 
@@ -197,8 +192,7 @@ contains
         !! @param gamma  specific heat ratio function
         !! @param pi_inf liquid stiffness
         !! @param qv fluid reference energy
-    subroutine s_convert_mixture_to_mixture_variables(q_vf, i, j, k, &
-                                                      rho, gamma, pi_inf, qv)
+    subroutine s_convert_mixture_to_mixture_variables(q_vf, i, j, k, rho, gamma, pi_inf, qv)
 
         type(scalar_field), dimension(sys_size), intent(in) :: q_vf
         integer, intent(in) :: i, j, k
@@ -238,8 +232,7 @@ contains
         !! @param gamma specific heat ratio
         !! @param pi_inf liquid stiffness
         !! @param qv fluid reference energy
-    subroutine s_convert_species_to_mixture_variables(q_vf, k, l, r, rho, &
-                                                      gamma, pi_inf, qv, Re_K, G_K, G)
+    subroutine s_convert_species_to_mixture_variables(q_vf, k, l, r, rho, gamma, pi_inf, qv, Re_K, G_K, G)
 
         type(scalar_field), dimension(sys_size), intent(in) :: q_vf
 
@@ -570,10 +563,7 @@ contains
         !! @param ix Index bounds in first coordinate direction
         !! @param iy Index bounds in second coordinate direction
         !! @param iz Index bounds in third coordinate direction
-    subroutine s_convert_conservative_to_primitive_variables(qK_cons_vf, &
-                                                             q_T_sf, &
-                                                             qK_prim_vf, &
-                                                             ibounds)
+    subroutine s_convert_conservative_to_primitive_variables(qK_cons_vf, q_T_sf, qK_prim_vf, ibounds)
 
         type(scalar_field), dimension(sys_size), intent(in) :: qK_cons_vf
         type(scalar_field), intent(inout) :: q_T_sf
@@ -808,6 +798,9 @@ contains
                             if (adv_n) then
                                 qK_prim_vf(n_idx)%sf(j, k, l) = qK_cons_vf(n_idx)%sf(j, k, l)
                                 nbub_sc = qK_prim_vf(n_idx)%sf(j, k, l)
+                                if (oneway) then
+                                    qK_prim_vf(alf_idx)%sf(j, k, l) = qK_cons_vf(alf_idx)%sf(j, k, l)
+                                end if
                             else
                                 call s_comp_n_from_cons(vftmp, nRtmp, nbub_sc, weight)
                             end if
@@ -1041,13 +1034,15 @@ contains
                                 + pi_inf + qv
                         elseif ((model_eqns /= 4) .and. (bubbles_euler .neqv. .true.)) then
                             ! E = Gamma*P + \rho u u /2 + \pi_inf + (\alpha\rho qv)
-                            q_cons_vf(E_idx)%sf(j, k, l) = &
-                                gamma*q_prim_vf(E_idx)%sf(j, k, l) + dyn_pres + pi_inf + qv
-                        else if ((model_eqns /= 4) .and. (bubbles_euler)) then
+                            q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf + qv
+                        else if ((model_eqns /= 4) .and. (bubbles_euler) .and. .not. oneway) then
                             ! \tilde{E} = dyn_pres + (1-\alf)(\Gamma p_l + \Pi_inf)
                             q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + &
                                                            (1._wp - q_prim_vf(alf_idx)%sf(j, k, l))* &
-                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf)
+                                                           (gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf + qv)
+                        else if ((model_eqns /= 4) .and. (bubbles_euler) .and. oneway) then
+                            ! \tilde{E} = dyn_pres + (\Gamma p_l + \Pi_inf)
+                            q_cons_vf(E_idx)%sf(j, k, l) = dyn_pres + gamma*q_prim_vf(E_idx)%sf(j, k, l) + pi_inf + qv
                         else
                             !Tait EOS, no conserved energy variable
                             q_cons_vf(E_idx)%sf(j, k, l) = 0._wp
@@ -1074,6 +1069,9 @@ contains
                             if (adv_n) then
                                 q_cons_vf(n_idx)%sf(j, k, l) = q_prim_vf(n_idx)%sf(j, k, l)
                                 nbub = q_prim_vf(n_idx)%sf(j, k, l)
+                                if (oneway) then
+                                    q_cons_vf(alf_idx)%sf(j, k, l) = q_prim_vf(alf_idx)%sf(j, k, l)
+                                end if
                             else
                                 call s_comp_n_from_prim(real(q_prim_vf(alf_idx)%sf(j, k, l), kind=wp), Rtmp, nbub, weight)
                             end if
@@ -1417,12 +1415,10 @@ contains
             elseif (((model_eqns == 4) .or. (model_eqns == 2 .and. bubbles_euler))) then
                 ! Sound speed for bubble mixture to order O(\alpha)
 
-                if (mpp_lim .and. (num_fluids > 1)) then
-                    c = (1._wp/gamma + 1._wp)* &
-                        (pres + pi_inf/(gamma + 1._wp))/rho
+                if ((mpp_lim .and. num_fluids > 1) .or. oneway) then
+                    c = (1._wp/gamma + 1._wp)*(pres + pi_inf/(gamma + 1._wp))/rho
                 else
-                    c = &
-                        (1._wp/gamma + 1._wp)* &
+                    c = (1._wp/gamma + 1._wp)* &
                         (pres + pi_inf/(gamma + 1._wp))/ &
                         (rho*(1._wp - adv(num_fluids)))
                 end if

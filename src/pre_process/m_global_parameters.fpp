@@ -78,6 +78,14 @@ module m_global_parameters
     real(wp) :: x_a, y_a, z_a
     real(wp) :: x_b, y_b, z_b
 
+    ! Selects the single stretching law used across all stretched directions.
+    ! stretch_type = 1 uses the hyperbolic-tangent map, while stretch_type = 2
+    ! uses the geometric-progression mesh with a refined core. The meaning of
+    ! a_[x,y,z] and [x,y,z]_[a,b] depends on this selector.
+    integer, parameter :: stretch_type_hyper_tan = 1
+    integer, parameter :: stretch_type_geom_prog = 2
+    integer :: stretch_type
+
     ! Simulation Algorithm Parameters
     integer :: model_eqns            !< Multicomponent flow model
     logical :: relax                 !< activate phase change
@@ -229,6 +237,9 @@ module m_global_parameters
     real(wp) :: Ca, Web, Re_inv, Eu
     real(wp), dimension(:), allocatable :: weight, R0
     logical :: bubbles_euler
+    logical :: oneway
+    integer :: oneway_patch
+    real(wp) :: oneway_vf
     logical :: qbmm      !< Quadrature moment method
     integer :: nmom  !< Number of carried moments
     real(wp) :: sigR, sigV, rhoRV !< standard deviations in R/V
@@ -261,13 +272,12 @@ module m_global_parameters
     integer :: thermal  !1 = adiabatic, 2 = isotherm, 3 = transfer
 
     real(wp) :: phi_vg, phi_gv, Pe_c, Tw, k_vl, k_gl
-    real(wp) :: gam_m
 
     real(wp), dimension(:), allocatable :: pb0, mass_g0, mass_v0, Pe_T, k_v, k_g
     real(wp), dimension(:), allocatable :: Re_trans_T, Re_trans_c, Im_trans_T, Im_trans_c, omegaN
 
     real(wp) :: R0ref, p0ref, rho0ref, T0ref, ss, pv, vd, mu_l, mu_v, mu_g, &
-                gam_v, gam_g, M_v, M_g, cp_v, cp_g, R_v, R_g
+                gam, gam_v, gam_g, gam_m, M_v, M_g, cp_v, cp_g, R_v, R_g
 
     !> @}
 
@@ -356,6 +366,8 @@ contains
         y_b = dflt_real
         z_a = dflt_real
         z_b = dflt_real
+
+        stretch_type = 1
 
         ! Simulation algorithm parameters
         model_eqns = dflt_int
@@ -508,11 +520,13 @@ contains
 
         ! Bubble modeling
         bubbles_euler = .false.
+        oneway = .false.
+        oneway_patch = dflt_int
+        oneway_vf = dflt_real
         polytropic = .true.
         polydisperse = .false.
 
         thermal = dflt_int
-        R0ref = dflt_real
         nb = dflt_int
 
         Eu = dflt_real
@@ -622,6 +636,7 @@ contains
         bub_pp%cp_g = dflt_real; cp_g = dflt_real
         bub_pp%R_v = dflt_real; R_v = dflt_real
         bub_pp%R_g = dflt_real; R_g = dflt_real
+        gam = dflt_real
 
     end subroutine s_assign_default_values_to_user_inputs
 
@@ -692,7 +707,12 @@ contains
             sys_size = adv_idx%end
 
             if (bubbles_euler) then
-                alf_idx = adv_idx%end
+                if (oneway) then
+                    alf_idx = adv_idx%end + 1
+                    sys_size = sys_size + 1
+                else
+                    alf_idx = adv_idx%end
+                end if
             else
                 alf_idx = 1
             end if

@@ -230,7 +230,7 @@ contains
         gamma = 0._wp
         pi_inf = 0._wp
 
-        if (bubbles_euler) then
+        if (bubbles_euler .and. .not. oneway) then
             if (mpp_lim .and. (model_eqns == 2) .and. (num_fluids > 2)) then
                 $:GPU_LOOP(parallelism='[seq]')
                 do i = 1, num_fluids
