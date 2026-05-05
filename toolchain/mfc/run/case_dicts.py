@@ -64,7 +64,6 @@ COMMON = {
     'down_sample': ParamType.LOG,
     'recon_type': ParamType.INT,
     'muscl_order': ParamType.INT,
-    'oneway': ParamType.LOG,
 }
 
 PRE_PROCESS = COMMON.copy()
@@ -107,8 +106,6 @@ PRE_PROCESS.update({
     'bubbles_lagrange': ParamType.LOG,
     'simplex_perturb': ParamType.LOG,
     'fft_wrt': ParamType.LOG,
-    'oneway_patch': ParamType.INT,
-    'oneway_vf': ParamType.REAL,
     'under_relax': ParamType.REAL,
 })
 
@@ -153,8 +150,6 @@ for cmp in ["x", "y", "z"]:
 
     PRE_PROCESS[f"bc_{cmp}%beg"] = ParamType.INT
     PRE_PROCESS[f"bc_{cmp}%end"] = ParamType.INT
-
-PRE_PROCESS["stretch_type"] = ParamType.INT
 
 for f_id in range(1, 10+1):
     PRE_PROCESS[f'fluid_rho({f_id})'] = ParamType.REAL

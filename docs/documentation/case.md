@@ -112,10 +112,9 @@ feature, detecting GPU pointers and performing RDMA accordingly.
 | ---:                     | :----:  |          :---                    |
 | `x[y,z]_domain%%beg[end]`| Real    | Beginning [ending] of the $x$[y,z]-direction domain    |
 | `stretch_x[y,z]`         | Logical | Stretching of the mesh in the $x$[y,z]-direction |
-| `stretch_type`           | Integer | Global stretching law for every stretched direction: `1` = `HT`, `2` = `GP` |
-| `a_x[y,z]`               | Real    | Stretching rate for `HT`, or number of refined-core cells for `GP` |
-| `x[y,z]_a`               | Real    | Negative-side stretching start for `HT`, or lower refined-core bound for `GP` |
-| `x[y,z]_b`               | Real    | Positive-side stretching start for `HT`, or upper refined-core bound for `GP` |
+| `a_x[y,z]`               | Real    | Rate at which the grid is stretched in the $x$[y,z]-direction |
+| `x[y,z]_a`               | Real    | Beginning of the stretching in the negative $x$[y,z]-direction |
+| `x[y,z]_b`               | Real    | Beginning of the stretching in the positive $x$[y,z]-direction |
 | `loops_x[y,z]`           | Integer | Number of times to recursively apply grid stretching |
 | `cyl_coord`              | Logical | Cylindrical coordinates (2D: Axisymmetric, 3D: Cylindrical) |
 | `m`                      | Integer | Number of grid cells in the $x$-coordinate direction |
@@ -147,12 +146,6 @@ $a_x$ defines the smoothness of the stretching.
 Stretching along the $y$ and $z$ axes follows the same logistics.
 Optimal choice of the parameters for grid stretching is case-dependent and left to the user.
 `loops_x[y,z]` defines the number of times the grid stretching function is applied and has a default value of one.
-
-- `stretch_type` selects the stretching law globally for every stretched axis.
-Use `1` for the existing hyperbolic tangent mapping or `2` for the geometric progression with a uniform refined core.
-When `stretch_type = 1`, `a_[x,y,z]` is the stretching rate and `[x,y,z]_a/b` are the start locations of the negative and positive stretching regions.
-When `stretch_type = 2`, `a_[x,y,z]` stores the number of cells in the refined core and `[x,y,z]_a/b` define the refined core bounds.
-The geometric-progression mode ignores `loops_x[y,z]`.
 
 - `cyl_coord` activates cylindrical coordinates.
 The domain is defined in $x$-$y$-$z$ cylindrical coordinates, instead of Cartesian coordinates.

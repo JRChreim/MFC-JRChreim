@@ -300,6 +300,8 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
 
         self.prohibit(not bubbles_euler,
                      "adv_n requires bubbles_euler to be enabled")
+        self.prohibit(num_fluids != 1,
+                     "adv_n requires num_fluids = 1")
         self.prohibit(qbmm,
                      "adv_n is not compatible with qbmm")
 
@@ -1156,7 +1158,6 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
 
     def check_grid_stretching(self):  # pylint: disable=too-many-branches
         """Checks grid stretching constraints (pre-process)"""
-        stretch_type = self.get('stretch_type', 1)
         loops_x = self.get('loops_x', 1)
         loops_y = self.get('loops_y', 1)
         stretch_y = self.get('stretch_y', 'F') == 'T'
@@ -1170,8 +1171,6 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                      "loops_x must be at least 1")
         self.prohibit(loops_y < 1,
                      "loops_y must be at least 1")
-        self.prohibit(stretch_type not in [1, 2],
-                     "stretch_type must be 1 (HT) or 2 (GP)")
         self.prohibit(stretch_y and n == 0,
                      "stretch_y requires n > 0")
         self.prohibit(stretch_z and p == 0,
@@ -1199,10 +1198,6 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
             if coord_a is not None and coord_b is not None:
                 self.prohibit(coord_a >= coord_b,
                              f"{direction}_a must be less than {direction}_b with stretch_{direction} enabled")
-
-            if stretch_type == 2:
-                self.prohibit(a <= 0 or a != int(a),
-                             f"a_{direction} must be a positive integer number of refined cells when stretch_type = 2")
 
     def check_perturb_density(self):
         """Checks initial partial density perturbation constraints (pre-process)"""

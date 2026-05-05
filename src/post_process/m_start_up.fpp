@@ -106,7 +106,7 @@ contains
             omega_wrt, qm_wrt, liutex_wrt, schlieren_wrt, schlieren_alpha, &
             fd_order, mixture_err, alt_soundspeed, &
             flux_lim, flux_wrt, cyl_coord, &
-            parallel_io, rhoref, pref, bubbles_euler, qbmm, sigR, oneway, &
+            parallel_io, rhoref, pref, bubbles_euler, qbmm, sigR, &
             R0ref, nb, polytropic, thermal, Ca, Web, Re_inv, &
             polydisperse, poly_sigma, file_per_process, relax, &
             relax_model, cf_wrt, sigma, adv_n, ib, num_ibs, &
@@ -855,13 +855,6 @@ contains
             if (adv_n) then
                 q_sf(:, :, :) = q_cons_vf(n_idx)%sf(x_beg:x_end, y_beg:y_end, z_beg:z_end)
                 write (varname, '(A)') 'n'
-                call s_write_variable_to_formatted_database_file(varname, t_step)
-                varname(:) = ' '
-            end if
-
-            if (oneway) then
-                q_sf(:, :, :) = q_cons_vf(alf_idx)%sf(x_beg:x_end, y_beg:y_end, z_beg:z_end)
-                write (varname, '(A)') 'alpha_b'
                 call s_write_variable_to_formatted_database_file(varname, t_step)
                 varname(:) = ' '
             end if

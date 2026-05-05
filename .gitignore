@@ -10,7 +10,6 @@ src/*/autogen/
 
 *.swo
 *.swp
-*.png
 
 *:Zone.Identifier
 

@@ -311,14 +311,13 @@ module m_global_parameters
     real(wp) :: Eu, Ca, Web, Re_inv
     real(wp), dimension(:), allocatable :: weight, R0
     logical :: bubbles_euler
-    logical :: oneway
     logical :: qbmm
     logical :: polytropic
     logical :: polydisperse
     logical :: adv_n
     integer :: thermal  !< 1 = adiabatic, 2 = isotherm, 3 = transfer
     real(wp) :: phi_vg, phi_gv, Pe_c, Tw, k_vl, k_gl
-    real(wp) :: gam, gam_m
+    real(wp) :: gam_m
     real(wp), dimension(:), allocatable :: pb0, mass_g0, mass_v0, Pe_T, k_v, k_g
     real(wp), dimension(:), allocatable :: Re_trans_T, Re_trans_c, Im_trans_T, Im_trans_c, omegaN
     real(wp) :: R0ref, p0ref, rho0ref, T0ref, ss, pv, vd, mu_l, mu_v, mu_g, &
@@ -458,7 +457,6 @@ contains
         bub_pp%cp_g = dflt_real; cp_g = dflt_real
         bub_pp%R_v = dflt_real; R_v = dflt_real
         bub_pp%R_g = dflt_real; R_g = dflt_real
-        gam = dflt_real
 
         ! Formatted database file(s) structure parameters
         format = dflt_int
@@ -525,8 +523,8 @@ contains
 
         ! Bubble modeling
         bubbles_euler = .false.
-        oneway = .false.
         qbmm = .false.
+        R0ref = dflt_real
         nb = dflt_int
         polydisperse = .false.
         poly_sigma = dflt_real
@@ -615,12 +613,7 @@ contains
             sys_size = adv_idx%end
 
             if (bubbles_euler) then
-                if (oneway) then
-                    alf_idx = adv_idx%end + 1
-                    sys_size = sys_size + 1
-                else
-                    alf_idx = adv_idx%end
-                end if
+                alf_idx = adv_idx%end
             else
                 alf_idx = 1
             end if

@@ -23,24 +23,25 @@ module m_phase_change
 
     implicit none
 
-    private; public :: pVap_sf, &
-                       s_initialize_phasechange_module, &
-                       s_finalize_phasechange_module, &
-                       s_compute_bubbles_euler_vapor_pressure, &
-                       s_infinite_relaxation_k
+    private; public :: s_initialize_phasechange_module, &
+ s_infinite_relaxation_k
 
     !> @name Parameters for the first order transition phase change
     !> @{
-    integer, parameter  :: max_iter = 50                       !< max # of iterations
-    real(wp), parameter :: pCr      = 4.94e7_wp                !< Critical water pressure
-    real(wp), parameter :: TCr      = 385.05_wp + 273.15_wp    !< Critical water temperature
-    real(wp), parameter :: mixM     = 0*sgm_eps                !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
-    integer, parameter  :: lp       = 1                        !< index for the liquid phase of the reacting fluid
-    integer, parameter  :: vp       = 2                        !< index for the vapor phase of the reacting fluid
+    integer, parameter :: max_iter = 1e4_wp             !< max # of iterations
+    real(wp), parameter :: pCr = 4.94e7_wp              !< Critical water pressure
+    real(wp), parameter :: TCr = 385.05_wp + 273.15_wp  !< Critical water temperature
+    real(wp), parameter :: mixM = sgm_eps               !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    integer, parameter :: lp = 1                        !< index for the liquid phase of the reacting fluid
+    integer, parameter :: vp = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
 
-    real(wp), allocatable, dimension(:, :, :) :: pVap_sf !< Relaxed cellwise vapor pressure used by Eulerian bubbles
-    $:GPU_DECLARE(create='[pVap_sf]')
+    !> @name Gibbs free energy phase change parameters
+    !> @{
+    real(wp) :: A, B, C, D
+    !> @}
+
+    $:GPU_DECLARE(create='[A,B,C,D]')
 
 contains
 
@@ -53,7 +54,7 @@ contains
         A = (cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp) + qvps(vp) - qvps(lp)) &
             /((gs_min(vp) - 1.0_wp)*cvs(vp))
 
-        if (.not. bubbles_euler) return
+        B = (qvs(lp) - qvs(vp))/((gs_min(vp) - 1.0_wp)*cvs(vp))
 
         C = (cvs(vp)*gs_min(vp) - cvs(lp)*gs_min(lp)) &
             /((gs_min(vp) - 1.0_wp)*cvs(vp))
@@ -81,16 +82,12 @@ contains
         type(scalar_field), dimension(sys_size), intent(inout) :: q_cons_vf
         real(wp) :: pS, pSOV, pSSL !< equilibrium pressure for mixture, overheated vapor, and subcooled liquid
         real(wp) :: TS, TSatOV, TSatSL, TSOV, TSSL !< equilibrium temperature for mixture, overheated vapor, and subcooled liquid. Saturation Temperatures at overheated vapor and subcooled liquid
-        real(wp) :: pVapSG !< Vapor pressure from the intermediate pT state, used only for the Blake/subgrid trigger
         real(wp) :: rhoe, dynE !< total internal energies (different calculations), kinetic energy, and total entropy
-        real(wp) :: rho, rM !< total density, total reacting mass
-        real(wp) :: alpha_b !< volume fraction of the subgrid component, used in case icsg is activated
-        logical :: TR, TIC, TSG
+        real(wp) :: rho, rM !< total density, total reacting mass, individual reacting masses
+        logical :: TR
 
-        $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,pVapSG]')
+        $:GPU_DECLARE(create='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL]')
         $:GPU_DECLARE(create='[rhoe,dynE,rho,rM,TR]')
-
-        real(wp), dimension(nb) :: mass_b, R_b !< subgrid variables, used in case icsg is activated
 
         real(wp), dimension(num_fluids) :: p_infOV, p_infpT, p_infSL, alphak, me0k, m0k, rhok, Tk
         $:GPU_DECLARE(create='[p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,rhok,Tk]')
@@ -99,20 +96,18 @@ contains
         $:GPU_DECLARE(create='[mOr]')
 
         !< Generic loop iterators
-        integer :: cb, i, j, k, l
+        integer :: i, j, k, l
 
         ! assigning value to the global parameter
         max_iter_pc_ts = 0
 
         ! starting equilibrium solver
-        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,pVapSG,rhoe,rhoeT,dynE,rho,rM,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,mOr,rhok,Tk]')
+        $:GPU_PARALLEL_LOOP(collapse=3, private='[pS,pSOV,pSSL,TS,TSatOV,TSatSL,TSOV,TSSL,rhoe,rhoeT,dynE,rho,rM,TR,p_infOV,p_infpT,p_infSL,alphak,me0k,m0k,mOr,rhok,Tk]')
         do j = 0, m
             do k = 0, n
                 do l = 0, p
                     ! trigger for phase change. This will be used for checking many conditions through the code
                     TR = .true.
-
-                    if (bubbles_euler) pVap_sf(j, k, l) = pv
 
                     $:GPU_LOOP(parallelism='[seq]')
                     do i = 1, num_fluids
@@ -137,26 +132,7 @@ contains
                       TR = .false.
                     end if
 
-                    ! if ( any( m0k <= 0 ) .or. any( alphak <= 0 ) ) then
-                    !     print *, 'pre-correction phase-change probe: proc_rank = ', proc_rank, &
-                    !              ' j,k,l = ', j, k, l
-                    !     print *, 'raw alphak = ', alphak
-                    !     print *, 'raw m0k    = ', m0k
-
-                    !     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
-
-                    !     print *, 'post-correction phase-change probe: proc_rank = ', proc_rank, &
-                    !              ' j,k,l = ', j, k, l
-                    !     print *, 'corrected alphak = ', alphak
-                    !     print *, 'corrected m0k = ', m0k
-                    !     print *, 'rM = ', rM
-                    !     print *, 'rho = ', rho
-                    !     print *, 'active phase count = ', count( m0k > 0 )
-                    !     print *, 'TR = ', TR
-
-                    ! else
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
-                    ! end if
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
                     dynE = 0.0_wp
@@ -191,44 +167,15 @@ contains
                             ! new volume fractions, after partial densities and p- or pT-equilibrium
                             alphak = m0k / rhok
 
-                            !! phase change triggers
-                            ! For Interface Capturing (enough alphak)
-                            TIC = (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps)
-
-                            ! For Subgrid (enough alpha_b)
-                            ! in case interface capturing and subgrid are activated. Subgrid trigger
-                            TSG = .false.
-                            if (bubbles_euler) then
-                              alpha_b = q_cons_vf(alf_idx)%sf(j, k, l) 
-                              if ( (alphak(lp) > alpha_b) .and. ( alphak(lp) > 0.5 ) ) then
-                                ! Vapor pressure from the intermediate pT state is
-                                ! only needed here to evaluate the Blake/subgrid
-                                ! trigger before deciding whether pTg relaxation is
-                                ! activated.
-                                call s_Saturation_Properties(pVapSG, TS, pS, 2)
-
-                                do cb = 1, nb
-
-                                  ! this is true for the monodisperse case, for the moment. I need to expand this to 'R0ref(cb)'
-                                  ! mass_b(cb) = rho0ref * 4.0_wp * pi * R0ref ** 3.0_wp / 3.0_wp
-
-                                  R_b(cb) = q_cons_vf(bub_idx%rs(cb))%sf(j, k, l) / q_cons_vf(n_idx)%sf(j, k, l)
-
-                                  call s_SG_trigger( alpha_b, mass_b(cb), pS, R_b(cb), pVapSG, TSG )
-
-                                end do
-                              end if
-                            end if
-
                             ! 1 - model activation, 1st order transition (p,T) <= (pCr, TCr)
                             if ( ( pS < pCr ) .and. &
                             ! 2.1 Homogeneous pTg-equilibrium criterium
                             ( ( ( pS < 0 ) .and. ( pS + minval(p_infpT) > 0.0_wp ) ) &
                             .or. &
-                            ! 2.2. Heterogeneous pTg-equilibrium (either IC or SG activated).
-                            TIC .or. TSG &
-                            ) ) then
-                                ! updating m1 and m2 AFTER correcting the partial densities. These values are
+                            ! 2.2. Heterogeneous pTg-equilibrium.
+                            ( (alphak(lp) > palpha_eps) .and. (alphak(vp) > palpha_eps) ) ) &
+                            ) then
+                                ! updating m1 and m2 AFTER correcting the partial densities. These values are 
                                 ! stored to be retrieved in case the final state is a mixture of fluids
                                 mOr = (/ m0k(lp), m0k(vp) /)
 
@@ -241,8 +188,8 @@ contains
                                 ! calling pT-equilibrium for overheated vapor, which is MFL = 0
                                 call s_infinite_pt_relaxation(j, k, l, m0k, 0, pSOV, p_infOV, rhoe, rM, TSOV)
 
-                                ! computing the saturation temperature for the overheated vapor state
-                                call s_Saturation_Properties(pSOV, TSatOV, TSOV, 1)
+                                ! calculating Saturation temperature
+                                call s_TSat(pSOV, TSatOV, TSOV)
 
                                 ! subcooled liquid
                                 ! tranferring the total mass to liquid and depleting the mass of vapor
@@ -251,8 +198,8 @@ contains
                                 ! calling pT-equilibrium for subcooled liquid, which is MFL = 1
                                 call s_infinite_pt_relaxation(j, k, l, m0k, 1, pSSL, p_infSL, rhoe, rM, TSSL)
 
-                                ! computing the saturation temperature for the subcooled liquid state
-                                call s_Saturation_Properties(pSSL, TSatSL, TSSL, 1)
+                                ! calculating Saturation temperature
+                                call s_TSat(pSSL, TSatSL, TSSL)
 
                                 ! checking the conditions for overheated vapor
                                 if (TSOV > TSatOV) then
@@ -291,13 +238,6 @@ contains
                                     end if
                                 end if
                                 Tk = spread(TS, 1, num_fluids)
-
-                                    ! if ( m0k(vp) > 0.0_wp ) then
-                                    !     print *, 'alphak(lp):', alphak(lp)
-                                    !     print *, 'alphak(vp):', alphak(vp)
-                                    !     print *, 'alpha_b:', alpha_b
-                                    ! end if
-
                             else
                                 $:GPU_LOOP(parallelism='[seq]')
                                 do i = 1, num_fluids
@@ -307,7 +247,7 @@ contains
                                 ! cycles the innermost loop to the next iteration
                                 cycle
                             end if
-                        end select                        
+                        end select
                     else
                         $:GPU_LOOP(parallelism='[seq]')
                         do i = 1, num_fluids
@@ -315,16 +255,8 @@ contains
                             m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
                         end do
                     end if
-                    ! Update conservative variables only when the relaxation
-                    ! path remains active for this cell.
-                    if (TR) then 
-                        call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
-                        ! Store the final relaxed-cell vapor pressure
-                        ! for the next Euler bubble update.
-                        if (bubbles_euler .and. pv > 0.0_wp) then
-                            call s_Saturation_Properties(pVap_sf(j, k, l), TS, pS, 2)
-                        end if
-                    end if
+                    ! updating conservative variables after the any relaxation procedures
+                    call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
                 end do
             end do
         end do
@@ -355,10 +287,11 @@ contains
         logical, dimension(num_fluids) :: is_negligible_mass
         character(20) :: nss, pSs, Econsts
         integer, dimension(num_fluids) :: iFix, iAuxSP, iAuxZP !< auxiliary index for choosing appropiate values for conditional sums
+        real(wp), dimension(3) :: Oc
         integer, dimension(:), allocatable :: iSP, iZP
 
         integer :: mF !< multiplying factor for the tolerance of the solver
-        integer :: i, na, ns, nsL, ns_total !< generic loop iterators
+        integer :: i, na, ns, nsL !< generic loop iterators
 
         ! indices for all the fluids/phases
         iFix = (/ (i, i=1,num_fluids) /)
@@ -393,28 +326,22 @@ contains
 
         ! counter for the outer loop
         nsL = 0
-        ns_total = 0
+
+        ! Relaxation factor. Although this is not needed for Newton Solver for finding p, it seems to be needed to update
+        ! the internal energies after finding pS.
+        Om = under_relax
 
         do while ( ( ( abs( sum( mek(iSP) ) - rhoe ) > ptgalpha_eps ) .and. ( abs( ( sum( mek(iSP) ) - rhoe ) / rhoe ) > ptgalpha_eps ) ) .or.  ( nSL == 0 ) )
             ! increasing counter
             nsL = nsL + 1
 
-            ! Keep a copy of the current outer iterate. The inner pressure solve uses this
-            ! frozen energy state, and the Rankine-Hugoniot update is applied afterward.
-            mek_old = mek
-
             ! Variable to check the energy constraint before initializing the p-relaxation procedure. This ensures
-            ! global convergence will be estabilished. The expression below is only meaningful when all
-            ! participating phases have positive stiffness.
-            if ( minval( ps_inf(iSP) ) > 0.0_wp ) then
-              Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
-            else
-              Econst = huge( 1.0_wp )
-            end if
+            ! global convergence will be estabilished
+            Econst = sum( (gs_min(iSP) - 1.0_wp) * ( mek(iSP) - m0k(iSP) * qvs(iSP) ) / ( gs_min(iSP) * ps_inf(iSP) - minval( ps_inf(iSP) ) ) )
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
-            if ( ( ( minval( ps_inf(iSP) ) > 0.0_wp ) .and. ( Econst <= 1.0_wp ) ) .or. ( nsL > max_iter ) ) then
+            if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
 
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
@@ -436,7 +363,6 @@ contains
             do while ( ( ( abs(fp - 1.0_wp) > mF * ptgalpha_eps ) ) .or. ( ns <= 1 ) )
                 ! increasing counter
                 ns = ns + 1
-                ns_total = ns_total + 1
 
                 ! updating functions used in the Newton's solver. f(p)
                 fp = sum( alphak(iSP) )
@@ -509,20 +435,6 @@ contains
                     end if
                 end if
             end do
-
-            ! Outer relaxation step: now that the frozen-energy pressure solve has converged,
-            ! update the phase internal energies from the Rankine-Hugoniot relation.
-            mek_target(iSP) = meik(iSP) - pS * ( alphak(iSP) - alpha0k(iSP) )
-
-            Om = under_relax
-            if ( any( mek_target(iSP) < m0k(iSP) * qvs(iSP) ) ) then
-              Om = min( under_relax, minval( ( mek_old(iSP) - m0k(iSP) * qvs(iSP) ) / ( mek_old(iSP) - mek_target(iSP) ) ) / 2 )
-            end if
-
-            Om = max( 1.0e-12_wp, Om )
-
-            ! Damp the outer update toward the Rankine-Hugoniot target.
-            mek(iSP) = mek_old(iSP) + Om * ( mek_target(iSP) - mek_old(iSP) )
         end do
 
         ! (NOT common) temperatures
@@ -757,15 +669,6 @@ contains
         if ((rhoe - mQ - minval(ps_inf(iSP))) < 0.0_wp) then
 
             if ( any((/ 0, 1 /) == MFL ) ) then
-! #ifndef MFC_OpenACC
-!                 print *, 'pT trial rejected by energy constraint: j,k,l = ', j, k, l
-!                 print *, 'MFL = ', MFL
-!                 print *, 'm0k(lp) = ', m0k(lp), ' m0k(vp) = ', m0k(vp)
-!                 print *, 'rhoe = ', rhoe
-!                 print *, 'mQ = ', mQ
-!                 print *, 'minval(ps_inf(iSP)) = ', minval(ps_inf(iSP))
-!                 print *, 'energy_margin = ', rhoe - mQ - minval(ps_inf(iSP))
-! #endif
 
                 ! Assigning zero values for pressure and temperature in case of mass depletion cases
                 pS = 0.0_wp ; TS = 0.0_wp
@@ -823,7 +726,7 @@ contains
             if ((pS <= -1.0_wp*minval(ps_inf(iSP))) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
 
               call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
+                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
                                 , pS, (/abs( gp - 1.0_wp ), 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
 
               call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
@@ -858,15 +761,12 @@ contains
         real(wp), intent(inout) :: pS, TS, rM
         real(wp), intent(in) :: rhoe
         integer, intent(in) :: j, k, l
-        logical, intent(inout) :: TR, TSG ! triggering parameters
+        logical, intent(inout) :: TR ! triggering parameters
         real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
-        real(wp), parameter :: Om_floor = 1.0e-12_wp ! minimum positive relaxation factor
         real(wp) :: Om ! underrelaxation factor
-        real(wp) :: m_scale, p_scale, g_scale, e_scale
-        real(wp), dimension(2) :: DeltamP_hat
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s
 
@@ -933,9 +833,10 @@ contains
 
         ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
         maxg = maxval([gk(lp),gk(vp)])
-        ! Newton solver for pTg-equilibrium. The residual and Jacobian are
-        ! normalized so the linear system is better conditioned.
-        do while ( ( norm2(R2D) > ptgalpha_eps ) .or. ( ns == 0 ) )
+
+        ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
+        do while ( ( ( norm2(R2D) > ptgalpha_eps ) .and. ( norm2( R2D*(/maxg,rhoe/) ) / norm2( (/maxg,rhoe/) ) > ptgalpha_eps ) ) &
+          .or. ( ns == 0 ) )
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
@@ -966,32 +867,15 @@ contains
                   - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( ( pS + ps_inf(lp) ) ** 2 ) &
                   - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
-            ! normalization factors for the current Newton system
-            g_scale = 1.0_wp
-            e_scale = 1.0_wp
-            m_scale = 1.0_wp
-            p_scale = 1.0_wp
-            ! g_scale = max(1.0_wp, abs(maxg))
-            ! e_scale = max(1.0_wp, abs(rhoe), abs(pS), abs(mQ))
-            ! m_scale = max(1.0_wp, abs(rM))
-            ! p_scale = max(1.0_wp, abs(pS), abs(minval(p_infpTg)))
-
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
-            call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac, &
-                                           m_scale, p_scale, g_scale, e_scale)
+            call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
 
             ! calculating correction array for Newton's method
-            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
-            DeltamP_hat = matmul(InvJac, R2D)
-            DeltamP(1) = m_scale * DeltamP_hat(1)
-            DeltamP(2) = p_scale * DeltamP_hat(2)
+            DeltamP = matmul(InvJac, R2D)
 
             ! checking if the correction in the mass/pressure will lead to negative values for those quantities
             ! If so, adjust the underrelaxation parameter Om
 #ifndef MFC_OpenACC
-            ! reset the trial factor at the start of each Newton iteration
-            Om = under_relax
-
             ! creating criteria for variable underrelaxation factor
             if (m0k(lp) - Om*DeltamP(1) <= 0.0_wp) then
                 Oc(1) = m0k(lp)/(2*DeltamP(1))
@@ -1008,13 +892,8 @@ contains
             else
                 Oc(3) = under_relax
             end if
-            ! choosing amongst the minimum relaxation maximum to ensure solver will not produce unphysical values.
-            ! If the limiter becomes nonpositive, fall back to a tiny positive step instead of reversing direction.
-            if (minval(Oc) > 0.0_wp) then
-                Om = min(under_relax, minval(Oc))
-            else
-                Om = Om_floor
-            end if
+            ! choosing amonst the minimum relaxation maximum to ensure solver will not produce unphysical values
+            Om = minval(Oc)
 #else
             Om = under_relax
 #endif
@@ -1028,50 +907,26 @@ contains
             ! updating pressure
             pS = pS - Om*DeltamP(2)
 
-            ! re-evaluating the normalized residuals after the update.
-            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
+            ! calculating residuals, which are (i) the difference between the Gibbs Free energy of the gas and the liquid
+            ! and (ii) the energy before and after the phase-change process.
+            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
 
-            ! updating common temperature
-            TS = (rhoe + pS - mQ)/mCP
+          ! updating common temperature
+          TS = (rhoe + pS - mQ)/mCP
 
-            ! entropy
-            sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+          ! entropy
+          sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
 
-            ! enthalpy
-            hk = gs_min*cvs*TS + qvs
+          ! enthalpy
+          hk = gs_min*cvs*TS + qvs
 
-            ! Gibbs-free energy
-            gk = hk - TS*sk
+          ! Gibbs-free energy
+          gk = hk - TS*sk
 
-            ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
-            maxg = maxval([gk(lp),gk(vp)])
+          ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
+          maxg = maxval([gk(lp),gk(vp)])
 
-            ! print *, 'j,k,l = ', j, k, l
-            ! print *, 'ns = ', ns
-            ! print *, 'mCP = ', mCP
-            ! print *, 'mQ = ', mQ
-            ! print *, 'TS = ', TS
-            ! print *, 'Om = ', Om
-            ! print *, 'DeltamP = ', DeltamP
-            ! print *, 'pS = ', pS
-            ! print *, 'pS + minval(p_infpTg) = ', pS + minval(p_infpTg)
-            ! print *, 'pS + ps_inf(lp) = ', pS + ps_inf(lp)
-            ! print *, 'pS + ps_inf(vp) = ', pS + ps_inf(vp)
-            ! print *, 'R2D = ', R2D
-            ! print *, 'norm2(R2D) = ', norm2(R2D)
-            ! print *, 'det(J) = ', Jac(1,1)*Jac(2,2) - Jac(1,2)*Jac(2,1)
-            ! print *, 'Jac = ', Jac
-            ! print *, 'mCPD = ', mCPD
-            ! print *, 'mQD = ', mQD
-            ! print *, 'mCVGP = ', mCVGP
-            ! print *, 'mCVGP2 = ', mCVGP2
-            ! print *, 'm0k(lp) = ', m0k(lp)
-            ! print *, 'm0k(vp) = ', m0k(vp)
-            ! print *, 'maxg = ', maxg
-            ! print *, 'relative residual = ', norm2(R2D*(/maxg,rhoe/))/norm2((/maxg,rhoe/))
-
-
-          ! checking if the residue returned any NaN values
+                      ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
           if (ieee_is_nan(norm2(R2D)) .or. (ns > max_iter)) then
 
@@ -1226,29 +1081,15 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TJac Transpose of the Jacobian Matrix
-    subroutine s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac, &
-                                         m_scale, p_scale, g_scale, e_scale)
+    subroutine s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
         $:GPU_ROUTINE(function_name='s_compute_jacobian_matrix', &
             & parallelism='[seq]', cray_inline=True)
 
         real(wp), dimension(num_fluids), intent(in) :: m0k
         real(wp), intent(in) :: pS, mCPD, mCVGP, mCVGP2, rM
-        real(wp), intent(in), optional :: m_scale, p_scale, g_scale, e_scale
         integer, intent(in) :: j, k, l
         real(wp), dimension(2, 2), intent(out) :: Jac, InvJac, TJac
         real(wp) :: TS, dFdT, dTdm, dTdp ! mass of the reacting fluid, total reacting mass, and auxiliary variables
-        real(wp) :: m_scale_eff, p_scale_eff, g_scale_eff, e_scale_eff, detJ_hat
-        real(wp), dimension(2, 2) :: JacHat
-
-        m_scale_eff = 1.0_wp
-        p_scale_eff = 1.0_wp
-        g_scale_eff = 1.0_wp
-        e_scale_eff = 1.0_wp
-
-        if (present(m_scale)) m_scale_eff = m_scale
-        if (present(p_scale)) p_scale_eff = p_scale
-        if (present(g_scale)) g_scale_eff = g_scale
-        if (present(e_scale)) e_scale_eff = e_scale
 
         TS = 1/(rM*cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)) &
                 + m0k(lp)*(cvs(lp)*(gs_min(lp) - 1)/(pS + ps_inf(lp)) &
@@ -1316,20 +1157,8 @@ contains
         TJac(2, 1) = Jac(1, 2)
         TJac(2, 2) = Jac(2, 2)
 
-        ! form the scaled Jacobian used by the Newton solve:
-        !   J_hat = diag(1/g_scale, 1/e_scale) * J * diag(m_scale, p_scale)
-        JacHat(1, 1) = Jac(1, 1) * m_scale_eff / g_scale_eff
-        JacHat(1, 2) = Jac(1, 2) * p_scale_eff / g_scale_eff
-        JacHat(2, 1) = Jac(2, 1) * m_scale_eff / e_scale_eff
-        JacHat(2, 2) = Jac(2, 2) * p_scale_eff / e_scale_eff
-
-        detJ_hat = JacHat(1, 1)*JacHat(2, 2) - JacHat(1, 2)*JacHat(2, 1)
-
-        InvJac(1, 1) = JacHat(2, 2)
-        InvJac(1, 2) = -1.0_wp*JacHat(1, 2)
-        InvJac(2, 1) = -1.0_wp*JacHat(2, 1)
-        InvJac(2, 2) = JacHat(1, 1)
-        InvJac = InvJac/detJ_hat
+        ! dividing by det(J)
+        InvJac = InvJac/(Jac(1, 1)*Jac(2, 2) - Jac(1, 2)*Jac(2, 1))
 
     end subroutine s_compute_jacobian_matrix
 
@@ -1344,23 +1173,15 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param rhoe mixture energy
         !!  @param R2D (2D) residue array
-    subroutine s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
+    subroutine s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
         $:GPU_ROUTINE(function_name='s_compute_pTg_residual', &
             & parallelism='[seq]', cray_inline=True)
 
         real(wp), dimension(num_fluids), intent(in) :: m0k
         real(wp), intent(in) :: pS, rhoe, mCPD, mCVGP, mQD, rM
-        real(wp), intent(in), optional :: g_scale, e_scale
         integer, intent(in) :: j, k, l
         real(wp), dimension(2), intent(out) :: R2D
         real(wp) :: TS !< mass of the reacting liquid, total reacting mass, equilibrium temperature
-        real(wp) :: g_scale_eff, e_scale_eff, R1_raw, R2_raw
-
-        g_scale_eff = 1.0_wp
-        e_scale_eff = 1.0_wp
-
-        if (present(g_scale)) g_scale_eff = g_scale
-        if (present(e_scale)) e_scale_eff = e_scale
 
         ! relaxed temperature
         TS = 1/(rM*cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)) &
@@ -1369,14 +1190,14 @@ contains
                 + mCVGP)
 
         ! Gibbs Free Energy Equality condition (DG)
-        R1_raw = TS*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
+        R2D(1) = TS*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
                      *(1 - log(TS)) - (qvps(lp) - qvps(vp)) &
                      + cvs(lp)*(gs_min(lp) - 1)*log(pS + ps_inf(lp)) &
                      - cvs(vp)*(gs_min(vp) - 1)*log(pS + ps_inf(vp))) &
                  + qvs(lp) - qvs(vp)
 
         ! Constant Energy Process condition (DE)
-        R2_raw = (rhoe + pS &
+        R2D(2) = (rhoe + pS &
                   + m0k(lp)*(qvs(vp) - qvs(lp)) - rM*qvs(vp) - mQD &
                   + (m0k(lp)*(cvs(vp)*gs_min(vp) - cvs(lp)*gs_min(lp)) &
                   - rM*cvs(vp)*gs_min(vp) - mCPD) * TS ) / 1
@@ -1491,156 +1312,82 @@ contains
 
     end subroutine s_whistleblower
 
-        !>  This auxiliary routine computes the requested saturation property
-        !!      from the supplied saturation state and initial guess
-        !!  @param pSat Saturation pressure. Input for iSatOut = 1 and output for iSatOut = 2
-        !!  @param TSat Saturation temperature. Output for iSatOut = 1 and input for iSatOut = 2
-        !!  @param SatIn Initial guess for the Newton solver: temperature when computing TSat, pressure when computing pSat
-        !!  @param iSatOut Saturation-property selector chosen by the caller
-    subroutine s_Saturation_Properties(pSat, TSat, SatIn, iSatOut)
-        $:GPU_ROUTINE(function_name='s_Saturation_Properties',parallelism='[seq]', &
+        !>  This auxiliary subroutine finds the Saturation temperature for a given
+        !!      saturation pressure through a newton solver
+        !!  @param pSat Saturation Pressure
+        !!  @param TSat Saturation Temperature
+        !!  @param TSIn equilibrium Temperature
+    subroutine s_TSat(pSat, TSat, TSIn)
+        $:GPU_ROUTINE(function_name='s_TSat',parallelism='[seq]', &
             & cray_inline=True)
 
-        real(wp), intent(inout) :: pSat, TSat
-        real(wp), intent(in) :: SatIn
-        integer, intent(in) :: iSatOut
-        real(wp) :: dFdp, dFdT, FSatProp, Om, pMin
-        character(20) :: iSatOutS, nss, SatInS, pSatS, TSatS
+        real(wp), intent(out) :: TSat
+        real(wp), intent(in) :: pSat, TSIn
+        real(wp) :: dFdT, FT, Om !< auxiliary variables
+        character(20) :: nss, pSatS, TSatS
 
         ! Generic loop iterators
         integer :: ns
 
-        ! Shared Newton-solver state. The selected branch below only changes the
-        ! residual and jacobian formulas for the requested saturation property.
-        Om = under_relax
-        ns = 0
-        FSatProp = 2.0_wp*ptgalpha_eps
+        ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
+        ! phisically sustained (p = 0, T = 0)
+        if ((pSat <= 0.0_wp) .and. (TSIn >= 0.0_wp)) then
 
-        select case (iSatOut)
-        case (1)
-            ! Compute saturation temperature from a prescribed saturation pressure.
-            ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
-            ! phisically sustained (p = 0, T = 0)
-            if ((pSat <= sgm_eps) .and. (SatIn >= 0.0_wp)) then
+            ! assigning Saturation temperature
+            TSat = 0.0_wp
 
-                ! assigning Saturation temperature
-                TSat = 0.0_wp
+        else
 
-            else
+            ! calculating initial estimate for temperature in the TSat procedure. I will also use this variable to
+            ! iterate over the Newton's solver
+            TSat = TSIn
 
-                ! calculating initial estimate for temperature in the TSat procedure. I will also use this variable to
-                ! iterate over the Newton's solver
-                TSat = SatIn
+            ! underrelaxation factor
+            Om = under_relax
+            ! starting counter for the Newton solver
+            ns = 0
 
-                ! Newton solver for finding the saturation temperature as function of pressure. ns == 0, so the loop is
-                ! entered at least once.
-                do while ( ( abs(FSatProp) > ptgalpha_eps ) .or. ( ns == 0 ) )
+            ! Newton solver for finding the saturation temperature as function of pressure. ns == 0, so the loop is
+            ! entered at least once.
+            do while ( ( abs(FT) > ptgalpha_eps ) .or. ( ns == 0 ) )
 
-                    ! Updating counter for the iterative procedure
-                    ns = ns + 1
+                ! Updating counter for the iterative procedure
+                ns = ns + 1
 
-                    ! residual for the saturation-temperature solve
-                    FSatProp = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
-                                     *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
-                                     + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
-                                     - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
-                               + qvs(lp) - qvs(vp)
+                ! calculating residual
+                FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
+                           *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
+                           + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
+                           - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
+                     + qvs(lp) - qvs(vp)
 
-                    ! calculating the jacobian
-                    dFdT = &
-                        -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TSat) &
-                        - (qvps(lp) - qvps(vp)) &
-                        + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
-                        - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))
+                ! calculating the jacobian
+                dFdT = &
+                    -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TSat) &
+                    - (qvps(lp) - qvps(vp)) &
+                    + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
+                    - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))
 
-                    ! updating saturation temperature
-                    TSat = TSat - Om*FSatProp/dFdT
+                ! updating saturation temperature
+                TSat = TSat - Om*FT/dFdT
 
 #ifndef MFC_OpenACC
-                    ! Checking if TSat returns a NaN
-                    if ((ieee_is_nan(TSat)) .or. (ns > max_iter)) then
+                ! Checking if TSat returns a NaN
+                if ((ieee_is_nan(TSat)) .or. (ns > max_iter)) then
 
-                        call s_int_to_str(ns, nss)
-                        call s_real_to_str(TSat, TSatS)
-                        call s_real_to_str(pSat, pSatS)
-                        call s_real_to_str(SatIn, SatInS)
-                        call s_mpi_abort('pSat = '//pSatS//', TSat = '//TSatS//', SatIn = '//SatInS//'. &
-                        & ns = '//nss//'. m_phase_change, s_Saturation_Properties. Aborting!')
+                    call s_int_to_str(ns, nss)
+                    call s_real_to_str(TSat, TSatS)
+                    call s_real_to_str(pSat, pSatS)
+                    call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
+                    & ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
 
-                    end if
+                end if
 #endif
-                end do
+            end do
 
-            end if
+        end if
 
-        case (2)
-            ! Compute saturation pressure from a prescribed saturation temperature.
-            ! minimum pressure that keeps the logarithms well-defined
-            pMin = maxval((/ -(1.0_wp - ptgalpha_eps)*ps_inf(lp) + ptgalpha_eps, &
-                            -(1.0_wp - ptgalpha_eps)*ps_inf(vp) + ptgalpha_eps /))
-
-            ! if the prescribed saturation temperature is nonphysical or
-            ! the phase change state cannot be sustained
-            if (TSat <= sgm_eps) then
-
-                ! assigning Saturation pressure
-                pSat = 0.0_wp
-
-            else
-
-                ! calculating initial estimate for pressure in the pSat procedure. I will also use this variable to
-                ! iterate over the Newton's solver
-                pSat = max(SatIn, pMin)
-
-                ! Newton solver for finding the saturation pressure as function of temperature. ns == 0, so the loop is
-                ! entered at least once.
-                do while ( ( abs(FSatProp) > ptgalpha_eps ) .or. ( ns == 0 ) )
-
-                    ! Updating counter for the iterative procedure
-                    ns = ns + 1
-
-                    ! residual for the saturation-pressure solve, using the same
-                    ! Gibbs-equality expression as in the saturation-temperature path
-                    FSatProp = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
-                                     *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
-                                     + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
-                                     - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
-                               + qvs(lp) - qvs(vp)
-
-                    ! jacobian of the Gibbs-equality residual with respect to pressure
-                    dFdp = TSat*(cvs(lp)*(gs_min(lp) - 1)/(pSat + ps_inf(lp)) &
-                                 - cvs(vp)*(gs_min(vp) - 1)/(pSat + ps_inf(vp)))
-
-                    ! updating saturation pressure and keeping the logarithms well-defined
-                    pSat = max(pSat - Om*FSatProp/dFdp, pMin)
-
-#ifndef MFC_OpenACC
-                    ! Checking if pSat returns a NaN
-                    if ((ieee_is_nan(pSat)) .or. (ns > max_iter)) then
-
-                        call s_int_to_str(ns, nss)
-                        call s_real_to_str(TSat, TSatS)
-                        call s_real_to_str(pSat, pSatS)
-                        call s_real_to_str(SatIn, SatInS)
-                        call s_mpi_abort('pSat = '//pSatS//', TSat = '//TSatS//', pIn = '//SatInS//'. &
-                        & ns = '//nss//'. m_phase_change, s_Saturation_Properties. Aborting!')
-
-                    end if
-#endif
-                end do
-
-            end if
-
-#ifndef MFC_OpenACC
-        case default
-            call s_int_to_str(iSatOut, iSatOutS)
-            call s_mpi_abort('Unsupported saturation output choice = '//iSatOutS// &
-                           & '. Use 1 for outputting temperature or 2 for outputting pressure. ' // &
-                           & 'm_phase_change, s_Saturation_Properties. Aborting!')
-#endif
-        end select
-
-    end subroutine s_Saturation_Properties
+    end subroutine s_TSat
 
     subroutine update_conservative_vars(j, k, l, m0k, pS, q_cons_vf, Tk )
 
@@ -1687,45 +1434,10 @@ contains
         end do
     end subroutine update_conservative_vars
 
-        !>  This auxiliary subroutine enables phase change based on subgrid
-        !!  criterium, if subgrid model is activated. This is based on Fuster's
-        !!  work (Stability of bubbly liquids and its connection to the process
-        !!  of cavitation inception)
-    subroutine s_SG_trigger( alpha_b, massIn_b, pS, RIn_b, pVap, TSG )
-        $:GPU_ROUTINE(function_name='s_SG_trigger',parallelism='[seq]', &
-            & cray_inline=True)
-
-        real(wp), intent(in)    :: alpha_b, massIn_b, pS, RIn_b, pVap
-        logical, intent(inout)  :: TSG
-        real(wp) :: RBlake
-
-        !! first approximation: dilute limit - Blake's critical radius for
-        !! either mono or polydisperse bubbles, since they are into the dilute
-        !! limit
-        ! RBlake = ( 3.0_wp * gam * R_g * rho0ref / ( 2.0_wp * ss * R0ref ** ( 3.0_wp * gam - 6.0_wp ) ) ) ** ( 1 / ( 5.0_wp - 3.0_wp * gam ) )
-        ! below the boiling point, the subgrid model is not activated, as for any T, the equilibrium is stable
-        if (pS > pVap) then
-            TSG = .false.
-        else
-            RBlake = 2.0_wp * ss / ( pVap - pS ) * ( 1.0_wp - 1.0_wp / ( 3.0_wp * gam ) )
-            TSG = RIn_b > RBlake
-        end if
-
-        ! if (TSG) then
-        !   print *, 'RIn_b', RIn_b
-        !   print *, 'RBlake', RBlake
-        !   Print *, '( pVap - pS )', ( pVap - pS )
-        !   print *, 'pVap', pVap
-        !   print *, 'pS', pS
-        ! end if
-        ! TSG = alpha_b > 1.0e-4_wp
-
-    end subroutine s_SG_trigger
-
-    impure subroutine s_real_to_str(rl, res)
+    subroutine s_real_to_str(rl, res)
         real(wp), intent(in) :: rl
         character(len=*), intent(out) :: res
-        write (res, '(ES20.8)') rl
+        write (res, '(F10.4)') rl
         res = trim(res)
     end subroutine s_real_to_str
 
