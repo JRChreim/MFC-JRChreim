@@ -129,7 +129,7 @@ contains
                     ! check is the total number of NaN partial densities is == num_fluids. In this case, we assume
                     ! the solver will fail irrespective of the relaxation. There is no magic
                     if ( count( ieee_is_nan( m0k ) ) == num_fluids ) then
-                      TR = .false.  
+                      TR = .false.
                     end if
 
                     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
@@ -149,7 +149,7 @@ contains
                     if (TR) then
                         select case (relax_model)
                         case (1) ! (old) p-equilibrium
-                            call s_old_infinite_p_relaxation_k(j, k, l, alphak, me0k, m0k, pS, rhoe, Tk)                            
+                            call s_old_infinite_p_relaxation(j, k, l, alphak, me0k, m0k, pS, rhoe, Tk)
                         case (4) ! p-equilibrium
                             call s_infinite_p_relaxation(j, k, l, alphak, me0k, m0k, pS, rhoe, rM, Tk)
                         case (5) ! pT-equilibrium
@@ -225,7 +225,7 @@ contains
                                     m0k(lp) = mOr(1) ; m0k(vp) = mOr(2)
 
                                     ! pTg-relaxation
-                                    call s_infinite_ptg_relaxation_k(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
+                                    call s_infinite_ptg_relaxation(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
                                     ! if no pTg happens, the solver will return to the hyperbolic state variables
                                     if ( TR .eqv. .false. ) then
                                         $:GPU_LOOP(parallelism='[seq]')
@@ -751,7 +751,7 @@ contains
         !!  @param rhoe mixture energy
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TS equilibrium temperature at the interface
-    subroutine s_infinite_ptg_relaxation_k(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
+    subroutine s_infinite_ptg_relaxation(j, k, l, alphak, me0k, m0k, pS, p_infpT, rho, rhoe, rM, TR, TS)
 
         $:GPU_ROUTINE(function_name='s_infinite_ptg_relaxation', &
             & parallelism='[seq]', cray_inline=True)
@@ -792,7 +792,7 @@ contains
             p_infpTg(lp) = ps_inf(lp) ; p_infpTg(vp) = ps_inf(vp)
 
             ! give an arbitrary value 'positive' value for the pressure as,
-            ! since now both vapor and liquid exist pS > -min(pi_inf) for the 
+            ! since now both vapor and liquid exist pS > -min(pi_inf) for the
             ! solver to converge (at least) within the pR-relaxation context
             pS = 1.0e4_wp
 
@@ -1256,6 +1256,8 @@ contains
         alphak = mk / rhok
 
         alphak( pack( iFix, mk < sgm_eps ) ) = 0._wp
+
+        print *, 'alphak', alphak
 
         if (model_eqns == 3) then
             print *, 'mek', mk * ek
