@@ -36,31 +36,15 @@ module m_phase_change
     integer, parameter :: vp = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
 
-    !> @name Gibbs free energy phase change parameters
-    !> @{
-    real(wp) :: A, B, C, D
-    !> @}
-
-    $:GPU_DECLARE(create='[A,B,C,D]')
-
 contains
 
     !>  The purpose of this subroutine is to initialize the phase change module
-        !!      by setting the parameters needed for phase change and
+    !!      by setting the parameters needed for phase change and
         !!      selecting the phase change module that will be used
         !!      (pT- or pTg-equilibrium)
     impure subroutine s_initialize_phasechange_module
-        ! variables used in the calculation of the saturation curves for fluids 1 and 2
-        A = (cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp) + qvps(vp) - qvps(lp)) &
-            /((gs_min(vp) - 1.0_wp)*cvs(vp))
-
-        B = (qvs(lp) - qvs(vp))/((gs_min(vp) - 1.0_wp)*cvs(vp))
-
-        C = (cvs(vp)*gs_min(vp) - cvs(lp)*gs_min(lp)) &
-            /((gs_min(vp) - 1.0_wp)*cvs(vp))
-
-        D = ((gs_min(lp) - 1.0_wp)*cvs(lp)) &
-            /((gs_min(vp) - 1.0_wp)*cvs(vp))
+        ! Retained for startup compatibility. The saturation solve now uses
+        ! local coefficients directly in s_TSat.
 
     end subroutine s_initialize_phasechange_module
 
@@ -1323,11 +1307,16 @@ contains
 
         real(wp), intent(out) :: TSat
         real(wp), intent(in) :: pSat, TSIn
-        real(wp) :: dFdT, FT, Om !< auxiliary variables
+        real(wp) :: dFdT, FT, FTnew, Om !< auxiliary variables
+        real(wp) :: A, B, C, Tnew, Tlo, Thi, flo, fhi, log_guess, Tcrit
+        real(wp) :: pSat_lp, pSat_vp
+        real(wp), parameter :: t_floor = 1.0e-12_wp
+        real(wp), parameter :: t_ceiling = 1.0e12_wp
+        integer, parameter :: max_bracket_iter = 60
         character(20) :: nss, pSatS, TSatS
 
         ! Generic loop iterators
-        integer :: ns
+        integer :: ns, bracket_iter
 
         ! in case of fluid under tension (p - p_inf > 0, T > 0), or, when subcooled liquid/overheated vapor cannot be
         ! phisically sustained (p = 0, T = 0)
@@ -1335,57 +1324,220 @@ contains
 
             ! assigning Saturation temperature
             TSat = 0.0_wp
-
-        else
-
-            ! calculating initial estimate for temperature in the TSat procedure. I will also use this variable to
-            ! iterate over the Newton's solver
-            TSat = TSIn
-
-            ! underrelaxation factor
-            Om = under_relax
-            ! starting counter for the Newton solver
-            ns = 0
-
-            ! Newton solver for finding the saturation temperature as function of pressure. ns == 0, so the loop is
-            ! entered at least once.
-            do while ( ( abs(FT) > ptgalpha_eps ) .or. ( ns == 0 ) )
-
-                ! Updating counter for the iterative procedure
-                ns = ns + 1
-
-                ! calculating residual
-                FT = TSat*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
-                           *(1 - log(TSat)) - (qvps(lp) - qvps(vp)) &
-                           + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
-                           - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))) &
-                     + qvs(lp) - qvs(vp)
-
-                ! calculating the jacobian
-                dFdT = &
-                    -(cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp))*log(TSat) &
-                    - (qvps(lp) - qvps(vp)) &
-                    + cvs(lp)*(gs_min(lp) - 1)*log(pSat + ps_inf(lp)) &
-                    - cvs(vp)*(gs_min(vp) - 1)*log(pSat + ps_inf(vp))
-
-                ! updating saturation temperature
-                TSat = TSat - Om*FT/dFdT
-
-#ifndef MFC_OpenACC
-                ! Checking if TSat returns a NaN
-                if ((ieee_is_nan(TSat)) .or. (ns > max_iter)) then
-
-                    call s_int_to_str(ns, nss)
-                    call s_real_to_str(TSat, TSatS)
-                    call s_real_to_str(pSat, pSatS)
-                    call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
-                    & ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
-
-                end if
-#endif
-            end do
+            return
 
         end if
+
+        if (pSat <= -min(ps_inf(lp), ps_inf(vp))) then
+            call s_mpi_abort('s_TSat requires pSat + ps_inf > 0 for both phases.')
+        end if
+
+        pSat_lp = pSat + ps_inf(lp)
+        pSat_vp = pSat + ps_inf(vp)
+
+        A = cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)
+        B = -(qvps(lp) - qvps(vp)) &
+            + cvs(lp)*(gs_min(lp) - 1.0_wp)*log(pSat_lp) &
+            - cvs(vp)*(gs_min(vp) - 1.0_wp)*log(pSat_vp)
+        C = qvs(lp) - qvs(vp)
+
+        ! Guard against the singular A -> 0 limit by falling back to the
+        ! linearized saturation relation.
+        if (f_approx_equal(A, 0.0_wp)) then
+            if (.not. f_approx_equal(B, 0.0_wp)) then
+                TSat = -C/B
+
+                if ((TSat <= 0.0_wp) .or. (ieee_is_nan(TSat))) then
+                    call s_mpi_abort('s_TSat linear fallback produced an invalid temperature.')
+                end if
+
+                return
+
+            elseif (f_approx_equal(C, 0.0_wp)) then
+                if (ieee_is_nan(TSIn)) then
+                    TSat = t_floor
+                else
+                    TSat = max(TSIn, t_floor)
+                end if
+                return
+
+            else
+                call s_mpi_abort('s_TSat cannot solve the degenerate saturation equation.')
+            end if
+        end if
+
+        ! Calculating initial estimate for temperature in the TSat procedure.
+        ! If the incoming guess is unusable, seed it with the C = 0 solution.
+        TSat = TSIn
+        if (ieee_is_nan(TSat) .or. (TSat <= t_floor)) then
+            log_guess = 1.0_wp + B/A
+            if (log_guess < log(t_floor)) then
+                TSat = t_floor
+            elseif (log_guess > log(t_ceiling)) then
+                TSat = t_ceiling
+            else
+                TSat = exp(log_guess)
+            end if
+        elseif (TSat > t_ceiling) then
+            TSat = t_ceiling
+        end if
+
+        TSat = max(TSat, t_floor)
+
+        ! underrelaxation factor
+        Om = under_relax
+
+        ! Evaluate the residual once before entering the safeguarded solver.
+        FT = TSat*(A*(1.0_wp - log(TSat)) + B) + C
+        if (abs(FT) <= ptgalpha_eps) then
+            return
+        end if
+
+        ! Build a positive bracket around the initial guess by expanding in
+        ! both directions. This keeps the bisection fallback safe.
+        Tlo = TSat
+        Thi = TSat
+        flo = FT
+        fhi = FT
+        do bracket_iter = 1, max_bracket_iter
+            if (Tlo > t_floor) then
+                Tlo = max(t_floor, 0.5_wp*Tlo)
+                flo = Tlo*(A*(1.0_wp - log(Tlo)) + B) + C
+
+                if (abs(flo) <= ptgalpha_eps) then
+                    TSat = Tlo
+                    return
+                end if
+
+                if (flo*FT <= 0.0_wp) then
+                    Thi = max(Tsat, Tlo)
+                    Tlo = min(Tsat, Tlo)
+                    fhi = FT
+                    exit
+                end if
+            end if
+
+            if (Thi < t_ceiling) then
+                Thi = min(t_ceiling, 2.0_wp*Thi)
+                fhi = Thi*(A*(1.0_wp - log(Thi)) + B) + C
+
+                if (abs(fhi) <= ptgalpha_eps) then
+                    TSat = Thi
+                    return
+                end if
+
+                if (FT*fhi <= 0.0_wp) then
+                    Tlo = min(Tsat, Thi)
+                    Thi = max(Tsat, Thi)
+                    flo = FT
+                    exit
+                end if
+            end if
+        end do
+
+        ! If the local expansion failed, try the two monotonic pieces split by
+        ! the stationary point of the residual.
+        if ((flo*fhi > 0.0_wp) .and. (.not. f_approx_equal(A, 0.0_wp))) then
+            log_guess = B/A
+            if (log_guess < log(t_floor)) then
+                Tcrit = t_floor
+            elseif (log_guess > log(t_ceiling)) then
+                Tcrit = t_ceiling
+            else
+                Tcrit = exp(log_guess)
+            end if
+
+            if (TSat <= Tcrit) then
+                Tlo = t_floor
+                Thi = Tcrit
+                flo = Tlo*(A*(1.0_wp - log(Tlo)) + B) + C
+                fhi = Thi*(A*(1.0_wp - log(Thi)) + B) + C
+                if (flo*fhi <= 0.0_wp) then
+                    if ((TSat < Tlo) .or. (TSat > Thi) .or. ieee_is_nan(TSat)) TSat = 0.5_wp*(Tlo + Thi)
+                    FT = TSat*(A*(1.0_wp - log(TSat)) + B) + C
+                    if (abs(FT) <= ptgalpha_eps) then
+                        return
+                    end if
+                end if
+            end if
+
+            if (flo*fhi > 0.0_wp) then
+                Tlo = Tcrit
+                Thi = t_ceiling
+                flo = Tlo*(A*(1.0_wp - log(Tlo)) + B) + C
+                fhi = Thi*(A*(1.0_wp - log(Thi)) + B) + C
+                if (flo*fhi <= 0.0_wp) then
+                    if ((TSat < Tlo) .or. (TSat > Thi) .or. ieee_is_nan(TSat)) TSat = 0.5_wp*(Tlo + Thi)
+                    FT = TSat*(A*(1.0_wp - log(TSat)) + B) + C
+                    if (abs(FT) <= ptgalpha_eps) then
+                        return
+                    end if
+                end if
+            end if
+        end if
+
+        if (flo*fhi > 0.0_wp) then
+            call s_int_to_str(0, nss)
+            call s_real_to_str(TSat, TSatS)
+            call s_real_to_str(pSat, pSatS)
+            call s_mpi_abort('Could not bracket TSat = '//TSatS//' for pSat = '//pSatS//'. Aborting!')
+        end if
+
+        ! starting counter for the safeguarded Newton solver
+        ns = 0
+
+        ! Newton solver for finding the saturation temperature as function of
+        ! pressure. A bisection step is used whenever the Newton update leaves
+        ! the bracket or fails to reduce the residual.
+        do while ( ( abs(FT) > ptgalpha_eps ) .or. ( ns == 0 ) )
+
+            ns = ns + 1
+
+            if (ns > max_iter) then
+                call s_int_to_str(ns, nss)
+                call s_real_to_str(TSat, TSatS)
+                call s_real_to_str(pSat, pSatS)
+                call s_mpi_abort('TSat = '//TSatS//', pSat = '// pSatS //' (by assumption of first order transition). &
+                & ns = '//nss//'. m_phase_change, s_TSat. Aborting!')
+            end if
+
+            ! calculating the jacobian
+            dFdT = B - A*log(TSat)
+
+            ! updating saturation temperature
+            Tnew = TSat - Om*FT/dFdT
+
+            ! Safeguard the Newton step. If it would leave the bracket or make
+            ! the residual worse, fall back to bisection.
+            if ((ieee_is_nan(Tnew)) .or. (Tnew <= t_floor) .or. (Tnew >= t_ceiling) .or. &
+                (Tnew <= Tlo) .or. (Tnew >= Thi) .or. (f_approx_equal(dFdT, 0.0_wp)) .or. &
+                (f_approx_equal(Tnew, TSat))) then
+                Tnew = 0.5_wp*(Tlo + Thi)
+            end if
+
+            FTnew = Tnew*(A*(1.0_wp - log(Tnew)) + B) + C
+            if (ieee_is_nan(FTnew) .or. (abs(FTnew) > abs(FT))) then
+                Tnew = 0.5_wp*(Tlo + Thi)
+                FTnew = Tnew*(A*(1.0_wp - log(Tnew)) + B) + C
+            end if
+
+            FT = FTnew
+
+            if (flo*FT <= 0.0_wp) then
+                Thi = Tnew
+                fhi = FT
+            else
+                Tlo = Tnew
+                flo = FT
+            end if
+
+            TSat = Tnew
+
+            if ((abs(FT) <= ptgalpha_eps) .or. (abs(Thi - Tlo) <= 1.0e-12_wp*max(1.0_wp, abs(TSat)))) then
+                exit
+            end if
+
+        end do
 
     end subroutine s_TSat
 
