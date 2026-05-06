@@ -1002,14 +1002,14 @@ contains
                   - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
             ! normalization factors for the current Newton system
-            g_scale = 1.0_wp
-            e_scale = 1.0_wp
-            m_scale = 1.0_wp
-            p_scale = 1.0_wp
-            ! g_scale = max(1.0_wp, abs(maxg))
-            ! e_scale = max(1.0_wp, abs(rhoe), abs(pS), abs(mQ))
-            ! m_scale = max(1.0_wp, abs(rM))
-            ! p_scale = max(1.0_wp, abs(pS), abs(minval(p_infpTg)))
+            ! g_scale = 1.0_wp
+            ! e_scale = 1.0_wp
+            ! m_scale = 1.0_wp
+            ! p_scale = 1.0_wp
+            g_scale = max(1.0_wp, abs(maxg))
+            e_scale = max(1.0_wp, abs(rhoe), abs(pS), abs(mQ))
+            m_scale = max(1.0_wp, abs(rM))
+            p_scale = max(1.0_wp, abs(pS), abs(minval(p_infpTg)))
 
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
             call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac, &
