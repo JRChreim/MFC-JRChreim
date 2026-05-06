@@ -970,7 +970,9 @@ contains
         maxg = maxval([gk(lp),gk(vp)])
         ! Newton solver for pTg-equilibrium. The residual and Jacobian are
         ! normalized so the linear system is better conditioned.
-        do while ( ( norm2(R2D) > ptgalpha_eps ) .or. ( ns == 0 ) )
+        g_scale = 1.0_wp
+        e_scale = 1.0_wp
+        do while ( ( ( norm2(R2D) > ptgalpha_eps ) .or. ( norm2( R2D * (/g_scale,e_scale/)) / norm2((/g_scale,e_scale/) ) > ptgalpha_eps ) ) .or. ( ns == 0 ) )
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
@@ -1002,10 +1004,6 @@ contains
                   - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
             ! normalization factors for the current Newton system
-            ! g_scale = 1.0_wp
-            ! e_scale = 1.0_wp
-            ! m_scale = 1.0_wp
-            ! p_scale = 1.0_wp
             g_scale = max(1.0_wp, abs(maxg))
             e_scale = max(1.0_wp, abs(rhoe), abs(pS), abs(mQ))
             m_scale = max(1.0_wp, abs(rM))
