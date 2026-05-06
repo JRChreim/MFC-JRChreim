@@ -1,0 +1,616 @@
+#compdef mfc.sh ./mfc.sh mfc
+# AUTO-GENERATED from cli/commands.py - Do not edit manually
+# Regenerate with: ./mfc.sh generate
+
+_mfc() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    local -a commands
+    commands=(
+        "build:Build MFC and its dependencies."
+        "b:Alias for build"
+        "run:Run a case with MFC."
+        "r:Alias for run"
+        "test:Run MFC\'s test suite."
+        "t:Alias for test"
+        "clean:Clean build artifacts."
+        "c:Alias for clean"
+        "validate:Validate a case file without running."
+        "v:Alias for validate"
+        "new:Create a new case from a template."
+        "viz:Visualize post-processed MFC output."
+        "params:Search and explore MFC case parameters."
+        "packer:Packer utility (pack/unpack/compare)."
+        "completion:Install shell tab-completion."
+        "help:Show help on a topic."
+        "generate:Regenerate completion scripts from CLI schema."
+        "load:Loads the MFC environment with source."
+        "lint:Lints and tests all toolchain code."
+        "format:Formats all code after editing."
+        "spelling:Runs the spell checker after editing."
+        "precheck:Run CI lint checks locally before committing."
+        "interactive:Launch interactive menu-driven interface."
+        "bench:Benchmark MFC (for CI)."
+        "bench_diff:Compare MFC Benchmarks (for CI)."
+        "count:Count LOC in MFC."
+        "count_diff:Compare LOC between branches."
+    )
+
+    _arguments -C \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            _describe -t commands 'mfc command' commands
+            ;;
+        args)
+            case $words[1] in
+                build)
+                    _arguments \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]' \
+                        '-i[(GPU Optimization) Build a version of MFC optimized for a case.]:_files -g "*.py"' \
+                        '--input[(GPU Optimization) Build a version of MFC optimized for a case.]:_files -g "*.py"' \
+                        '--case-optimization[(GPU Optimization) Compile MFC targets with some case parameters hard-coded (requires --input).]'
+                    ;;
+                b)
+                    _arguments \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]' \
+                        '-i[(GPU Optimization) Build a version of MFC optimized for a case.]:_files -g "*.py"' \
+                        '--input[(GPU Optimization) Build a version of MFC optimized for a case.]:_files -g "*.py"' \
+                        '--case-optimization[(GPU Optimization) Compile MFC targets with some case parameters hard-coded (requires --input).]'
+                    ;;
+                run)
+                    _arguments \
+                        '1:Input file to run.:_files -g "*.py"' \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]' \
+                        '*-g[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '*--gpus[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '-e[Job execution/submission engine choice.]:(interactive batch)' \
+                        '--engine[Job execution/submission engine choice.]:(interactive batch)' \
+                        '-p[(Batch) Partition for job submission.]' \
+                        '--partition[(Batch) Partition for job submission.]' \
+                        '-q[(Batch) Quality of Service for job submission.]' \
+                        '--quality_of_service[(Batch) Quality of Service for job submission.]' \
+                        '-N[(Batch) Number of nodes.]' \
+                        '--nodes[(Batch) Number of nodes.]' \
+                        '-n[Number of tasks per node.]' \
+                        '--tasks-per-node[Number of tasks per node.]' \
+                        '-w[(Batch) Walltime.]' \
+                        '--walltime[(Batch) Walltime.]' \
+                        '-a[(Batch) Account to charge.]' \
+                        '--account[(Batch) Account to charge.]' \
+                        '-@[(Batch) Email for job notification.]' \
+                        '--email[(Batch) Email for job notification.]' \
+                        '-#[(Batch) Job name.]' \
+                        '--name[(Batch) Job name.]' \
+                        '-s[Build from scratch.]' \
+                        '--scratch[Build from scratch.]' \
+                        '-b[(Interactive) Override MPI execution binary]:(mpirun jsrun srun mpiexec)' \
+                        '--binary[(Interactive) Override MPI execution binary]:(mpirun jsrun srun mpiexec)' \
+                        '--dry-run[(Batch) Run without submitting batch file.]' \
+                        '--case-optimization[(GPU Optimization) Compile MFC targets with some case parameters hard-coded.]' \
+                        '--no-build[(Testing) Do not rebuild MFC.]' \
+                        '--wait[(Batch) Wait for the job to finish.]' \
+                        '-c[(Batch) Path to a custom submission file template or one of the built-in templates.]:(bridges2 carpenter carpenter-cray default delta deltaai frontier hipergator nautilus oscar phoenix phoenix-bench santis tuo)' \
+                        '--computer[(Batch) Path to a custom submission file template or one of the built-in templates.]:(bridges2 carpenter carpenter-cray default delta deltaai frontier hipergator nautilus oscar phoenix phoenix-bench santis tuo)' \
+                        '-o[Output file (YAML) for summary.]' \
+                        '--output-summary[Output file (YAML) for summary.]' \
+                        '--clean[Clean the case before running.]' \
+                        '--ncu[Profile with NVIDIA Nsight Compute.]' \
+                        '--nsys[Profile with NVIDIA Nsight Systems.]' \
+                        '--rcu[Profile with ROCM rocprof-compute.]' \
+                        '--rsys[Profile with ROCM rocprof-systems.]'
+                    ;;
+                r)
+                    _arguments \
+                        '1:Input file to run.:_files -g "*.py"' \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]' \
+                        '*-g[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '*--gpus[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '-e[Job execution/submission engine choice.]:(interactive batch)' \
+                        '--engine[Job execution/submission engine choice.]:(interactive batch)' \
+                        '-p[(Batch) Partition for job submission.]' \
+                        '--partition[(Batch) Partition for job submission.]' \
+                        '-q[(Batch) Quality of Service for job submission.]' \
+                        '--quality_of_service[(Batch) Quality of Service for job submission.]' \
+                        '-N[(Batch) Number of nodes.]' \
+                        '--nodes[(Batch) Number of nodes.]' \
+                        '-n[Number of tasks per node.]' \
+                        '--tasks-per-node[Number of tasks per node.]' \
+                        '-w[(Batch) Walltime.]' \
+                        '--walltime[(Batch) Walltime.]' \
+                        '-a[(Batch) Account to charge.]' \
+                        '--account[(Batch) Account to charge.]' \
+                        '-@[(Batch) Email for job notification.]' \
+                        '--email[(Batch) Email for job notification.]' \
+                        '-#[(Batch) Job name.]' \
+                        '--name[(Batch) Job name.]' \
+                        '-s[Build from scratch.]' \
+                        '--scratch[Build from scratch.]' \
+                        '-b[(Interactive) Override MPI execution binary]:(mpirun jsrun srun mpiexec)' \
+                        '--binary[(Interactive) Override MPI execution binary]:(mpirun jsrun srun mpiexec)' \
+                        '--dry-run[(Batch) Run without submitting batch file.]' \
+                        '--case-optimization[(GPU Optimization) Compile MFC targets with some case parameters hard-coded.]' \
+                        '--no-build[(Testing) Do not rebuild MFC.]' \
+                        '--wait[(Batch) Wait for the job to finish.]' \
+                        '-c[(Batch) Path to a custom submission file template or one of the built-in templates.]:(bridges2 carpenter carpenter-cray default delta deltaai frontier hipergator nautilus oscar phoenix phoenix-bench santis tuo)' \
+                        '--computer[(Batch) Path to a custom submission file template or one of the built-in templates.]:(bridges2 carpenter carpenter-cray default delta deltaai frontier hipergator nautilus oscar phoenix phoenix-bench santis tuo)' \
+                        '-o[Output file (YAML) for summary.]' \
+                        '--output-summary[Output file (YAML) for summary.]' \
+                        '--clean[Clean the case before running.]' \
+                        '--ncu[Profile with NVIDIA Nsight Compute.]' \
+                        '--nsys[Profile with NVIDIA Nsight Systems.]' \
+                        '--rcu[Profile with ROCM rocprof-compute.]' \
+                        '--rsys[Profile with ROCM rocprof-systems.]'
+                    ;;
+                test)
+                    _arguments \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]' \
+                        '*-g[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '*--gpus[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '-l[List all available tests.]' \
+                        '--list[List all available tests.]' \
+                        '-f[First test UUID to run.]' \
+                        '--from[First test UUID to run.]' \
+                        '-t[Last test UUID to run.]' \
+                        '--to[Last test UUID to run.]' \
+                        '*-o[Only run tests with specified properties.]' \
+                        '*--only[Only run tests with specified properties.]' \
+                        '-a[Run the Post Process Tests too.]' \
+                        '--test-all[Run the Post Process Tests too.]' \
+                        '-%[Percentage of tests to run.]' \
+                        '--percent[Percentage of tests to run.]' \
+                        '-m[Maximum number of attempts to run a test.]' \
+                        '--max-attempts[Maximum number of attempts to run a test.]' \
+                        '--rdma-mpi[Run tests with RDMA MPI enabled]' \
+                        '--no-build[(Testing) Do not rebuild MFC.]' \
+                        '--no-examples[Do not test example cases.]' \
+                        '--case-optimization[(GPU Optimization) Compile MFC targets with some case parameters hard-coded.]' \
+                        '--dry-run[Build and generate case files but do not run tests.]' \
+                        '--shard[Run only a subset of tests (e.g., 1/2 for first half, 2/2 for second half).]' \
+                        '--generate[(Test Generation) Generate golden files.]' \
+                        '--add-new-variables[(Test Generation) If new variables are found in D/ when running tests, add them to the golden files.]' \
+                        '--remove-old-tests[(Test Generation) Delete test directories that are no longer needed.]'
+                    ;;
+                t)
+                    _arguments \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]' \
+                        '*-g[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '*--gpus[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '-l[List all available tests.]' \
+                        '--list[List all available tests.]' \
+                        '-f[First test UUID to run.]' \
+                        '--from[First test UUID to run.]' \
+                        '-t[Last test UUID to run.]' \
+                        '--to[Last test UUID to run.]' \
+                        '*-o[Only run tests with specified properties.]' \
+                        '*--only[Only run tests with specified properties.]' \
+                        '-a[Run the Post Process Tests too.]' \
+                        '--test-all[Run the Post Process Tests too.]' \
+                        '-%[Percentage of tests to run.]' \
+                        '--percent[Percentage of tests to run.]' \
+                        '-m[Maximum number of attempts to run a test.]' \
+                        '--max-attempts[Maximum number of attempts to run a test.]' \
+                        '--rdma-mpi[Run tests with RDMA MPI enabled]' \
+                        '--no-build[(Testing) Do not rebuild MFC.]' \
+                        '--no-examples[Do not test example cases.]' \
+                        '--case-optimization[(GPU Optimization) Compile MFC targets with some case parameters hard-coded.]' \
+                        '--dry-run[Build and generate case files but do not run tests.]' \
+                        '--shard[Run only a subset of tests (e.g., 1/2 for first half, 2/2 for second half).]' \
+                        '--generate[(Test Generation) Generate golden files.]' \
+                        '--add-new-variables[(Test Generation) If new variables are found in D/ when running tests, add them to the golden files.]' \
+                        '--remove-old-tests[(Test Generation) Delete test directories that are no longer needed.]'
+                    ;;
+                clean)
+                    _arguments \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]'
+                    ;;
+                c)
+                    _arguments \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]'
+                    ;;
+                validate)
+                    _arguments \
+                        '1:Path to case file to validate.:_files -g "*.py"' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]'
+                    ;;
+                v)
+                    _arguments \
+                        '1:Path to case file to validate.:_files -g "*.py"' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]'
+                    ;;
+                new)
+                    _arguments \
+                        '1:Name/path for the new case directory.:_files -/' \
+                        '-t[Template to use (e.g., 1D_minimal, 2D_minimal, 3D_minimal, or example:<name>).]:(1D_minimal 2D_minimal 3D_minimal)' \
+                        '--template[Template to use (e.g., 1D_minimal, 2D_minimal, 3D_minimal, or example:<name>).]:(1D_minimal 2D_minimal 3D_minimal)' \
+                        '-l[List available templates.]' \
+                        '--list[List available templates.]'
+                    ;;
+                viz)
+                    _arguments \
+                        '1:Path to the case directory containing binary/ or silo_hdf5/ output.:_files -/' \
+                        '--var[Variable to visualize (e.g. pres, rho, vel1). Omit (or pass all) for a tiled layout of all variables (1D and 2D data) or]' \
+                        '--step[Timestep(s) to render. Formats: a single integer (e.g. 1000), a range start:end:stride (e.g. 0:5000:500), a comma list (]' \
+                        '-f[Input data format: binary or silo (auto-detected from directory structure if omitted).]:(binary silo)' \
+                        '--format[Input data format: binary or silo (auto-detected from directory structure if omitted).]:(binary silo)' \
+                        '-o[Output directory for --png and --mp4.]:_files -/' \
+                        '--output[Output directory for --png and --mp4.]:_files -/' \
+                        '--cmap[Matplotlib colormap name (--png, --mp4 only).]:(viridis plasma inferno magma cividis RdBu RdYlBu RdYlGn RdGy coolwarm bwr seismic PiYG PRGn BrBG PuOr Spectral Blues Greens Oranges Reds Purples Greys YlOrRd YlOrBr YlGn YlGnBu GnBu BuGn BuPu PuBu PuBuGn PuRd RdPu hot afmhot gist_heat copper bone gray pink spring summer autumn winter cool binary gist_yarg gist_gray twilight twilight_shifted hsv tab10 tab20 tab20b tab20c Set1 Set2 Set3 Paired Accent Dark2 Pastel1 Pastel2 turbo jet rainbow nipy_spectral gist_ncar gist_rainbow gist_stern gist_earth ocean terrain gnuplot gnuplot2 CMRmap cubehelix brg flag prism Wistia)' \
+                        '--vmin[Minimum value for color scale (--png, --mp4 only).]' \
+                        '--vmax[Maximum value for color scale (--png, --mp4 only).]' \
+                        '--dpi[Image resolution in DPI (--png, --mp4).]' \
+                        '--slice-axis[Axis for 3D slice (--png, --mp4 only).]:(x y z)' \
+                        '--slice-value[Coordinate value at which to take the 3D slice (--png, --mp4 only).]' \
+                        '--slice-index[Array index at which to take the 3D slice (--png, --mp4 only).]' \
+                        '--mp4[Encode all rendered frames into an MP4 video (requires --step with multiple timesteps).]' \
+                        '--fps[Frames per second for --mp4 output.]' \
+                        '--list-vars[Print the variable names available at the given timestep and exit.]' \
+                        '--list-steps[Print all available timesteps and exit.]' \
+                        '--log-scale[Logarithmic color/y scale (--png, --mp4 only).]' \
+                        '-i[Launch an interactive Dash web UI in your browser. Loads all timesteps (or the set given by --step) and lets you scrub t]' \
+                        '--interactive[Launch an interactive Dash web UI in your browser. Loads all timesteps (or the set given by --step) and lets you scrub t]' \
+                        '--port[Port for --interactive web server.]' \
+                        '--host[Bind address for --interactive web server.]' \
+                        '--png[Save PNG image(s) to the output directory instead of launching the terminal UI.]'
+                    ;;
+                params)
+                    _arguments \
+                        '1:Search query (parameter name or pattern to search for).' \
+                        '-t[Filter by type: int, real, log, str.]' \
+                        '--type[Filter by type: int, real, log, str.]' \
+                        '-f[List parameter families (grouped by prefix).]' \
+                        '--families[List parameter families (grouped by prefix).]' \
+                        '-F[List feature groups (mhd, bubbles, weno, etc.).]' \
+                        '--features[List feature groups (mhd, bubbles, weno, etc.).]' \
+                        '--feature[Show all parameters for a feature group (e.g., --feature mhd).]' \
+                        '--names-only[Only search parameter names (not descriptions).]' \
+                        '-c[Show count statistics only.]' \
+                        '--count[Show count statistics only.]' \
+                        '-n[Maximum number of results to show (default: unlimited).]' \
+                        '--limit[Maximum number of results to show (default: unlimited).]' \
+                        '-d[Show parameter descriptions.]' \
+                        '--describe[Show parameter descriptions.]'
+                    ;;
+                packer)
+                    :
+                    ;;
+                completion)
+                    _arguments \
+                        '1:Action: install, uninstall, or status:(install uninstall status)' \
+                        '2:Shell type: bash or zsh (auto-detected if not specified):(bash zsh)'
+                    ;;
+                help)
+                    _arguments \
+                        '1:Help topic: gpu, clusters, batch, debugging, performance:(gpu clusters batch debugging performance)'
+                    ;;
+                generate)
+                    _arguments \
+                        '--check[Check if generated files are up to date (exit 1 if not).]' \
+                        '--json-schema[Generate JSON Schema for IDE auto-completion of case files.]'
+                    ;;
+                load)
+                    :
+                    ;;
+                lint)
+                    _arguments \
+                        '--no-test[Skip running unit tests (only run pylint).]'
+                    ;;
+                format)
+                    :
+                    ;;
+                spelling)
+                    :
+                    ;;
+                precheck)
+                    _arguments \
+                        '-j[Number of parallel jobs for formatting.]' \
+                        '--jobs[Number of parallel jobs for formatting.]'
+                    ;;
+                interactive)
+                    :
+                    ;;
+                bench)
+                    _arguments \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]' \
+                        '*-g[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '*--gpus[(Optional GPU override) List of GPU #s to use (environment default if unspecified).]' \
+                        '-o[Path to the YAML output file to write the results to.]' \
+                        '--output[Path to the YAML output file to write the results to.]' \
+                        '-m[Memory per task for benchmarking cases]' \
+                        '--mem[Memory per task for benchmarking cases]'
+                    ;;
+                bench_diff)
+                    _arguments \
+                        '1:Path to a benchmark result YAML file.' \
+                        '2:Path to a benchmark result YAML file.' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]'
+                    ;;
+                count)
+                    _arguments \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]'
+                    ;;
+                count_diff)
+                    _arguments \
+                        '*-t[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '*--targets[Space-separated list of targets to act upon.]:value:(fftw hdf5 silo lapack hipfort pre_process simulation post_process syscheck documentation)' \
+                        '--mpi[Enable MPI]' \
+                        '--no-mpi[Disable MPI]' \
+                        '--gpu[Enable GPU]:mode:(acc mp)' \
+                        '--no-gpu[Disable GPU]' \
+                        '--debug[Build with debug compiler flags (for MFC code)]' \
+                        '--no-debug[Build without debug flags]' \
+                        '--gcov[Enable gcov coverage]' \
+                        '--no-gcov[Disable gcov coverage]' \
+                        '--unified[Enable unified memory]' \
+                        '--no-unified[Disable unified memory]' \
+                        '--single[Enable single precision]' \
+                        '--no-single[Disable single precision]' \
+                        '--mixed[Enable mixed precision]' \
+                        '--no-mixed[Disable mixed precision]' \
+                        '--fastmath[Enable fast math]' \
+                        '--no-fastmath[Disable fast math]' \
+                        '-j[Allows for JOBS concurrent jobs.]' \
+                        '--jobs[Allows for JOBS concurrent jobs.]' \
+                        '-v[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '--verbose[Increase output verbosity (-v, -vv, -vvv for more detail).]' \
+                        '-d[Enable Python toolchain debug logging (not MFC code).]' \
+                        '--debug-log[Enable Python toolchain debug logging (not MFC code).]'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_mfc "$@"

@@ -131,7 +131,7 @@ contains
         ! Namelist for all of the parameters to be inputted by the user
         namelist /user_inputs/ case_dir, old_grid, old_ic, &
             t_step_old, t_step_start, m, n, p, x_domain, y_domain, z_domain, &
-            stretch_x, stretch_y, stretch_z, a_x, a_y, &
+            stretch_x, stretch_y, stretch_z, stretch_type, a_x, a_y, &
             a_z, x_a, y_a, z_a, x_b, y_b, z_b, &
             model_eqns, num_fluids, mpp_lim, &
             weno_order, bc_x, bc_y, bc_z, num_patches, &
@@ -173,6 +173,50 @@ contains
                                  'likely due to a datatype mismatch. Exiting.')
             end if
             close (1)
+
+            select case (stretch_type)
+            case (stretch_type_hyper_tan, stretch_type_geom_prog)
+            case default
+                call s_mpi_abort('stretch_type must be 1 for hyperbolic tangent or 2 for geometric progression.')
+            end select
+
+            if (stretch_type == stretch_type_geom_prog) then
+                if (stretch_x) then
+                    if (f_is_default(a_x) .or. (.not. f_is_integer(a_x)) .or. (a_x <= 0._wp)) then
+                        call s_mpi_abort('For GP stretching, a_x must be a positive integer number of refined cells.')
+                    end if
+                    if (f_is_default(x_a) .or. f_is_default(x_b)) then
+                        call s_mpi_abort('For GP stretching, x_a and x_b must define the refined core bounds.')
+                    end if
+                    if (x_b <= x_a) then
+                        call s_mpi_abort('For GP stretching, x_b must be greater than x_a.')
+                    end if
+                end if
+
+                if (stretch_y) then
+                    if (f_is_default(a_y) .or. (.not. f_is_integer(a_y)) .or. (a_y <= 0._wp)) then
+                        call s_mpi_abort('For GP stretching, a_y must be a positive integer number of refined cells.')
+                    end if
+                    if (f_is_default(y_a) .or. f_is_default(y_b)) then
+                        call s_mpi_abort('For GP stretching, y_a and y_b must define the refined core bounds.')
+                    end if
+                    if (y_b <= y_a) then
+                        call s_mpi_abort('For GP stretching, y_b must be greater than y_a.')
+                    end if
+                end if
+
+                if (stretch_z) then
+                    if (f_is_default(a_z) .or. (.not. f_is_integer(a_z)) .or. (a_z <= 0._wp)) then
+                        call s_mpi_abort('For GP stretching, a_z must be a positive integer number of refined cells.')
+                    end if
+                    if (f_is_default(z_a) .or. f_is_default(z_b)) then
+                        call s_mpi_abort('For GP stretching, z_a and z_b must define the refined core bounds.')
+                    end if
+                    if (z_b <= z_a) then
+                        call s_mpi_abort('For GP stretching, z_b must be greater than z_a.')
+                    end if
+                end if
+            end if
 
             call s_update_cell_bounds(cells_bounds, m, n, p)
 

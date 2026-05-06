@@ -78,6 +78,14 @@ module m_global_parameters
     real(wp) :: x_a, y_a, z_a
     real(wp) :: x_b, y_b, z_b
 
+    ! Selects the single stretching law used across all stretched directions.
+    ! stretch_type = 1 uses the hyperbolic-tangent map, while stretch_type = 2
+    ! uses the geometric-progression mesh with a refined core. The meaning of
+    ! a_[x,y,z] and [x,y,z]_[a,b] depends on this selector.
+    integer, parameter :: stretch_type_hyper_tan = 1
+    integer, parameter :: stretch_type_geom_prog = 2
+    integer :: stretch_type
+
     ! Simulation Algorithm Parameters
     integer :: model_eqns            !< Multicomponent flow model
     logical :: relax                 !< activate phase change
@@ -356,6 +364,8 @@ contains
         y_b = dflt_real
         z_a = dflt_real
         z_b = dflt_real
+
+        stretch_type = 1
 
         ! Simulation algorithm parameters
         model_eqns = dflt_int
