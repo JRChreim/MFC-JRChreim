@@ -143,6 +143,7 @@ _SIMPLE_DESCS = {
     "stretch_x": "Enable grid stretching in x",
     "stretch_y": "Enable grid stretching in y",
     "stretch_z": "Enable grid stretching in z",
+    "stretch_type": "Grid stretching law selector",
     "a_x": "Grid stretching rate in x",
     "a_y": "Grid stretching rate in y",
     "a_z": "Grid stretching rate in z",
@@ -611,6 +612,12 @@ CONSTRAINTS = {
         "value_labels": {1: "minmod", 2: "MC", 3: "Van Albada", 4: "Van Leer", 5: "SUPERBEE"},
     },
 
+    # Grid stretching
+    "stretch_type": {
+        "choices": [1, 2],
+        "value_labels": {1: "hyperbolic tangent", 2: "geometric progression"},
+    },
+
     # Time stepping
     "time_stepper": {
         "choices": [1, 2, 3],
@@ -846,6 +853,7 @@ def _load():  # pylint: disable=too-many-locals,too-many-statements
     _r("cyl_coord", LOG, {"grid"})
     for n in ["stretch_x", "stretch_y", "stretch_z"]:
         _r(n, LOG, {"grid"})
+    _r("stretch_type", INT, {"grid"})
     for d in ["x", "y", "z"]:
         _r(f"{d}_a", REAL, {"grid"})
         _r(f"{d}_b", REAL, {"grid"})

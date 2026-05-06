@@ -1526,6 +1526,7 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
         """Checks grid stretching constraints (pre-process)"""
         loops_x = self.get('loops_x', 1)
         loops_y = self.get('loops_y', 1)
+        stretch_type = self.get('stretch_type', 1)
         stretch_y = self.get('stretch_y', 'F') == 'T'
         stretch_z = self.get('stretch_z', 'F') == 'T'
         old_grid = self.get('old_grid', 'F') == 'T'
@@ -1537,6 +1538,8 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                      "loops_x must be at least 1")
         self.prohibit(loops_y < 1,
                      "loops_y must be at least 1")
+        self.prohibit(stretch_type not in (1, 2),
+                     "stretch_type must be 1 for hyperbolic tangent or 2 for geometric progression")
         self.prohibit(stretch_y and n == 0,
                      "stretch_y requires n > 0")
         self.prohibit(stretch_z and p == 0,
@@ -1561,6 +1564,9 @@ class CaseValidator:  # pylint: disable=too-many-public-methods
                          f"{direction}_a must be set with stretch_{direction} enabled")
             self.prohibit(coord_b is None,
                          f"{direction}_b must be set with stretch_{direction} enabled")
+            if stretch_type == 2:
+                self.prohibit(not self._is_numeric(a) or a <= 0 or int(a) != a,
+                             f"For GP stretching, a_{direction} must be a positive integer number of refined cells")
             if coord_a is not None and coord_b is not None:
                 self.prohibit(coord_a >= coord_b,
                              f"{direction}_a must be less than {direction}_b with stretch_{direction} enabled")

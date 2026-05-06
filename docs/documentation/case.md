@@ -116,6 +116,7 @@ feature, detecting GPU pointers and performing RDMA accordingly.
 | ---:                     | :----:  |          :---                    |
 | `x[y,z]_domain%%beg[end]`| Real    | Beginning [ending] of the $x$[y,z]-direction domain    |
 | `stretch_x[y,z]`         | Logical | Stretching of the mesh in the $x$[y,z]-direction |
+| `stretch_type`           | Integer | Stretching law selector (`1` = hyperbolic tangent, `2` = geometric progression) |
 | `a_x[y,z]`               | Real    | Rate at which the grid is stretched in the $x$[y,z]-direction |
 | `x[y,z]_a`               | Real    | Beginning of the stretching in the negative $x$[y,z]-direction |
 | `x[y,z]_b`               | Real    | Beginning of the stretching in the positive $x$[y,z]-direction |
@@ -139,7 +140,9 @@ When the simulation is 2D/axi-symmetric or 1D, it requires that $p=0$ or $p=n=0$
 - `stretch_[x,y,z]` activates grid stretching in the $[x,y,z]$ directions.
 The grid is gradually stretched such that the domain boundaries are pushed away from the origin along a specified axis.
 
-- `a_[x,y,z]`, `[x,y,z]_a`, and `[x,y,z]_b` are parameters that define the grid stretching function. When grid stretching along the $x$ axis is considered, the stretching function is given as:
+- `stretch_type` selects the stretching law used by all stretched directions. `1` uses the hyperbolic tangent map below, while `2` uses the geometric-progression core.
+
+- `a_[x,y,z]`, `[x,y,z]_a`, and `[x,y,z]_b` are parameters that define the grid stretching function. When `stretch_type = 1` and grid stretching along the $x$ axis is considered, the stretching function is given as:
 
 \f[ x_{cb,stretch} = x_{cb} + \frac{x_{cb}}{a_x} \Bigg[ \mathrm{log}\left[\mathrm{cosh} \left( \frac{a_x(x_{cb}-x_a)}{L} \right) \right] + \mathrm{log}\left[\mathrm{cosh} \left( \frac{a_x(x_{cb}-x_b)}{L} \right) \right] -2 \mathrm{log}\left[\mathrm{cosh} \left( \frac{a_x(x_b-x_a)}{2L} \right) \right]  \Bigg] \f]
 

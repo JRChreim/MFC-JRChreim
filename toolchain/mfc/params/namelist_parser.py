@@ -37,7 +37,7 @@ _FALLBACK_PARAMS = {
         'ptgalpha_eps', 'qbmm', 'recon_type', 'relativity', 'relax',
         'relax_model', 'rhoRV', 'rhoref', 'sigR', 'sigV',
         'sigma', 'simplex_params', 'simplex_perturb', 'stretch_x', 'stretch_y',
-        'stretch_z', 'surface_tension', 't_step_old', 't_step_start', 'thermal',
+        'stretch_type', 'stretch_z', 'surface_tension', 't_step_old', 't_step_start', 'thermal',
         'viscous', 'weno_order', 'x_a', 'x_b', 'x_domain',
         'y_a', 'y_b', 'y_domain', 'z_a', 'z_b',
         'z_domain',
