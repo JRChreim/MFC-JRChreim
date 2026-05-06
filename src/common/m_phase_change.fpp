@@ -1437,7 +1437,7 @@ contains
     subroutine s_real_to_str(rl, res)
         real(wp), intent(in) :: rl
         character(len=*), intent(out) :: res
-        write (res, '(F10.4)') rl
+        write (res, '(ES20.8)') rl
         res = trim(res)
     end subroutine s_real_to_str
 
