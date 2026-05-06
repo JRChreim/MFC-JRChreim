@@ -624,7 +624,7 @@ contains
         relax_model = dflt_int
         palpha_eps = dflt_real
         ptgalpha_eps = dflt_real
-        under_relax = dflt_real
+        under_relax = 1.0_wp
         hypoelasticity = .false.
         hyperelasticity = .false.
         int_comp = .false.
