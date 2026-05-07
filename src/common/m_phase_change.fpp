@@ -764,7 +764,7 @@ contains
         ! phase, and then let the algorithm run.
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen?
-        if ((pS < -1.47e5_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp))) then
+        if ((pS < -2.27e6_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp))) then
 
             ! transfer a bit of mass to the deficient phase, enforce phase change
             call s_correct_partial_densities(1, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
