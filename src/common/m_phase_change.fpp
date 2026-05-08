@@ -914,6 +914,9 @@ contains
 
         ! is the fluid at a metastable state with enough 'energy' for phase change to happen? Or, is the subgrid bubble
         ! volume fraction large enough?
+        if (pS < -2.25e6_wp) then
+          print *, rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp)
+        end if
         if ( ( (pS < -2.25e6_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp)) ) .or. &
         TSG ) then
 
