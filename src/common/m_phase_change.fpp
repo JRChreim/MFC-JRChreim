@@ -972,7 +972,7 @@ contains
         ! normalized so the linear system is better conditioned.
         g_scale = 1.0_wp
         e_scale = 1.0_wp
-        do while ( ( ( norm2(R2D) > ptgalpha_eps ) .or. ( norm2( R2D * (/g_scale,e_scale/)) / norm2((/g_scale,e_scale/) ) > ptgalpha_eps ) ) .or. ( ns == 0 ) )
+        do while ( ( ( norm2(R2D) > ptgalpha_eps ) .and. ( norm2( R2D * (/g_scale,e_scale/)) / norm2((/g_scale,e_scale/) ) > ptgalpha_eps ) ) .or. ( ns == 0 ) )
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
