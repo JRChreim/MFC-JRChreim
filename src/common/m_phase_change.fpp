@@ -239,8 +239,11 @@ contains
                             m0k(i) = q_cons_vf(i + contxb - 1)%sf(j, k, l)
                         end do
                     end if
-                    ! updating conservative variables after the any relaxation procedures
-                    call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+                    ! Update conservative variables only when the relaxation
+                    ! path remains active for this cell.
+                    if (TR) then
+                      call update_conservative_vars( j, k, l, m0k, pS, q_cons_vf, Tk )
+                    end if
                 end do
             end do
         end do
@@ -325,7 +328,7 @@ contains
 
 #ifndef MFC_OpenACC
             ! energy constraint for the p-equilibrium
-            if ((minval( ps_inf(iSP) ) > 0) .and. (Econst <= 1.0_wp) .or. (nsL > max_iter)) then
+            if ( ( ( minval( ps_inf(iSP) ) > 0.0_wp ) .and. ( Econst <= 1.0_wp ) ) .or. ( nsL > max_iter ) ) then
 
               call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/1/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
                                 , (/ (/fpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, nsL, ps_inf &
@@ -661,7 +664,7 @@ contains
 #ifndef MFC_OpenACC
             else
                 call s_whistleblower((/ 0.0_wp,  0.0_wp/), (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                  , (/ (/0.0_wp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
                                   , 0.0_wp, (/0.0_wp, 0.0_wp/), rhoe, spread(0.0_wp, 1, num_fluids))
 
                 call s_real_to_str(rhoe - mQ - minval(ps_inf(iSP)), Econsts)
@@ -710,7 +713,7 @@ contains
             if ((pS <= -1.0_wp*minval(ps_inf(iSP))) .or. (ieee_is_nan(pS)) .or. (ns > max_iter)) then
 
               call s_whistleblower((/0.0_wp, 0.0_wp/), (/ (/1/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), j &
-                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, ps_inf &
+                                , (/ (/gpp, 0.0_wp/), (/0.0_wp, 0.0_wp/) /), k, l, m0k, ns, p_infpT &
                                 , pS, (/abs( gp - 1.0_wp ), 0.0_wp/), rhoe, spread(TS, 1, num_fluids))
 
               call s_real_to_str(pS, pSs); call s_int_to_str(nS, nss)
@@ -750,7 +753,10 @@ contains
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
+        real(wp), parameter :: Om_floor = 1.0e-12_wp ! minimum positive relaxation factor
         real(wp) :: Om ! underrelaxation factor
+        real(wp) :: m_scale, p_scale, g_scale, e_scale
+        real(wp), dimension(2) :: DeltamP_hat
         real(wp) :: maxg, mCP, mCPD, mCVGP, mCVGP2, mQ, mQD, rho, TSat ! auxiliary variables for the pTg-solver
         character(20) :: nss, pSs, Econsts, R2D1s, R2D2s
 
@@ -817,10 +823,11 @@ contains
 
         ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
         maxg = maxval([gk(lp),gk(vp)])
-
-        ! Newton solver for pTg-equilibrium. 1d6 is arbitrary, and ns == 0, to the loop is entered at least once.
-        do while ( ( ( norm2(R2D) > ptgalpha_eps ) .and. ( norm2( R2D*(/maxg,rhoe/) ) / norm2( (/maxg,rhoe/) ) > ptgalpha_eps ) ) &
-          .or. ( ns == 0 ) )
+        ! Newton solver for pTg-equilibrium. The residual and Jacobian are
+        ! normalized so the linear system is better conditioned.
+        g_scale = 1.0_wp
+        e_scale = 1.0_wp
+        do while ( ( ( norm2(R2D) > ptgalpha_eps ) .and. ( norm2( R2D * (/g_scale,e_scale/)) / norm2((/g_scale,e_scale/) ) > ptgalpha_eps ) ) .or. ( ns == 0 ) )
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
@@ -851,15 +858,28 @@ contains
                   - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( ( pS + ps_inf(lp) ) ** 2 ) &
                   - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
 
+            ! normalization factors for the current Newton system
+            g_scale = max(1.0_wp, abs(maxg))
+            e_scale = max(1.0_wp, abs(rhoe), abs(pS), abs(mQ))
+            m_scale = max(1.0_wp, abs(rM))
+            p_scale = max(1.0_wp, abs(pS), abs(minval(p_infpTg)))
+
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
-            call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
+            call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac, &
+                                           m_scale, p_scale, g_scale, e_scale)
 
             ! calculating correction array for Newton's method
-            DeltamP = matmul(InvJac, R2D)
+            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
+            DeltamP_hat = matmul(InvJac, R2D)
+            DeltamP(1) = m_scale * DeltamP_hat(1)
+            DeltamP(2) = p_scale * DeltamP_hat(2)
 
             ! checking if the correction in the mass/pressure will lead to negative values for those quantities
             ! If so, adjust the underrelaxation parameter Om
 #ifndef MFC_OpenACC
+            ! reset the trial factor at the start of each Newton iteration
+            Om = under_relax
+
             ! creating criteria for variable underrelaxation factor
             if (m0k(lp) - Om*DeltamP(1) <= 0.0_wp) then
                 Oc(1) = m0k(lp)/(2*DeltamP(1))
@@ -876,8 +896,13 @@ contains
             else
                 Oc(3) = under_relax
             end if
-            ! choosing amonst the minimum relaxation maximum to ensure solver will not produce unphysical values
-            Om = minval(Oc)
+            ! choosing amongst the minimum relaxation maximum to ensure solver will not produce unphysical values.
+            ! If the limiter becomes nonpositive, fall back to a tiny positive step instead of reversing direction.
+            if (minval(Oc) > 0.0_wp) then
+                Om = min(under_relax, minval(Oc))
+            else
+                Om = Om_floor
+            end if
 #else
             Om = under_relax
 #endif
@@ -891,26 +916,25 @@ contains
             ! updating pressure
             pS = pS - Om*DeltamP(2)
 
-            ! calculating residuals, which are (i) the difference between the Gibbs Free energy of the gas and the liquid
-            ! and (ii) the energy before and after the phase-change process.
-            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+            ! re-evaluating the normalized residuals after the update.
+            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
 
-          ! updating common temperature
-          TS = (rhoe + pS - mQ)/mCP
+            ! updating common temperature
+            TS = (rhoe + pS - mQ)/mCP
 
-          ! entropy
-          sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
+            ! entropy
+            sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
 
-          ! enthalpy
-          hk = gs_min*cvs*TS + qvs
+            ! enthalpy
+            hk = gs_min*cvs*TS + qvs
 
-          ! Gibbs-free energy
-          gk = hk - TS*sk
+            ! Gibbs-free energy
+            gk = hk - TS*sk
 
-          ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
-          maxg = maxval([gk(lp),gk(vp)])
+            ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
+            maxg = maxval([gk(lp),gk(vp)])
 
-                      ! checking if the residue returned any NaN values
+          ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
           if (ieee_is_nan(norm2(R2D)) .or. (ns > max_iter)) then
 
@@ -1065,15 +1089,29 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param q_cons_vf Cell-average conservative variables
         !!  @param TJac Transpose of the Jacobian Matrix
-    subroutine s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac)
+    subroutine s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac, &
+                                         m_scale, p_scale, g_scale, e_scale)
         $:GPU_ROUTINE(function_name='s_compute_jacobian_matrix', &
             & parallelism='[seq]', cray_inline=True)
 
         real(wp), dimension(num_fluids), intent(in) :: m0k
         real(wp), intent(in) :: pS, mCPD, mCVGP, mCVGP2, rM
+        real(wp), intent(in), optional :: m_scale, p_scale, g_scale, e_scale
         integer, intent(in) :: j, k, l
         real(wp), dimension(2, 2), intent(out) :: Jac, InvJac, TJac
         real(wp) :: TS, dFdT, dTdm, dTdp ! mass of the reacting fluid, total reacting mass, and auxiliary variables
+        real(wp) :: m_scale_eff, p_scale_eff, g_scale_eff, e_scale_eff, detJ_hat
+        real(wp), dimension(2, 2) :: JacHat
+
+        m_scale_eff = 1.0_wp
+        p_scale_eff = 1.0_wp
+        g_scale_eff = 1.0_wp
+        e_scale_eff = 1.0_wp
+
+        if (present(m_scale)) m_scale_eff = m_scale
+        if (present(p_scale)) p_scale_eff = p_scale
+        if (present(g_scale)) g_scale_eff = g_scale
+        if (present(e_scale)) e_scale_eff = e_scale
 
         TS = 1/(rM*cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)) &
                 + m0k(lp)*(cvs(lp)*(gs_min(lp) - 1)/(pS + ps_inf(lp)) &
@@ -1141,8 +1179,20 @@ contains
         TJac(2, 1) = Jac(1, 2)
         TJac(2, 2) = Jac(2, 2)
 
-        ! dividing by det(J)
-        InvJac = InvJac/(Jac(1, 1)*Jac(2, 2) - Jac(1, 2)*Jac(2, 1))
+        ! form the scaled Jacobian used by the Newton solve:
+        !   J_hat = diag(1/g_scale, 1/e_scale) * J * diag(m_scale, p_scale)
+        JacHat(1, 1) = Jac(1, 1) * m_scale_eff / g_scale_eff
+        JacHat(1, 2) = Jac(1, 2) * p_scale_eff / g_scale_eff
+        JacHat(2, 1) = Jac(2, 1) * m_scale_eff / e_scale_eff
+        JacHat(2, 2) = Jac(2, 2) * p_scale_eff / e_scale_eff
+
+        detJ_hat = JacHat(1, 1)*JacHat(2, 2) - JacHat(1, 2)*JacHat(2, 1)
+
+        InvJac(1, 1) = JacHat(2, 2)
+        InvJac(1, 2) = -1.0_wp*JacHat(1, 2)
+        InvJac(2, 1) = -1.0_wp*JacHat(2, 1)
+        InvJac(2, 2) = JacHat(1, 1)
+        InvJac = InvJac/detJ_hat
 
     end subroutine s_compute_jacobian_matrix
 
@@ -1157,15 +1207,23 @@ contains
         !!  @param pS equilibrium pressure at the interface
         !!  @param rhoe mixture energy
         !!  @param R2D (2D) residue array
-    subroutine s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D)
+    subroutine s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
         $:GPU_ROUTINE(function_name='s_compute_pTg_residual', &
             & parallelism='[seq]', cray_inline=True)
 
         real(wp), dimension(num_fluids), intent(in) :: m0k
         real(wp), intent(in) :: pS, rhoe, mCPD, mCVGP, mQD, rM
+        real(wp), intent(in), optional :: g_scale, e_scale
         integer, intent(in) :: j, k, l
         real(wp), dimension(2), intent(out) :: R2D
         real(wp) :: TS !< mass of the reacting liquid, total reacting mass, equilibrium temperature
+        real(wp) :: g_scale_eff, e_scale_eff, R1_raw, R2_raw
+
+        g_scale_eff = 1.0_wp
+        e_scale_eff = 1.0_wp
+
+        if (present(g_scale)) g_scale_eff = g_scale
+        if (present(e_scale)) e_scale_eff = e_scale
 
         ! relaxed temperature
         TS = 1/(rM*cvs(vp)*(gs_min(vp) - 1)/(pS + ps_inf(vp)) &
@@ -1174,17 +1232,20 @@ contains
                 + mCVGP)
 
         ! Gibbs Free Energy Equality condition (DG)
-        R2D(1) = TS*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
+        R1_raw = TS*((cvs(lp)*gs_min(lp) - cvs(vp)*gs_min(vp)) &
                      *(1 - log(TS)) - (qvps(lp) - qvps(vp)) &
                      + cvs(lp)*(gs_min(lp) - 1)*log(pS + ps_inf(lp)) &
                      - cvs(vp)*(gs_min(vp) - 1)*log(pS + ps_inf(vp))) &
                  + qvs(lp) - qvs(vp)
 
         ! Constant Energy Process condition (DE)
-        R2D(2) = (rhoe + pS &
+        R2_raw = (rhoe + pS &
                   + m0k(lp)*(qvs(vp) - qvs(lp)) - rM*qvs(vp) - mQD &
                   + (m0k(lp)*(cvs(vp)*gs_min(vp) - cvs(lp)*gs_min(lp)) &
                   - rM*cvs(vp)*gs_min(vp) - mCPD) * TS ) / 1
+
+        R2D(1) = R1_raw / g_scale_eff
+        R2D(2) = R2_raw / e_scale_eff
 
     end subroutine s_compute_pTg_residual
 
