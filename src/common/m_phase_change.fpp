@@ -34,7 +34,7 @@ module m_phase_change
     integer, parameter  :: max_iter = 50                       !< max # of iterations
     real(wp), parameter :: pCr      = 4.94e7_wp                !< Critical water pressure
     real(wp), parameter :: TCr      = 385.05_wp + 273.15_wp    !< Critical water temperature
-    real(wp), parameter :: mixM     = 0*sgm_eps                !< threshold for 'mixture cell'. If Y < mixM, phase change does not happen
+    real(wp), parameter :: mixM     = 0*sgm_eps                !< optional reacting-mass floor / mixture threshold; depending on the case, this may be set to zero or kept positive
     integer, parameter  :: lp       = 1                        !< index for the liquid phase of the reacting fluid
     integer, parameter  :: vp       = 2                        !< index for the vapor phase of the reacting fluid
     !> @}
@@ -69,14 +69,16 @@ contains
         !!      fluid 2 is its vapor, matching the saturation-property solver.
     impure subroutine s_compute_bubbles_euler_vapor_pressure()
 
-        real(wp) :: pGuess, pVap, TSatRef
+        real(wp) :: pVap
         
         ! A dflt_real input signals that no vapor pressure should be used. Additionally
         ! if the Eulerian bubble model is not activated, there is no need to compute the vapor pressure for the bubbles.
         if ( ( bub_pp%pv == dflt_real .or. bub_pp%pv == 0.0_wp ) .or. (.not. bubbles_euler) .or. (num_fluids < 2) ) return
 
-        ! if this is not the case, then we update the vapor pressure pv to its saturation value at the reference temperature. This is the initial vapor pressure for all the bubbles, and it will be updated during the simulation with the pT- or pTg-equilibrium solver.
-        call s_Saturation_Properties(pVap, TSatRef, bub_pp%p0ref, 2)
+        ! if this is not the case, then we update the vapor pressure pv to its saturation value at the
+        ! reference bubble temperature. This is the initial vapor pressure for all the bubbles, and it
+        ! will be updated during the simulation with the pT- or pTg-equilibrium solver.
+        call s_Saturation_Properties(pVap, bub_pp%T0ref, bub_pp%p0ref, 2)
         pv = pVap
         bub_pp%pv = pVap
 
@@ -149,6 +151,7 @@ contains
                         ! calculating the total internal energy such that the energy-fraction for each of the
                         ! fluids can be proportionally distributed when the sum of the internal energies differs from
                         ! either approach
+                        me0k(i) = 0.0_wp
                         if (model_eqns == 3) then
                             ! initial volume fraction
                             me0k(i) = q_cons_vf(i + intxb - 1)%sf(j, k, l)
@@ -162,24 +165,26 @@ contains
                     end if
 
                     ! if ( any( m0k <= 0 ) .or. any( alphak <= 0 ) ) then
-                    !     print *, 'pre-correction phase-change probe: proc_rank = ', proc_rank, &
-                    !              ' j,k,l = ', j, k, l
-                    !     print *, 'raw alphak = ', alphak
-                    !     print *, 'raw m0k    = ', m0k
+                        ! print *, 'pre-correction phase-change probe: proc_rank = ', proc_rank, &
+                        !          ' j,k,l = ', j, k, l
+                        ! print *, 'raw alphak = ', alphak
+                        ! print *, 'raw m0k    = ', m0k
+                        ! print *, 'raw me0k   = ', me0k
 
-                    !     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
+                        call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
-                    !     print *, 'post-correction phase-change probe: proc_rank = ', proc_rank, &
-                    !              ' j,k,l = ', j, k, l
-                    !     print *, 'corrected alphak = ', alphak
-                    !     print *, 'corrected m0k = ', m0k
-                    !     print *, 'rM = ', rM
-                    !     print *, 'rho = ', rho
-                    !     print *, 'active phase count = ', count( m0k > 0 )
-                    !     print *, 'TR = ', TR
+                        ! print *, 'post-correction phase-change probe: proc_rank = ', proc_rank, &
+                        !          ' j,k,l = ', j, k, l
+                        ! print *, 'corrected alphak = ', alphak
+                        ! print *, 'corrected m0k = ', m0k
+                        ! print *, 'corrected me0k   = ', me0k
+                        ! print *, 'rM = ', rM
+                        ! print *, 'rho = ', rho
+                        ! print *, 'active phase count = ', count( m0k > 0 )
+                        ! print *, 'TR = ', TR
 
                     ! else
-                    call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
+                    !     call s_correct_partial_densities(2, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
                     ! end if
 
                     ! kinetic energy as an auxiliary variable to the calculation of the total internal energy
@@ -892,7 +897,7 @@ contains
         real(wp), intent(in) :: rhoe
         integer, intent(in) :: j, k, l
         logical, intent(inout) :: TR, TSG ! triggering parameters
-        real(wp), dimension(num_fluids) :: p_infpTg, hk, gk, sk
+        real(wp), dimension(num_fluids) :: p_infpTg
         real(wp), dimension(2, 2) :: Jac, InvJac, TJac
         real(wp), dimension(2) :: R2D, DeltamP
         real(wp), dimension(3) :: Oc
@@ -917,7 +922,8 @@ contains
         if ( ( (pS < -2.00e6_wp) .and. (rM > (rhoe - gs_min(lp)*ps_inf(lp)/(gs_min(lp) - 1.0e-1_wp))/qvs(lp)) ) .or. &
         TSG ) then
 
-            ! transfer a bit of mass to the deficient phase, enforce phase change
+            ! transfer a mixM-controlled amount of mass to the deficient phase
+            ! (or exactly zero if mixM = 0), then enforce phase change
             call s_correct_partial_densities(1, alphak, me0k, m0k, rM, rho, TR, i, j, k, l)
 
             ! The following changes do not have a strong physicial rationale. So keep an eye on them,
@@ -950,71 +956,28 @@ contains
         ! Relaxation factor. This value is initially user-defined, with a certain level of self adjustment.
         Oc = under_relax;
 
+        ! initializing the residual and correction arrays for the Newton solver
         R2D = 0.0_wp ; DeltamP = 0.0_wp;
+
         ! starting counter for the Newton solver
         ns = 0
 
-        ! (initial) common temperature
-        TS = (rhoe + pS - mQ)/mCP
+        ! Evaluate the current pTg iterate once before entering Newton's method.
+        call s_update_ptg_state(m0k, pS, p_infpTg, rhoe, rM, mCP, mCPD, mQ, mQD, mCVGP, mCVGP2, TS, maxg, &
+                                m_scale, p_scale, g_scale, e_scale)
+        call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
 
-        ! entropy
-        sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
-
-        ! enthalpy
-        hk = gs_min*cvs*TS + qvs
-
-        ! Gibbs-free energy.
-        gk = hk - TS*sk
-
-        ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
-        maxg = maxval([gk(lp),gk(vp)])
-        ! Newton solver for pTg-equilibrium. The residual and Jacobian are
-        ! normalized so the linear system is better conditioned.
-        g_scale = 1.0_wp
-        e_scale = 1.0_wp
+        ! Newton solver for pTg-equilibrium. The residual and Jacobian are normalized so the linear system is better conditioned.
         do while ( ( ( norm2(R2D) > ptgalpha_eps ) .and. ( norm2( R2D * (/g_scale,e_scale/)) / norm2((/g_scale,e_scale/) ) > ptgalpha_eps ) ) .or. ( ns == 0 ) )
 
             ! Updating counter for the iterative procedure
             ns = ns + 1
 
-            ! Auxiliary variables to help in the calculation of the residue
-            ! Those must be updated through the iterations, as they either depend on
-            ! the partial masses for all fluids, or on the equilibrium pressure
-
-            ! sum of the total alpha*rho*cp of the system
-            mCP = sum( m0k * cvs * gs_min )
-
-            ! mCP - the contribution from the reacting phases
-            mCPD = mCP - m0k(lp) * cvs(lp) * gs_min(lp) - m0k(vp) * cvs(vp) * gs_min(vp)
-
-            ! sum of the total alpha*rho*q of the system
-            mQ = sum( m0k * qvs )
-
-            ! mQ - the contribution from the reacting phases
-            mQD = mQ - m0k(lp) * qvs(lp) - m0k(vp) * qvs(vp)
-
-            ! mCVG - the contribution from the reacting phases
-            mCVGP = sum( m0k * cvs * ( gs_min - 1 ) / ( pS + ps_inf ) ) &
-                  - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( pS + ps_inf(lp) ) &
-                  - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( pS + ps_inf(vp) )
-
-            ! mCVG2 - the contribution from the reacting phases
-            mCVGP2 = sum( m0k * cvs * ( gs_min - 1 ) / ( ( pS + ps_inf ) ** 2 ) ) &
-                  - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( ( pS + ps_inf(lp) ) ** 2 ) &
-                  - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
-
-            ! normalization factors for the current Newton system
-            g_scale = max(1.0_wp, abs(maxg))
-            e_scale = max(1.0_wp, abs(rhoe), abs(pS), abs(mQ))
-            m_scale = max(1.0_wp, abs(rM))
-            p_scale = max(1.0_wp, abs(pS), abs(minval(p_infpTg)))
-
             ! calculating the (2D) Jacobian Matrix used in the solution of the pTg-quilibrium model
             call s_compute_jacobian_matrix(InvJac, j, Jac, k, l, m0k, mCPD, mCVGP, mCVGP2, pS, rM, TJac, &
                                            m_scale, p_scale, g_scale, e_scale)
 
-            ! calculating correction array for Newton's method
-            call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
+            ! calculating correction array for Newton's method from the current residual
             DeltamP_hat = matmul(InvJac, R2D)
             DeltamP(1) = m_scale * DeltamP_hat(1)
             DeltamP(2) = p_scale * DeltamP_hat(2)
@@ -1061,23 +1024,10 @@ contains
             ! updating pressure
             pS = pS - Om*DeltamP(2)
 
-            ! re-evaluating the normalized residuals after the update.
+            ! Evaluate the updated Newton iterate before the next convergence check.
+            call s_update_ptg_state(m0k, pS, p_infpTg, rhoe, rM, mCP, mCPD, mQ, mQD, mCVGP, mCVGP2, TS, maxg, &
+                                    m_scale, p_scale, g_scale, e_scale)
             call s_compute_pTg_residual(j, k, l, m0k, mCPD, mCVGP, mQD, pS, rhoe, rM, R2D, g_scale, e_scale)
-
-            ! updating common temperature
-            TS = (rhoe + pS - mQ)/mCP
-
-            ! entropy
-            sk = cvs*log((TS**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
-
-            ! enthalpy
-            hk = gs_min*cvs*TS + qvs
-
-            ! Gibbs-free energy
-            gk = hk - TS*sk
-
-            ! maximum Gibbs Free Energy for the reacting phase, used as a relative criterion for the solver
-            maxg = maxval([gk(lp),gk(vp)])
 
             ! print *, 'j,k,l = ', j, k, l
             ! print *, 'ns = ', ns
@@ -1102,7 +1052,6 @@ contains
             ! print *, 'm0k(vp) = ', m0k(vp)
             ! print *, 'maxg = ', maxg
             ! print *, 'relative residual = ', norm2(R2D*(/maxg,rhoe/))/norm2((/maxg,rhoe/))
-
 
           ! checking if the residue returned any NaN values
 #ifndef MFC_OpenACC
@@ -1231,7 +1180,7 @@ contains
             ! continue relaxation
             TR = .true.
         else
-            ! if there are any insignificant values, make them significant
+            ! if mixM > 0, lift insignificant values to the prescribed floor
             m0k( pack( iFix, m0k < rho * mixM ) ) = rho * mixM
 
             ! continue relaxation
@@ -1245,6 +1194,64 @@ contains
         rM = m0k(lp) + m0k(vp)
 
     end subroutine s_correct_partial_densities
+
+    !>  Evaluate the current pTg Newton iterate and refresh the auxiliary state
+        !!      used by the scaled Jacobian and residual.
+    subroutine s_update_ptg_state(m0k, pS, p_infpTg, rhoe, rM, mCP, mCPD, mQ, mQD, mCVGP, mCVGP2, TS, maxg, &
+                                  m_scale, p_scale, g_scale, e_scale)
+        $:GPU_ROUTINE(function_name='s_update_ptg_state', &
+            & parallelism='[seq]', cray_inline=True)
+
+        real(wp), dimension(num_fluids), intent(in) :: m0k, p_infpTg
+        real(wp), intent(in) :: pS, rhoe, rM
+        real(wp), intent(out) :: mCP, mCPD, mQ, mQD, mCVGP, mCVGP2, TS, maxg
+        real(wp), intent(out) :: m_scale, p_scale, g_scale, e_scale
+        integer, parameter :: iReact(2) = (/ lp, vp /)
+        real(wp), dimension(2) :: sk, hk, gk
+
+        ! sum of the total alpha*rho*cp of the system
+        mCP = sum( m0k * cvs * gs_min )
+
+        ! mCP - the contribution from the reacting phases
+        mCPD = mCP - m0k(lp) * cvs(lp) * gs_min(lp) - m0k(vp) * cvs(vp) * gs_min(vp)
+
+        ! sum of the total alpha*rho*q of the system
+        mQ = sum( m0k * qvs )
+
+        ! mQ - the contribution from the reacting phases
+        mQD = mQ - m0k(lp) * qvs(lp) - m0k(vp) * qvs(vp)
+
+        ! mCVG - the contribution from the reacting phases
+        mCVGP = sum( m0k * cvs * ( gs_min - 1 ) / ( pS + ps_inf ) ) &
+              - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( pS + ps_inf(lp) ) &
+              - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( pS + ps_inf(vp) )
+
+        ! mCVG2 - the contribution from the reacting phases
+        mCVGP2 = sum( m0k * cvs * ( gs_min - 1 ) / ( ( pS + ps_inf ) ** 2 ) ) &
+              - m0k(lp) * cvs(lp) * ( gs_min(lp) - 1 ) / ( ( pS + ps_inf(lp) ) ** 2 ) &
+              - m0k(vp) * cvs(vp) * ( gs_min(vp) - 1 ) / ( ( pS + ps_inf(vp) ) ** 2 )
+
+        ! current common temperature
+        TS = (rhoe + pS - mQ)/mCP
+
+        ! reacting-phase Gibbs free energies
+        sk = cvs(iReact)*log((TS**gs_min(iReact))/((pS + ps_inf(iReact))**(gs_min(iReact) - 1.0_wp))) &
+             + qvps(iReact)
+
+        hk = gs_min(iReact)*cvs(iReact)*TS + qvs(iReact)
+
+        gk = hk - TS*sk
+
+        ! maximum Gibbs free energy for the reacting phases
+        maxg = maxval(gk)
+
+        ! normalization factors for the current Newton system
+        g_scale = max(1.0_wp, abs(maxg))
+        e_scale = max(1.0_wp, abs(rhoe), abs(pS), abs(mQ))
+        m_scale = max(1.0_wp, abs(rM))
+        p_scale = max(1.0_wp, abs(pS), abs(minval(p_infpTg)))
+
+    end subroutine s_update_ptg_state
 
     !>  This auxiliary subroutine calculates the 2 x 2 Jacobian and, its inverse and transpose
         !!      to be used in the pTg-equilibirium procedure
@@ -1686,26 +1693,16 @@ contains
         real(wp), intent(in) :: pS
         real(wp), dimension(num_fluids), intent(in) :: m0k, Tk
         integer, intent(in) :: j, k, l
-        real(wp), dimension(num_fluids) :: sk, hk, gk, ek, rhok
+        real(wp), dimension(num_fluids) :: ek, rhok
         integer :: i
 
-        ! Thermodynamic state calculations
-        ! entropy
-        sk = cvs*log((Tk**gs_min)/((pS + ps_inf)**(gs_min - 1.0_wp))) + qvps
-
-        ! enthalpy
-        hk = gs_min*cvs*Tk + qvs
-
-        ! Gibbs-free energy
-        gk = hk - Tk*sk
-
-        ! densities
+        ! Only density and internal energy are needed to reconstruct the
+        ! conservative variables from the relaxed pressure-temperature state.
         rhok = (pS + ps_inf)/((gs_min - 1)*cvs*Tk)
 
-        ! internal energy
         ek = (pS + gs_min*ps_inf)/(pS + ps_inf)*cvs*Tk + qvs
 
-        ! assigning volume fractions, internal energies, and total entropy
+        ! assigning volume fractions and internal energies
         $:GPU_LOOP(parallelism='[seq]')
         do i = 1, num_fluids
 
