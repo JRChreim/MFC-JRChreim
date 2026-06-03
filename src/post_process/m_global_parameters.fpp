@@ -103,6 +103,7 @@ module m_global_parameters
     integer :: num_fluids      !< Number of different fluids present in the flow
     logical :: relax           !< phase change
     integer :: relax_model     !< Phase change relaxation model
+    integer :: sg_trigger      !< Subgrid trigger selector
     logical :: mpp_lim         !< Maximum volume fraction limiter
     integer :: sys_size        !< Number of unknowns in the system of equations
     integer :: recon_type      !< Which type of reconstruction to use
@@ -399,6 +400,7 @@ contains
         alt_soundspeed = .false.
         relax = .false.
         relax_model = dflt_int
+        sg_trigger = dflt_int
 
         mhd = .false.
         relativity = .false.

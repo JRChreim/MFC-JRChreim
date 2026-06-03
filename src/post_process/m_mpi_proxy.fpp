@@ -91,6 +91,7 @@ contains
             & 'model_eqns', 'num_fluids', 'bc_x%beg', 'bc_x%end', 'bc_y%beg',  &
             & 'bc_y%end', 'bc_z%beg', 'bc_z%end', 'flux_lim', 'format',        &
             & 'precision', 'fd_order', 'thermal', 'nb', 'relax_model',         &
+            & 'sg_trigger',                                                     &
             & 'n_start', 'num_ibs', 'muscl_order' ]
             call MPI_BCAST(${VAR}$, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         #:endfor
@@ -168,123 +169,121 @@ contains
 
 #ifdef MFC_MPI
         integer :: ierr !< Generic flag used to identify and report MPI errors
+        integer :: i
+        integer, allocatable :: ext_recvcounts(:)
+        integer, allocatable :: ext_displs(:)
+
+        allocate (ext_recvcounts(0:num_procs - 1))
+        allocate (ext_displs(0:num_procs - 1))
+
+        ext_recvcounts = 1
+        ext_displs(0) = 0
+
+        do i = 1, num_procs - 1
+            ext_displs(i) = ext_displs(i - 1) + ext_recvcounts(i - 1)
+        end do
 
         ! Simulation is 3D
         if (p > 0) then
             if (grid_geometry == 3) then
                 ! Minimum spatial extent in the r-direction
                 call MPI_GATHERV(minval(y_cb), 1, mpi_p, &
-                                 spatial_extents(1, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(1, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Minimum spatial extent in the theta-direction
                 call MPI_GATHERV(minval(z_cb), 1, mpi_p, &
-                                 spatial_extents(2, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(2, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Minimum spatial extent in the z-direction
                 call MPI_GATHERV(minval(x_cb), 1, mpi_p, &
-                                 spatial_extents(3, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(3, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Maximum spatial extent in the r-direction
                 call MPI_GATHERV(maxval(y_cb), 1, mpi_p, &
-                                 spatial_extents(4, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(4, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Maximum spatial extent in the theta-direction
                 call MPI_GATHERV(maxval(z_cb), 1, mpi_p, &
-                                 spatial_extents(5, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(5, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Maximum spatial extent in the z-direction
                 call MPI_GATHERV(maxval(x_cb), 1, mpi_p, &
-                                 spatial_extents(6, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(6, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
             else
                 ! Minimum spatial extent in the x-direction
                 call MPI_GATHERV(minval(x_cb), 1, mpi_p, &
-                                 spatial_extents(1, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(1, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Minimum spatial extent in the y-direction
                 call MPI_GATHERV(minval(y_cb), 1, mpi_p, &
-                                 spatial_extents(2, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(2, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Minimum spatial extent in the z-direction
                 call MPI_GATHERV(minval(z_cb), 1, mpi_p, &
-                                 spatial_extents(3, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(3, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Maximum spatial extent in the x-direction
                 call MPI_GATHERV(maxval(x_cb), 1, mpi_p, &
-                                 spatial_extents(4, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(4, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Maximum spatial extent in the y-direction
                 call MPI_GATHERV(maxval(y_cb), 1, mpi_p, &
-                                 spatial_extents(5, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(5, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
                 ! Maximum spatial extent in the z-direction
                 call MPI_GATHERV(maxval(z_cb), 1, mpi_p, &
-                                 spatial_extents(6, 0), recvcounts, 6*displs, &
-                                 mpi_p, 0, MPI_COMM_WORLD, &
-                                 ierr)
+                                 spatial_extents(6, 0), ext_recvcounts, &
+                                 6*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
             end if
             ! Simulation is 2D
         elseif (n > 0) then
 
             ! Minimum spatial extent in the x-direction
             call MPI_GATHERV(minval(x_cb), 1, mpi_p, &
-                             spatial_extents(1, 0), recvcounts, 4*displs, &
-                             mpi_p, 0, MPI_COMM_WORLD, &
-                             ierr)
+                             spatial_extents(1, 0), ext_recvcounts, &
+                             4*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
             ! Minimum spatial extent in the y-direction
             call MPI_GATHERV(minval(y_cb), 1, mpi_p, &
-                             spatial_extents(2, 0), recvcounts, 4*displs, &
-                             mpi_p, 0, MPI_COMM_WORLD, &
-                             ierr)
+                             spatial_extents(2, 0), ext_recvcounts, &
+                             4*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
             ! Maximum spatial extent in the x-direction
             call MPI_GATHERV(maxval(x_cb), 1, mpi_p, &
-                             spatial_extents(3, 0), recvcounts, 4*displs, &
-                             mpi_p, 0, MPI_COMM_WORLD, &
-                             ierr)
+                             spatial_extents(3, 0), ext_recvcounts, &
+                             4*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
             ! Maximum spatial extent in the y-direction
             call MPI_GATHERV(maxval(y_cb), 1, mpi_p, &
-                             spatial_extents(4, 0), recvcounts, 4*displs, &
-                             mpi_p, 0, MPI_COMM_WORLD, &
-                             ierr)
+                             spatial_extents(4, 0), ext_recvcounts, &
+                             4*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
             ! Simulation is 1D
         else
 
             ! Minimum spatial extent in the x-direction
             call MPI_GATHERV(minval(x_cb), 1, mpi_p, &
-                             spatial_extents(1, 0), recvcounts, 4*displs, &
-                             mpi_p, 0, MPI_COMM_WORLD, &
-                             ierr)
+                             spatial_extents(1, 0), ext_recvcounts, &
+                             2*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
 
             ! Maximum spatial extent in the x-direction
             call MPI_GATHERV(maxval(x_cb), 1, mpi_p, &
-                             spatial_extents(2, 0), recvcounts, 4*displs, &
-                             mpi_p, 0, MPI_COMM_WORLD, &
-                             ierr)
+                             spatial_extents(2, 0), ext_recvcounts, &
+                             2*ext_displs, mpi_p, 0, MPI_COMM_WORLD, ierr)
         end if
+
+        deallocate (ext_recvcounts)
+        deallocate (ext_displs)
 
 #endif
 
@@ -339,16 +338,32 @@ contains
 
 #ifdef MFC_MPI
         integer :: ierr !< Generic flag used to identify and report MPI errors
+        integer :: i
+        integer, allocatable :: ext_recvcounts(:)
+        integer, allocatable :: ext_displs(:)
+
+        allocate (ext_recvcounts(0:num_procs - 1))
+        allocate (ext_displs(0:num_procs - 1))
+
+        ext_recvcounts = 1
+        ext_displs(0) = 0
+
+        do i = 1, num_procs - 1
+            ext_displs(i) = ext_displs(i - 1) + ext_recvcounts(i - 1)
+        end do
 
         ! Minimum flow variable extent
         call MPI_GATHERV(minval(q_sf), 1, mpi_p, &
-                         data_extents(1, 0), recvcounts, 2*displs, &
+                         data_extents(1, 0), ext_recvcounts, 2*ext_displs, &
                          mpi_p, 0, MPI_COMM_WORLD, ierr)
 
         ! Maximum flow variable extent
         call MPI_GATHERV(maxval(q_sf), 1, mpi_p, &
-                         data_extents(2, 0), recvcounts, 2*displs, &
+                         data_extents(2, 0), ext_recvcounts, 2*ext_displs, &
                          mpi_p, 0, MPI_COMM_WORLD, ierr)
+
+        deallocate (ext_recvcounts)
+        deallocate (ext_displs)
 
 #endif
 
