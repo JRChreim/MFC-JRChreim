@@ -670,7 +670,7 @@ contains
 
         ! Silo-HDF5 Database Format
 
-        if (format == 1) then
+        if (format == 1 .and. n > 0) then
 
             ! For multidimensional data sets, the spatial extents of all of
             ! the grid(s) handled by the local processor(s) are recorded so
@@ -879,6 +879,58 @@ contains
         ! Silo-HDF5 Database Format
 
         if (format == 1) then
+
+            if (n == 0) then
+
+                if (precision == 1 .and. wp == dp) then
+                    x_cc_s(:) = real(x_cc(:), sp)
+                    q_sf_s(:, :, :) = real(q_sf(:, :, :), sp)
+                elseif (precision == 1 .and. wp == sp) then
+                    x_cc_s(:) = x_cc(:)
+                    q_sf_s(:, :, :) = q_sf(:, :, :)
+                end if
+
+                #:for PRECISION, SFX, DBT in [(1,'_s','DB_FLOAT'),(2,'',"DB_DOUBLE")]
+                    if (precision == ${PRECISION}$) then
+                        err = DBPUTCURVE(dbfile, trim(varname), len_trim(varname), &
+                                         x_cc${SFX}$ (0:m), q_sf${SFX}$, ${DBT}$, m + 1, &
+                                         DB_F77NULL, ierr)
+                    end if
+                #:endfor
+
+                if (num_procs > 1) then
+                    call s_mpi_defragment_1d_grid_variable()
+                    call s_mpi_defragment_1d_flow_variable(q_sf, q_root_sf)
+
+                    if (precision == 1) then
+                        x_root_cc_s(:) = real(x_root_cc(:), sp)
+                        q_root_sf_s(:, :, :) = real(q_root_sf(:, :, :), sp)
+                    end if
+                else
+                    if (precision == 1) then
+                        x_root_cc_s(:) = real(x_cc(:), sp)
+                        q_root_sf_s(:, :, :) = real(q_sf(:, :, :), sp)
+                    else
+                        x_root_cc(:) = x_cc(:)
+                        q_root_sf(:, :, :) = q_sf(:, :, :)
+                    end if
+                end if
+
+                if (proc_rank == 0) then
+                    #:for PRECISION, SFX, DBT in [(1,'_s','DB_FLOAT'),(2,'',"DB_DOUBLE")]
+                        if (precision == ${PRECISION}$) then
+                            err = DBPUTCURVE(dbroot, trim(varname), &
+                                             len_trim(varname), &
+                                             x_root_cc${SFX}$, q_root_sf${SFX}$, &
+                                             ${DBT}$, m_root + 1, &
+                                             DB_F77NULL, ierr)
+                        end if
+                    #:endfor
+                end if
+
+                return
+
+            end if
 
             ! Determining the extents of the flow variable on each local
             ! process and gathering all this information on root process
